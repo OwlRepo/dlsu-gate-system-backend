@@ -64,15 +64,14 @@ export class EmployeeService {
       }
 
       // Generate random data for remaining fields
-      const employee: CreateEmployeeDto = {
+      const employee = await this.employeeRepository.create({
         ...createEmployeeDto,
         employeeId: generatedEmployeeId,
         isActive: true,
         dateCreated: now.toISOString(),
         dateActivated: now.toISOString(),
-        dateDeactivated: null, // Since the employee is active
-        deviceId: createEmployeeDto.deviceId,
-      };
+        dateDeactivated: null,
+      });
 
       // Save to database
       const savedEmployee = await this.employeeRepository.save(employee);

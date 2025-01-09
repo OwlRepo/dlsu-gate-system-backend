@@ -7,6 +7,7 @@ import { Admin } from '../admin/entities/admin.entity';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { TokenBlacklistService } from '../auth/token-blacklist.service';
+import { EmployeeAuthService } from './services/employee-auth.service';
 
 describe('LoginController', () => {
   let controller: LoginController;
@@ -25,6 +26,11 @@ describe('LoginController', () => {
   const mockTokenBlacklistService = {
     isTokenBlacklisted: jest.fn(),
     blacklistToken: jest.fn(),
+  };
+
+  const mockEmployeeAuthService = {
+    validateEmployee: jest.fn(),
+    login: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -50,6 +56,10 @@ describe('LoginController', () => {
         {
           provide: TokenBlacklistService,
           useValue: mockTokenBlacklistService,
+        },
+        {
+          provide: EmployeeAuthService,
+          useValue: mockEmployeeAuthService,
         },
       ],
     }).compile();

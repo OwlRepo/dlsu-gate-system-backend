@@ -7,12 +7,14 @@ import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { SuperAdminLoginDto } from '../super-admin/dto/super-admin.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from '@nestjs/common';
+import { EmployeeAuthService } from './services/employee-auth.service';
 
 @Controller('auth')
 export class LoginController {
   constructor(
     private readonly loginService: LoginService,
     private readonly superAdminAuthService: SuperAdminAuthService,
+    private readonly employeeAuthService: EmployeeAuthService,
   ) {}
 
   @Public()
@@ -46,5 +48,26 @@ export class LoginController {
   async logout(@Request() req) {
     const token = req.headers.authorization?.split(' ')[1];
     return this.loginService.logout(token);
+  }
+
+  @Public()
+  @Post('employee')
+  @ApiOperation({ summary: 'Employee login' })
+  @ApiBody({
+    schema: {
+      example: {
+        username: 'john.doe',
+        password: 'secretPassword123',
+      },
+    },
+  })
+  async employeeLogin(
+    @Body() loginDto: { username: string; password: string },
+  ) {
+    const employee = await this.employeeAuthService.validateEmployee(
+      loginDto.username,
+      loginDto.password,
+    );
+    return this.employeeAuthService.login(employee);
   }
 }

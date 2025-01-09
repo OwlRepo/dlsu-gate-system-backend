@@ -24,6 +24,7 @@ export class EmployeeController {
     schema: {
       example: {
         username: 'john.doe',
+        password: 'secretPassword123',
         firstName: 'John',
         lastName: 'Doe',
         email: 'john.doe@example.com',
@@ -78,6 +79,7 @@ export class EmployeeController {
       example: {
         firstName: 'John',
         lastName: 'Doe',
+        password: 'newPassword123',
         isActive: true,
         deviceId: ['1234567890', '1234567891'],
       },

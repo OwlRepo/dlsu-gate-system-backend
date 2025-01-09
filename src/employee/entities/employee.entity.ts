@@ -2,14 +2,17 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity()
 export class Employee {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ unique: true })
+  username: string;
+
+  @Column()
+  password: string;
 
   @Column()
   employeeId: string;
-
-  @Column()
-  username: string;
 
   @Column()
   firstName: string;
@@ -31,4 +34,7 @@ export class Employee {
 
   @Column('simple-array')
   deviceId: string[];
+
+  @Column()
+  email: string;
 }

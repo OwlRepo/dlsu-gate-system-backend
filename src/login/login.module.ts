@@ -4,13 +4,15 @@ import { JwtModule } from '@nestjs/jwt';
 import { LoginService } from './login.service';
 import { LoginController } from './login.controller';
 import { Admin } from '../admin/entities/admin.entity';
+import { Employee } from '../employee/entities/employee.entity';
 import { SuperAdminModule } from '../super-admin/super-admin.module';
 import { SuperAdminAuthService } from './services/super-admin-auth.service';
+import { EmployeeAuthService } from './services/employee-auth.service';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin]),
+    TypeOrmModule.forFeature([Admin, Employee]),
     JwtModule.register({
       secret:
         process.env.JWT_SECRET ||
@@ -21,7 +23,7 @@ import { AuthModule } from '../auth/auth.module';
     AuthModule,
   ],
   controllers: [LoginController],
-  providers: [LoginService, SuperAdminAuthService],
+  providers: [LoginService, SuperAdminAuthService, EmployeeAuthService],
   exports: [TypeOrmModule],
 })
 export class LoginModule {}
