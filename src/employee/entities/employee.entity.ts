@@ -32,7 +32,7 @@ export class Employee {
   @Column({ nullable: true })
   date_deactivated: string;
 
-  @Column('simple-array')
+  @Column('json', { default: [] })
   device_id: string[];
 
   @Column({ unique: true })
