@@ -1,18 +1,103 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Between, Repository, DataSource, Table } from 'typeorm';
 import { Employee } from './entities/employee.entity';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
-export class EmployeeService {
+export class EmployeeService implements OnModuleInit {
   constructor(
     @InjectRepository(Employee)
     private employeeRepository: Repository<Employee>,
+    private dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    await this.ensureTablesExist();
+  }
+
+  private async ensureTablesExist() {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+
+      // Check if employee table exists
+      const employeeTableExists = await queryRunner.hasTable('employee');
+      if (!employeeTableExists) {
+        console.log('Creating employee table...');
+        await queryRunner.createTable(
+          new Table({
+            name: 'employee',
+            columns: [
+              {
+                name: 'id',
+                type: 'uuid',
+                isPrimary: true,
+                generationStrategy: 'uuid',
+                default: 'uuid_generate_v4()',
+              },
+              {
+                name: 'employee_id',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'username',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'password',
+                type: 'varchar',
+              },
+              {
+                name: 'first_name',
+                type: 'varchar',
+              },
+              {
+                name: 'last_name',
+                type: 'varchar',
+              },
+              {
+                name: 'device_id',
+                type: 'json',
+              },
+              {
+                name: 'is_active',
+                type: 'boolean',
+                default: true,
+              },
+              {
+                name: 'date_created',
+                type: 'timestamp',
+                default: 'CURRENT_TIMESTAMP',
+              },
+              {
+                name: 'date_activated',
+                type: 'timestamp',
+                default: 'CURRENT_TIMESTAMP',
+              },
+              {
+                name: 'date_deactivated',
+                type: 'timestamp',
+                isNullable: true,
+              },
+            ],
+          }),
+          true,
+        );
+      }
+    } catch (error) {
+      console.error('Error ensuring employee table exists:', error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
 
   async create(createEmployeeDto: CreateEmployeeDto) {
     try {

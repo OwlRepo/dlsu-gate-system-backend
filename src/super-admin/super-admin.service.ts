@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { SuperAdmin } from './entities/super-admin.entity';
 import { Admin } from '../admin/entities/admin.entity';
 import { CreateSuperAdminDto } from './dto/super-admin.dto';
@@ -11,6 +11,7 @@ import {
 } from '../config/default-users.config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { Table } from 'typeorm';
 
 @Injectable()
 export class SuperAdminService implements OnModuleInit {
@@ -19,10 +20,156 @@ export class SuperAdminService implements OnModuleInit {
     private superAdminRepository: Repository<SuperAdmin>,
     @InjectRepository(Admin)
     private adminRepository: Repository<Admin>,
+    private dataSource: DataSource,
   ) {}
 
   async onModuleInit() {
+    await this.ensureTablesExist();
     await this.initializeDefaultUsers();
+  }
+
+  private async ensureTablesExist() {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+
+      // Check if super_admin table exists
+      const superAdminTableExists = await queryRunner.hasTable('super_admin');
+      if (!superAdminTableExists) {
+        console.log('Creating super_admin table...');
+        await queryRunner.createTable(
+          new Table({
+            name: 'super_admin',
+            columns: [
+              {
+                name: 'id',
+                type: 'uuid',
+                isPrimary: true,
+                generationStrategy: 'uuid',
+                default: 'uuid_generate_v4()',
+              },
+              {
+                name: 'super_admin_id',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'email',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'password',
+                type: 'varchar',
+              },
+              {
+                name: 'username',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'name',
+                type: 'varchar',
+                isNullable: true,
+              },
+              {
+                name: 'role',
+                type: 'varchar',
+              },
+              {
+                name: 'created_at',
+                type: 'timestamp',
+                default: 'CURRENT_TIMESTAMP',
+              },
+              {
+                name: 'updated_at',
+                type: 'timestamp',
+                default: 'CURRENT_TIMESTAMP',
+              },
+            ],
+          }),
+          true,
+        );
+      }
+
+      // Check if admin table exists
+      const adminTableExists = await queryRunner.hasTable('admin');
+      if (!adminTableExists) {
+        console.log('Creating admin table...');
+        await queryRunner.createTable(
+          new Table({
+            name: 'admin',
+            columns: [
+              {
+                name: 'id',
+                type: 'uuid',
+                isPrimary: true,
+                generationStrategy: 'uuid',
+                default: 'uuid_generate_v4()',
+              },
+              {
+                name: 'admin_id',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'email',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'password',
+                type: 'varchar',
+              },
+              {
+                name: 'username',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
+                name: 'first_name',
+                type: 'varchar',
+              },
+              {
+                name: 'last_name',
+                type: 'varchar',
+              },
+              {
+                name: 'name',
+                type: 'varchar',
+                isNullable: true,
+              },
+              {
+                name: 'role',
+                type: 'varchar',
+              },
+              {
+                name: 'is_active',
+                type: 'boolean',
+                default: true,
+              },
+              {
+                name: 'created_at',
+                type: 'timestamp',
+                default: 'CURRENT_TIMESTAMP',
+              },
+              {
+                name: 'updated_at',
+                type: 'timestamp',
+                default: 'CURRENT_TIMESTAMP',
+              },
+            ],
+          }),
+          true,
+        );
+      }
+    } catch (error) {
+      console.error('Error ensuring tables exist:', error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   private async initializeDefaultUsers() {
