@@ -81,7 +81,7 @@ export class ScreensaverService {
         filename: screensaverFile,
         lastModified: stats.mtime,
         size: stats.size,
-        url: `${baseUrl}static/uploads/${screensaverFile}`,
+        url: `${baseUrl}${isDev ? '' : '/'}persistent_uploads/${screensaverFile}`,
       };
     } catch (error) {
       console.log('Error getting screensaver info:', error);

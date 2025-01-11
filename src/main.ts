@@ -36,6 +36,11 @@ async function bootstrap() {
     prefix: '/static/uploads/',
   });
 
+  // Serve files from persistent_uploads directory
+  app.useStaticAssets(join(process.cwd(), '..', 'persistent_uploads'), {
+    prefix: '/persistent_uploads',
+  });
+
   // Add graceful shutdown
   app.enableShutdownHooks();
 
