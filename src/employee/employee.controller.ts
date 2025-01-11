@@ -29,7 +29,7 @@ export class EmployeeController {
         last_name: 'Doe',
         email: 'john.doe@example.com',
         is_active: true,
-        deviceId: ['1234567890', '1234567891'],
+        device_id: ['1234567890', '1234567891'],
       },
     },
   })
@@ -49,10 +49,10 @@ export class EmployeeController {
     return this.employeeService.findOne(idOrUsername);
   }
 
-  @Get('device/:deviceId')
+  @Get('device/:device_id')
   @ApiOperation({ summary: 'Get employee by device ID' })
-  findByDeviceId(@Param('deviceId') deviceId: string) {
-    return this.employeeService.findByDeviceId(deviceId);
+  findByDeviceId(@Param('device_id') device_id: string) {
+    return this.employeeService.findByDeviceId(device_id);
   }
 
   @Get('created')
@@ -72,7 +72,7 @@ export class EmployeeController {
     return this.employeeService.findByDateRange(startDate, endDate);
   }
 
-  @Patch(':employeeId')
+  @Patch(':employee_id')
   @ApiOperation({ summary: 'Update employee by ID' })
   @ApiBody({
     schema: {
@@ -81,20 +81,20 @@ export class EmployeeController {
         last_name: 'Doe',
         password: 'newPassword123',
         is_active: true,
-        deviceId: ['1234567890', '1234567891'],
+        device_id: ['1234567890', '1234567891'],
       },
     },
   })
   update(
-    @Param('employeeId') employeeId: string,
+    @Param('employee_id') employee_id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
   ) {
-    return this.employeeService.update(employeeId, updateEmployeeDto);
+    return this.employeeService.update(employee_id, updateEmployeeDto);
   }
 
-  @Delete(':employeeId')
+  @Delete(':employee_id')
   @ApiOperation({ summary: 'Delete employee by ID' })
-  remove(@Param('employeeId') employeeId: string) {
-    return this.employeeService.remove(employeeId);
+  remove(@Param('employee_id') employee_id: string) {
+    return this.employeeService.remove(employee_id);
   }
 }

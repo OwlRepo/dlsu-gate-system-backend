@@ -27,7 +27,7 @@ export class UsersService {
     }));
 
     const employeeUsers: UserDto[] = employees.map((employee) => ({
-      id: employee.employeeId,
+      id: employee.employee_id,
       username: employee.username,
       userType: 'employee',
     }));
@@ -47,7 +47,7 @@ export class UsersService {
   async getEmployeeUsers(): Promise<UserDto[]> {
     const employees = await this.employeeRepository.find();
     return employees.map((employee) => ({
-      id: employee.employeeId,
+      id: employee.employee_id,
       username: employee.username,
       userType: 'employee',
     }));

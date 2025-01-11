@@ -12,7 +12,7 @@ export class Employee {
   password: string;
 
   @Column()
-  employeeId: string;
+  employee_id: string;
 
   @Column()
   first_name: string;
@@ -24,7 +24,7 @@ export class Employee {
   is_active: boolean;
 
   @Column()
-  dateCreated: string;
+  date_created: string;
 
   @Column()
   dateActivated: string;
@@ -33,7 +33,7 @@ export class Employee {
   dateDeactivated: string;
 
   @Column('simple-array')
-  deviceId: string[];
+  device_id: string[];
 
   @Column()
   email: string;

@@ -36,5 +36,5 @@ export class CreateEmployeeDto {
   @ApiProperty()
   @IsArray()
   @IsOptional()
-  deviceId?: string[];
+  device_id?: string[];
 }

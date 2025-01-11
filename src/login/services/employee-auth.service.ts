@@ -47,9 +47,9 @@ export class EmployeeAuthService {
     };
   }
 
-  async getEmployeeInfo(employeeId: number): Promise<Employee> {
+  async getEmployeeInfo(employee_id: number): Promise<Employee> {
     const employee = await this.employeeRepository.findOne({
-      where: { id: employeeId.toString() },
+      where: { id: employee_id.toString() },
     });
 
     if (!employee) {

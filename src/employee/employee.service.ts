@@ -101,10 +101,10 @@ export class EmployeeService implements OnModuleInit {
 
   async create(createEmployeeDto: CreateEmployeeDto) {
     try {
-      // Check if deviceId array is empty
+      // Check if device_id array is empty
       if (
-        !createEmployeeDto.deviceId ||
-        createEmployeeDto.deviceId.length === 0
+        !createEmployeeDto.device_id ||
+        createEmployeeDto.device_id.length === 0
       ) {
         return {
           success: false,
@@ -113,8 +113,8 @@ export class EmployeeService implements OnModuleInit {
       }
 
       // Check for duplicate device IDs
-      const uniqueDeviceIds = new Set(createEmployeeDto.deviceId);
-      if (uniqueDeviceIds.size !== createEmployeeDto.deviceId.length) {
+      const uniqueDeviceIds = new Set(createEmployeeDto.device_id);
+      if (uniqueDeviceIds.size !== createEmployeeDto.device_id.length) {
         return {
           success: false,
           message: 'Duplicate device IDs are not allowed',
@@ -135,14 +135,14 @@ export class EmployeeService implements OnModuleInit {
       }
 
       const now = new Date();
-      const generatedEmployeeId = `EMP${Math.floor(Math.random() * 10000)}`;
+      const generatedemployee_id = `EMP${Math.floor(Math.random() * 10000)}`;
 
-      // Check for existing employeeId
-      const existingEmployeeId = await this.employeeRepository.findOne({
-        where: { employeeId: generatedEmployeeId },
+      // Check for existing employee_id
+      const existingemployee_id = await this.employeeRepository.findOne({
+        where: { employee_id: generatedemployee_id },
       });
 
-      if (existingEmployeeId) {
+      if (existingemployee_id) {
         return {
           success: false,
           message: 'Generated Employee ID already exists. Please try again.',
@@ -160,9 +160,9 @@ export class EmployeeService implements OnModuleInit {
       const employee = await this.employeeRepository.create({
         ...createEmployeeDto,
         password: hashedPassword,
-        employeeId: generatedEmployeeId,
+        employee_id: generatedemployee_id,
         is_active: true,
-        dateCreated: now.toISOString(),
+        date_created: now.toISOString(),
         dateActivated: now.toISOString(),
         dateDeactivated: null,
       });
@@ -202,7 +202,7 @@ export class EmployeeService implements OnModuleInit {
   async findOne(idOrUsername: string) {
     try {
       const employee = await this.employeeRepository.findOne({
-        where: [{ employeeId: idOrUsername }, { username: idOrUsername }],
+        where: [{ employee_id: idOrUsername }, { username: idOrUsername }],
       });
       if (!employee) {
         return {
@@ -222,11 +222,12 @@ export class EmployeeService implements OnModuleInit {
     }
   }
 
-  async findByDeviceId(deviceId: string) {
+  async findByDeviceId(device_id: string) {
     try {
       const employees = await this.employeeRepository.find();
       const filteredEmployees = employees.filter(
-        (employee) => employee.deviceId && employee.deviceId.includes(deviceId),
+        (employee) =>
+          employee.device_id && employee.device_id.includes(device_id),
       );
 
       if (filteredEmployees.length === 0) {
@@ -251,7 +252,7 @@ export class EmployeeService implements OnModuleInit {
   async findByDateRange(startDate: string, endDate: string) {
     try {
       const employees = await this.employeeRepository.find({
-        where: { dateCreated: Between(startDate, endDate) },
+        where: { date_created: Between(startDate, endDate) },
       });
       return {
         success: true,
@@ -265,16 +266,16 @@ export class EmployeeService implements OnModuleInit {
     }
   }
 
-  async update(employeeId: string, updateEmployeeDto: UpdateEmployeeDto) {
+  async update(employee_id: string, updateEmployeeDto: UpdateEmployeeDto) {
     try {
       const allowedUpdates = {
         username: updateEmployeeDto.username,
         first_name: updateEmployeeDto.first_name,
         last_name: updateEmployeeDto.last_name,
-        deviceId: updateEmployeeDto.deviceId,
+        device_id: updateEmployeeDto.device_id,
       };
       const result = await this.employeeRepository.update(
-        employeeId,
+        employee_id,
         allowedUpdates,
       );
       if (result.affected === 0) {
@@ -295,10 +296,10 @@ export class EmployeeService implements OnModuleInit {
     }
   }
 
-  async updateDisable(employeeId: string) {
+  async updateDisable(employee_id: string) {
     try {
       const result = await this.employeeRepository.update(
-        { employeeId },
+        { employee_id },
         {
           is_active: false,
           dateDeactivated: new Date().toISOString(),
@@ -322,9 +323,9 @@ export class EmployeeService implements OnModuleInit {
     }
   }
 
-  async remove(employeeId: string) {
+  async remove(employee_id: string) {
     try {
-      const result = await this.employeeRepository.delete(employeeId);
+      const result = await this.employeeRepository.delete(employee_id);
       if (result.affected === 0) {
         return {
           success: false,
