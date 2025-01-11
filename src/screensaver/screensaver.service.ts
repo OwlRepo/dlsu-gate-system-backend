@@ -5,7 +5,7 @@ import { join } from 'path';
 
 @Injectable()
 export class ScreensaverService {
-  private readonly uploadDir = join(process.cwd(), 'uploads');
+  private readonly uploadDir = join(process.cwd(), '..', 'persistent_uploads');
 
   constructor(private configService: ConfigService) {
     // Ensure uploads directory exists
