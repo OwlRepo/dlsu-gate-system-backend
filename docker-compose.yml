@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  nestjs-app:
+    build: .
+    container_name: nestjs-app
+    ports:
+      - '51742:51742'
+    restart: always
+    env_file:
+      - .env

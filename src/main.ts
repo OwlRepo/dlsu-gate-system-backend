@@ -36,6 +36,9 @@ async function bootstrap() {
     prefix: '/static/uploads/',
   });
 
-  await app.listen(process.env.PORT ?? 3000);
+  // Add graceful shutdown
+  app.enableShutdownHooks();
+
+  await app.listen(process.env.PORT ?? 51742);
 }
 bootstrap();
