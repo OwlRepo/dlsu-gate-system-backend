@@ -163,8 +163,8 @@ export class EmployeeService implements OnModuleInit {
         employee_id: generatedemployee_id,
         is_active: true,
         date_created: now.toISOString(),
-        dateActivated: now.toISOString(),
-        dateDeactivated: null,
+        date_activated: now.toISOString(),
+        date_deactivated: null,
       });
 
       // Save to database
@@ -302,7 +302,7 @@ export class EmployeeService implements OnModuleInit {
         { employee_id },
         {
           is_active: false,
-          dateDeactivated: new Date().toISOString(),
+          date_deactivated: new Date().toISOString(),
         },
       );
       if (result.affected === 0) {

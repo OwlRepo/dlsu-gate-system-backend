@@ -27,10 +27,10 @@ export class Employee {
   date_created: string;
 
   @Column()
-  dateActivated: string;
+  date_activated: string;
 
   @Column({ nullable: true })
-  dateDeactivated: string;
+  date_deactivated: string;
 
   @Column('simple-array')
   device_id: string[];
