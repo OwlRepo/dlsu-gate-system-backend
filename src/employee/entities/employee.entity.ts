@@ -35,6 +35,6 @@ export class Employee {
   @Column('simple-array')
   device_id: string[];
 
-  @Column()
+  @Column({ unique: true })
   email: string;
 }
