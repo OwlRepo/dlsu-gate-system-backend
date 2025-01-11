@@ -264,7 +264,7 @@ export class SuperAdminService implements OnModuleInit {
 
     const admin = this.adminRepository.create({
       ...createAdminDto,
-      adminId: this.generateSecureAdminId(),
+      admin_id: this.generateSecureAdminId(),
       password: hashedPassword,
       role: 'admin',
       isActive: true,
@@ -285,7 +285,7 @@ export class SuperAdminService implements OnModuleInit {
       username: createSuperAdminDto.username,
       name: createSuperAdminDto.name,
       role: 'super-admin',
-      superAdminId: this.generateSecureSuperAdminId(),
+      super_admin_id: this.generateSecureSuperAdminId(),
     });
     const savedSuperAdmin = await this.superAdminRepository.save(superAdmin);
     return {
@@ -296,7 +296,7 @@ export class SuperAdminService implements OnModuleInit {
 
   async findOneById(id: string): Promise<SuperAdmin> {
     return this.superAdminRepository.findOne({
-      where: { superAdminId: id },
+      where: { super_admin_id: id },
     });
   }
 }

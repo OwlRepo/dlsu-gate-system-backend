@@ -14,26 +14,26 @@ export class AdminController {
     return this.adminService.findAll();
   }
 
-  @Get(':adminId')
-  @ApiOperation({ summary: 'Get admin by adminId' })
-  findOne(@Param('adminId') adminId: string) {
-    return this.adminService.findByAdminId(adminId);
+  @Get(':admin_id')
+  @ApiOperation({ summary: 'Get admin by admin_id' })
+  findOne(@Param('admin_id') admin_id: string) {
+    return this.adminService.findByAdminId(admin_id);
   }
 
-  @Patch(':adminId')
-  @ApiOperation({ summary: 'Update admin by adminId' })
+  @Patch(':admin_id')
+  @ApiOperation({ summary: 'Update admin by admin_id' })
   @ApiBody({ type: UpdateAdminDto })
   update(
-    @Param('adminId') adminId: string,
+    @Param('admin_id') admin_id: string,
     @Body() updateAdminDto: UpdateAdminDto,
   ) {
-    return this.adminService.update(adminId, updateAdminDto);
+    return this.adminService.update(admin_id, updateAdminDto);
   }
 
-  @Delete(':adminId')
-  @ApiOperation({ summary: 'Delete admin by adminId' })
-  remove(@Param('adminId') adminId: string) {
-    return this.adminService.remove(adminId);
+  @Delete(':admin_id')
+  @ApiOperation({ summary: 'Delete admin by admin_id' })
+  remove(@Param('admin_id') admin_id: string) {
+    return this.adminService.remove(admin_id);
   }
 
   @Patch(':username')

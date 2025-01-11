@@ -4,23 +4,23 @@ export class AddSuperAdminIdAndNullableName1234567890123
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add superAdminId column
+    // Add super_admin_id column
     await queryRunner.query(`
       ALTER TABLE "super_admins"
-      ADD COLUMN IF NOT EXISTS "superAdminId" VARCHAR UNIQUE
+      ADD COLUMN IF NOT EXISTS "super_admin_id" VARCHAR UNIQUE
     `);
 
-    // Update existing records with a generated superAdminId
+    // Update existing records with a generated super_admin_id
     await queryRunner.query(`
       UPDATE "super_admins"
-      SET "superAdminId" = 'SAD-' || UPPER(SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 12))
-      WHERE "superAdminId" IS NULL
+      SET "super_admin_id" = 'SAD-' || UPPER(SUBSTRING(MD5(RANDOM()::TEXT) FROM 1 FOR 12))
+      WHERE "super_admin_id" IS NULL
     `);
 
-    // Make superAdminId NOT NULL after populating it
+    // Make super_admin_id NOT NULL after populating it
     await queryRunner.query(`
       ALTER TABLE "super_admins"
-      ALTER COLUMN "superAdminId" SET NOT NULL
+      ALTER COLUMN "super_admin_id" SET NOT NULL
     `);
 
     // Modify name column to be nullable
@@ -43,10 +43,10 @@ export class AddSuperAdminIdAndNullableName1234567890123
       ALTER COLUMN "name" SET NOT NULL
     `);
 
-    // Remove superAdminId column
+    // Remove super_admin_id column
     await queryRunner.query(`
       ALTER TABLE "super_admins"
-      DROP COLUMN "superAdminId"
+      DROP COLUMN "super_admin_id"
     `);
   }
 }

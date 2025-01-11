@@ -21,7 +21,7 @@ export class UsersService {
     ]);
 
     const adminUsers: UserDto[] = admins.map((admin) => ({
-      id: admin.adminId,
+      id: admin.admin_id,
       username: admin.username,
       userType: 'admin',
     }));
@@ -38,7 +38,7 @@ export class UsersService {
   async getAdminUsers(): Promise<UserDto[]> {
     const admins = await this.adminRepository.find();
     return admins.map((admin) => ({
-      id: admin.adminId,
+      id: admin.admin_id,
       username: admin.username,
       userType: 'admin',
     }));

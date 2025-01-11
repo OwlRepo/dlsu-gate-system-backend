@@ -6,7 +6,7 @@ export class SuperAdmin {
   id: number;
 
   @Column({ unique: true })
-  superAdminId: string;
+  super_admin_id: string;
 
   @Column({ unique: true })
   username: string;

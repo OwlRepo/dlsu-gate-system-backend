@@ -35,7 +35,7 @@ export class SuperAdminAuthService {
     }
 
     const payload = {
-      sub: superAdmin.superAdminId,
+      sub: superAdmin.super_admin_id,
       username: superAdmin.username,
       role: 'super-admin',
     };
@@ -46,8 +46,8 @@ export class SuperAdminAuthService {
     };
   }
 
-  async getSuperAdminInfo(superAdminId: string): Promise<SuperAdmin> {
-    const superAdmin = await this.superAdminService.findOneById(superAdminId);
+  async getSuperAdminInfo(super_admin_id: string): Promise<SuperAdmin> {
+    const superAdmin = await this.superAdminService.findOneById(super_admin_id);
 
     if (!superAdmin) {
       throw new NotFoundException('Super admin not found');

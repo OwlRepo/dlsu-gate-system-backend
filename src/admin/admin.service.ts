@@ -18,11 +18,11 @@ export class AdminService {
   private async initializeExistingAdmins() {
     try {
       const admins = await this.adminRepository.find({
-        where: { adminId: null },
+        where: { admin_id: null },
       });
 
       for (const admin of admins) {
-        admin.adminId = this.generateSecureAdminId();
+        admin.admin_id = this.generateSecureAdminId();
         await this.adminRepository.save(admin);
       }
     } catch (error) {
@@ -49,16 +49,16 @@ export class AdminService {
     return admin;
   }
 
-  async findByAdminId(adminId: string) {
-    const admin = await this.adminRepository.findOne({ where: { adminId } });
+  async findByAdminId(admin_id: string) {
+    const admin = await this.adminRepository.findOne({ where: { admin_id } });
     if (!admin) {
-      throw new NotFoundException(`Admin with adminId ${adminId} not found`);
+      throw new NotFoundException(`Admin with admin_id ${admin_id} not found`);
     }
     return admin;
   }
 
-  async update(adminId: string, updateAdminDto: UpdateAdminDto) {
-    const admin = await this.findByAdminId(adminId);
+  async update(admin_id: string, updateAdminDto: UpdateAdminDto) {
+    const admin = await this.findByAdminId(admin_id);
 
     if (updateAdminDto.email) {
       const existingEmail = await this.adminRepository.findOne({
@@ -84,8 +84,8 @@ export class AdminService {
     return this.adminRepository.save(admin);
   }
 
-  async remove(adminId: string) {
-    const admin = await this.findByAdminId(adminId);
+  async remove(admin_id: string) {
+    const admin = await this.findByAdminId(admin_id);
     await this.adminRepository.remove(admin);
     return {
       success: true,

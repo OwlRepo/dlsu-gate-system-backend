@@ -18,7 +18,7 @@ export class Admin {
   role: string;
 
   @Column()
-  adminId: string;
+  admin_id: string;
 
   @Column({ default: true })
   isActive: boolean;

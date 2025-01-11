@@ -60,9 +60,9 @@ export class LoginService {
     return { message: 'Logged out successfully' };
   }
 
-  async getAdminInfo(adminId: number): Promise<Admin> {
+  async getAdminInfo(admin_id: number): Promise<Admin> {
     const admin = await this.adminRepository.findOne({
-      where: { id: adminId },
+      where: { id: admin_id },
     });
 
     if (!admin) {
