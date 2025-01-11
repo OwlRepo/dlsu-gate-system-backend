@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
@@ -6,7 +7,7 @@ import { join } from 'path';
 export class ScreensaverService {
   private readonly uploadDir = join(process.cwd(), 'uploads');
 
-  constructor() {
+  constructor(private configService: ConfigService) {
     // Ensure uploads directory exists
     this.initializeUploadDirectory();
   }
@@ -70,11 +71,17 @@ export class ScreensaverService {
         return null;
       }
 
+      const isDev =
+        this.configService.get<string>('NODE_ENV') === 'development';
+      const baseUrl = isDev
+        ? 'http://localhost:3000'
+        : this.configService.get<string>('BASE_URL');
       const stats = await fs.stat(join(this.uploadDir, screensaverFile));
       return {
         filename: screensaverFile,
         lastModified: stats.mtime,
         size: stats.size,
+        url: `${baseUrl}/static/uploads/${screensaverFile}`,
       };
     } catch (error) {
       console.log('Error getting screensaver info:', error);

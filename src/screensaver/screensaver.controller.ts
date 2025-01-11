@@ -58,13 +58,6 @@ export class ScreensaverController {
   @Get()
   @ApiOperation({ summary: 'Get current screensaver image URL' })
   async getScreensaver() {
-    const filePath = await this.screensaverService.getScreensaverPath();
-    const baseUrl =
-      this.configService.get<string>('BASE_URL') || 'http://localhost:3000';
-    const relativePath = filePath.split('public')[1]; // Get the path after 'public' directory
-
-    return {
-      url: `${baseUrl}/public${relativePath}`,
-    };
+    return await this.screensaverService.getScreensaverInfo();
   }
 }
