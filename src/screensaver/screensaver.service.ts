@@ -1,14 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class ScreensaverService {
   private readonly uploadDir = join(process.cwd(), '..', 'persistent_uploads');
 
-  constructor(private configService: ConfigService) {
-    // Ensure uploads directory exists
+  constructor(
+    private configService: ConfigService,
+    private jwtService: JwtService,
+  ) {
     this.initializeUploadDirectory();
   }
 
@@ -20,7 +27,22 @@ export class ScreensaverService {
     }
   }
 
-  async saveScreensaver(file: Express.Multer.File) {
+  async saveScreensaver(file: Express.Multer.File, token: string) {
+    // Verify token and check user type
+    try {
+      const decoded = this.jwtService.verify(token);
+      if (decoded.userType !== 'super-admin') {
+        throw new UnauthorizedException(
+          'Only super admins can upload screensavers',
+        );
+      }
+    } catch (error) {
+      console.error('Error verifying token:', error);
+      throw new UnauthorizedException(
+        'Invalid token or insufficient permissions',
+      );
+    }
+
     const fileExtension = file.mimetype.split('/')[1];
     const fileName = `screensaver-image.${fileExtension}`;
     const filePath = join(this.uploadDir, fileName);

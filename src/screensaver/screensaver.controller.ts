@@ -6,6 +6,7 @@ import {
   UploadedFile,
   UseGuards,
   BadRequestException,
+  Headers,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -42,7 +43,11 @@ export class ScreensaverController {
     },
   })
   @UseInterceptors(FileInterceptor('file'))
-  async uploadScreensaver(@UploadedFile() file: Express.Multer.File) {
+  async uploadScreensaver(
+    @UploadedFile() file: Express.Multer.File,
+    @Headers('authorization') authHeader: string,
+  ) {
+    const token = authHeader?.split(' ')[1];
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
@@ -52,7 +57,7 @@ export class ScreensaverController {
       throw new BadRequestException('Only JPG, JPEG and PNG files are allowed');
     }
 
-    return this.screensaverService.saveScreensaver(file);
+    return this.screensaverService.saveScreensaver(file, token);
   }
 
   @Get()
