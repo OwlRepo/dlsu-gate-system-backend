@@ -267,7 +267,7 @@ export class SuperAdminService implements OnModuleInit {
       admin_id: this.generateSecureAdminId(),
       password: hashedPassword,
       role: 'admin',
-      isActive: true,
+      is_active: true,
     });
 
     const savedAdmin = await this.adminRepository.save(admin);

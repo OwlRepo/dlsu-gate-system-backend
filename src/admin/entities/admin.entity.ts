@@ -21,7 +21,7 @@ export class Admin {
   admin_id: string;
 
   @Column({ default: true })
-  isActive: boolean;
+  is_active: boolean;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;

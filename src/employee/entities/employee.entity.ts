@@ -21,7 +21,7 @@ export class Employee {
   lastName: string;
 
   @Column()
-  isActive: boolean;
+  is_active: boolean;
 
   @Column()
   dateCreated: string;

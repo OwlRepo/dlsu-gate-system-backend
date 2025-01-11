@@ -161,7 +161,7 @@ export class EmployeeService implements OnModuleInit {
         ...createEmployeeDto,
         password: hashedPassword,
         employeeId: generatedEmployeeId,
-        isActive: true,
+        is_active: true,
         dateCreated: now.toISOString(),
         dateActivated: now.toISOString(),
         dateDeactivated: null,
@@ -300,7 +300,7 @@ export class EmployeeService implements OnModuleInit {
       const result = await this.employeeRepository.update(
         { employeeId },
         {
-          isActive: false,
+          is_active: false,
           dateDeactivated: new Date().toISOString(),
         },
       );

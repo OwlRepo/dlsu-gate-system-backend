@@ -31,7 +31,7 @@ export class CreateEmployeeDto {
   @ApiProperty()
   @IsBoolean()
   @IsOptional()
-  isActive?: boolean;
+  is_active?: boolean;
 
   @ApiProperty()
   @IsArray()
