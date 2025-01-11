@@ -71,8 +71,7 @@ export class ScreensaverService {
         return null;
       }
 
-      const isDev =
-        this.configService.get<string>('NODE_ENV') === 'development';
+      const isDev = process.env.NODE_ENV === 'development';
       const baseUrl = isDev
         ? 'http://localhost:3000'
         : this.configService.get<string>('BASE_URL');
