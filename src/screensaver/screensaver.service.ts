@@ -30,8 +30,18 @@ export class ScreensaverService {
   async saveScreensaver(file: Express.Multer.File, token: string) {
     // Verify token and check user type
     try {
+      if (!token) {
+        throw new UnauthorizedException('No token provided');
+      }
+
       const decoded = this.jwtService.verify(token);
-      if (decoded.userType !== 'super-admin') {
+      // Check if the user type is in the role property (common JWT structure)
+      const userType = decoded.role || decoded.userType || decoded.type;
+
+      console.log('Decoded token:', decoded); // For debugging
+      console.log('User type:', userType); // For debugging
+
+      if (userType !== 'super-admin') {
         throw new UnauthorizedException(
           'Only super admins can upload screensavers',
         );
