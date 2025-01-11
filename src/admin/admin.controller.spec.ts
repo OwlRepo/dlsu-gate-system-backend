@@ -80,8 +80,8 @@ describe('AdminController', () => {
     it('should update an admin by username', async () => {
       const updateAdminDto = {
         email: 'new.email@example.com',
-        firstName: 'Updated',
-        lastName: 'Name',
+        first_name: 'Updated',
+        last_name: 'Name',
         password: 'newSecurePassword123',
       };
 

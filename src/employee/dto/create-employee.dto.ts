@@ -18,11 +18,11 @@ export class CreateEmployeeDto {
 
   @ApiProperty()
   @IsString()
-  firstName: string;
+  first_name: string;
 
   @ApiProperty()
   @IsString()
-  lastName: string;
+  last_name: string;
 
   @ApiProperty()
   @IsEmail()

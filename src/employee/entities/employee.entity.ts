@@ -15,10 +15,10 @@ export class Employee {
   employeeId: string;
 
   @Column()
-  firstName: string;
+  first_name: string;
 
   @Column()
-  lastName: string;
+  last_name: string;
 
   @Column()
   is_active: boolean;

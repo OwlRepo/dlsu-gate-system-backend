@@ -10,8 +10,8 @@ export const defaultAdmin = {
   email: 'admin@example.com',
   password: 'Admin123!',
   username: 'admin123',
-  firstName: 'Default',
-  lastName: 'Admin',
+  first_name: 'Default',
+  last_name: 'Admin',
   name: 'Default Admin',
   role: 'admin',
 };

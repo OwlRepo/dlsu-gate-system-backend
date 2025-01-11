@@ -37,7 +37,7 @@ export class CreateAdminDto {
     example: 'John',
     description: 'The first name of the admin',
   })
-  firstName: string;
+  first_name: string;
 
   @IsNotEmpty()
   @IsString()
@@ -45,7 +45,7 @@ export class CreateAdminDto {
     example: 'Doe',
     description: 'The last name of the admin',
   })
-  lastName: string;
+  last_name: string;
 
   @IsNotEmpty()
   @IsString()

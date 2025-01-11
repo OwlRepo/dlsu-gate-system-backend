@@ -25,8 +25,8 @@ export class EmployeeController {
       example: {
         username: 'john.doe',
         password: 'secretPassword123',
-        firstName: 'John',
-        lastName: 'Doe',
+        first_name: 'John',
+        last_name: 'Doe',
         email: 'john.doe@example.com',
         is_active: true,
         deviceId: ['1234567890', '1234567891'],
@@ -77,8 +77,8 @@ export class EmployeeController {
   @ApiBody({
     schema: {
       example: {
-        firstName: 'John',
-        lastName: 'Doe',
+        first_name: 'John',
+        last_name: 'Doe',
         password: 'newPassword123',
         is_active: true,
         deviceId: ['1234567890', '1234567891'],

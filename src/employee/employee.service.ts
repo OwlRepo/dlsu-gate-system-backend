@@ -269,8 +269,8 @@ export class EmployeeService implements OnModuleInit {
     try {
       const allowedUpdates = {
         username: updateEmployeeDto.username,
-        firstName: updateEmployeeDto.firstName,
-        lastName: updateEmployeeDto.lastName,
+        first_name: updateEmployeeDto.first_name,
+        last_name: updateEmployeeDto.last_name,
         deviceId: updateEmployeeDto.deviceId,
       };
       const result = await this.employeeRepository.update(
