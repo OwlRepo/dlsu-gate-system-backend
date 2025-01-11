@@ -115,11 +115,9 @@ export class LoginController {
           userInfo = await this.employeeAuthService.getEmployeeInfo(
             decodedToken['sub'],
           );
-          const screensaverInfo =
-            await this.screensaverService.getScreensaverInfo();
+          userInfo.password = undefined;
           userInfo = {
             ...userInfo,
-            screensaver: screensaverInfo,
           };
           break;
         default:
