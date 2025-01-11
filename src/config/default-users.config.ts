@@ -1,6 +1,6 @@
 export const defaultSuperAdmin = {
   email: 'superadmin@example.com',
-  password: 'SuperAdmin123!',
+  password: 'superadmin123',
   username: 'defaultsuperadmin',
   name: 'Default Super Admin',
   role: 'super-admin',
@@ -9,7 +9,7 @@ export const defaultSuperAdmin = {
 export const defaultAdmin = {
   email: 'admin@example.com',
   password: 'Admin123!',
-  username: 'defaultadmin',
+  username: 'admin123',
   firstName: 'Default',
   lastName: 'Admin',
   name: 'Default Admin',
