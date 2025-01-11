@@ -8,6 +8,7 @@ import { AdminLoginDto } from './dto/admin-login.dto';
 import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { TokenBlacklistService } from '../auth/token-blacklist.service';
 import { EmployeeAuthService } from './services/employee-auth.service';
+import { ScreensaverService } from '../screensaver/screensaver.service';
 
 describe('LoginController', () => {
   let controller: LoginController;
@@ -31,6 +32,10 @@ describe('LoginController', () => {
   const mockEmployeeAuthService = {
     validateEmployee: jest.fn(),
     login: jest.fn(),
+  };
+
+  const mockScreensaverService = {
+    getScreensaverInfo: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -60,6 +65,10 @@ describe('LoginController', () => {
         {
           provide: EmployeeAuthService,
           useValue: mockEmployeeAuthService,
+        },
+        {
+          provide: ScreensaverService,
+          useValue: mockScreensaverService,
         },
       ],
     }).compile();

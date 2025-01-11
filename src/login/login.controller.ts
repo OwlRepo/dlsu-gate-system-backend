@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from '@nestjs/common';
 import { EmployeeAuthService } from './services/employee-auth.service';
 import { JwtService } from '@nestjs/jwt';
+import { ScreensaverService } from '../screensaver/screensaver.service';
 
 @Controller('auth')
 export class LoginController {
@@ -25,6 +26,7 @@ export class LoginController {
     private readonly superAdminAuthService: SuperAdminAuthService,
     private readonly employeeAuthService: EmployeeAuthService,
     private readonly jwtService: JwtService,
+    private readonly screensaverService: ScreensaverService,
   ) {}
 
   @Public()
@@ -113,6 +115,12 @@ export class LoginController {
           userInfo = await this.employeeAuthService.getEmployeeInfo(
             decodedToken['sub'],
           );
+          const screensaverInfo =
+            await this.screensaverService.getScreensaverInfo();
+          userInfo = {
+            ...userInfo,
+            screensaver: screensaverInfo,
+          };
           break;
         default:
           throw new UnauthorizedException('Invalid user type');

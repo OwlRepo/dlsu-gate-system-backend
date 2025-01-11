@@ -9,6 +9,7 @@ import { SuperAdminModule } from '../super-admin/super-admin.module';
 import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { EmployeeAuthService } from './services/employee-auth.service';
 import { AuthModule } from '../auth/auth.module';
+import { ScreensaverModule } from '../screensaver/screensaver.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AuthModule } from '../auth/auth.module';
     }),
     SuperAdminModule,
     AuthModule,
+    ScreensaverModule,
   ],
   controllers: [LoginController],
   providers: [LoginService, SuperAdminAuthService, EmployeeAuthService],
