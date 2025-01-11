@@ -41,6 +41,11 @@ export class EmployeeService implements OnModuleInit {
                 default: 'uuid_generate_v4()',
               },
               {
+                name: 'email',
+                type: 'varchar',
+                isUnique: true,
+              },
+              {
                 name: 'employee_id',
                 type: 'varchar',
                 isUnique: true,
