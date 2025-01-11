@@ -146,4 +146,10 @@ export class SuperAdminService implements OnModuleInit {
       password: createSuperAdminDto.password, // Return unhashed password
     };
   }
+
+  async findOneById(id: string): Promise<SuperAdmin> {
+    return this.superAdminRepository.findOne({
+      where: { superAdminId: id },
+    });
+  }
 }

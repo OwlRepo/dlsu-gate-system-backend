@@ -1,4 +1,12 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Get,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { LoginService } from './login.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { Public } from '../auth/public.decorator';
@@ -8,6 +16,7 @@ import { SuperAdminLoginDto } from '../super-admin/dto/super-admin.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from '@nestjs/common';
 import { EmployeeAuthService } from './services/employee-auth.service';
+import { JwtService } from '@nestjs/jwt';
 
 @Controller('auth')
 export class LoginController {
@@ -15,6 +24,7 @@ export class LoginController {
     private readonly loginService: LoginService,
     private readonly superAdminAuthService: SuperAdminAuthService,
     private readonly employeeAuthService: EmployeeAuthService,
+    private readonly jwtService: JwtService,
   ) {}
 
   @Public()
@@ -69,5 +79,52 @@ export class LoginController {
       loginDto.password,
     );
     return this.employeeAuthService.login(employee);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('validate')
+  @ApiOperation({ summary: 'Validate token and return user information' })
+  @ApiBearerAuth()
+  async validateToken(@Request() req) {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      throw new UnauthorizedException('No token provided');
+    }
+
+    const decodedToken = this.jwtService.decode(token);
+    if (!decodedToken) {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    const userType = decodedToken['role'];
+    let userInfo;
+
+    try {
+      switch (userType) {
+        case 'admin':
+          userInfo = await this.loginService.getAdminInfo(decodedToken['sub']);
+          break;
+        case 'super-admin':
+          userInfo = await this.superAdminAuthService.getSuperAdminInfo(
+            decodedToken['sub'],
+          );
+          break;
+        case 'employee':
+          userInfo = await this.employeeAuthService.getEmployeeInfo(
+            decodedToken['sub'],
+          );
+          break;
+        default:
+          throw new UnauthorizedException('Invalid user type');
+      }
+
+      const { ...userInfoWithoutPassword } = userInfo;
+      return userInfoWithoutPassword;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new NotFoundException(`${userType} not found`);
+      }
+      throw error;
+    }
   }
 }

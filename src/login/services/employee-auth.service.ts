@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -9,7 +13,7 @@ import * as bcrypt from 'bcrypt';
 export class EmployeeAuthService {
   constructor(
     @InjectRepository(Employee)
-    private employeeRepository: Repository<Employee>,
+    private readonly employeeRepository: Repository<Employee>,
     private jwtService: JwtService,
   ) {}
 
@@ -19,13 +23,13 @@ export class EmployeeAuthService {
     });
 
     if (!employee) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid username');
     }
 
     const isPasswordValid = await bcrypt.compare(password, employee.password);
 
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid password');
     }
 
     return employee;
@@ -38,7 +42,20 @@ export class EmployeeAuthService {
       role: 'employee',
     };
     return {
-      access_token: this.jwtService.sign(payload),
+      message: 'Employee authentication successful',
+      access_token: 'Bearer ' + this.jwtService.sign(payload),
     };
+  }
+
+  async getEmployeeInfo(employeeId: number): Promise<Employee> {
+    const employee = await this.employeeRepository.findOne({
+      where: { id: employeeId.toString() },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    return employee;
   }
 }

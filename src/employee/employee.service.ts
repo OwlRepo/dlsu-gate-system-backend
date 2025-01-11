@@ -5,6 +5,7 @@ import { Between, Repository } from 'typeorm';
 import { Employee } from './entities/employee.entity';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class EmployeeService {
@@ -63,9 +64,17 @@ export class EmployeeService {
         };
       }
 
-      // Generate random data for remaining fields
+      // Hash the password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(
+        createEmployeeDto.password,
+        saltRounds,
+      );
+
+      // Create employee with hashed password
       const employee = await this.employeeRepository.create({
         ...createEmployeeDto,
+        password: hashedPassword,
         employeeId: generatedEmployeeId,
         isActive: true,
         dateCreated: now.toISOString(),
@@ -75,9 +84,12 @@ export class EmployeeService {
 
       // Save to database
       const savedEmployee = await this.employeeRepository.save(employee);
+
+      // Return the response without the hashed password
+      const { password, ...employeeWithoutPassword } = savedEmployee;
       return {
         success: true,
-        data: savedEmployee,
+        data: employeeWithoutPassword,
       };
     } catch (error) {
       return {

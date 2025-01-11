@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,7 +17,7 @@ export class LoginService {
   constructor(
     private jwtService: JwtService,
     @InjectRepository(Admin)
-    private adminRepository: Repository<Admin>,
+    private readonly adminRepository: Repository<Admin>,
     private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
 
@@ -54,5 +58,17 @@ export class LoginService {
   async logout(token: string) {
     await this.tokenBlacklistService.blacklistToken(token);
     return { message: 'Logged out successfully' };
+  }
+
+  async getAdminInfo(adminId: number): Promise<Admin> {
+    const admin = await this.adminRepository.findOne({
+      where: { id: adminId },
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Admin not found');
+    }
+
+    return admin;
   }
 }
