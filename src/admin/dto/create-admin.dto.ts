@@ -29,31 +29,15 @@ export class CreateAdminDto {
   @IsNotEmpty()
   @IsString()
   @ApiProperty({
-    example: 'John',
-    description: 'The first name of the admin',
-  })
-  first_name: string;
-
-  @IsNotEmpty()
-  @IsString()
-  @ApiProperty({
-    example: 'Doe',
-    description: 'The last name of the admin',
-  })
-  last_name: string;
-
-  @IsNotEmpty()
-  @IsString()
-  @ApiProperty({
     example: 'admin',
     description: 'The role of the admin',
   })
-  role: string;
+  role?: string;
 
   @IsNotEmpty()
   @IsString()
   @ApiProperty({
-    example: 'John',
+    example: 'John Doe',
     description: 'The name of the admin',
   })
   name: string;

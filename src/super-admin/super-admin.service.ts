@@ -128,17 +128,9 @@ export class SuperAdminService implements OnModuleInit {
                 isUnique: true,
               },
               {
-                name: 'first_name',
-                type: 'varchar',
-              },
-              {
-                name: 'last_name',
-                type: 'varchar',
-              },
-              {
                 name: 'name',
                 type: 'varchar',
-                isNullable: true,
+                isNullable: false,
               },
               {
                 name: 'role',
@@ -201,9 +193,7 @@ export class SuperAdminService implements OnModuleInit {
           email: defaultAdmin.email,
           password: 'admin123',
           username: defaultAdmin.username,
-          first_name: defaultAdmin.firstName,
-          last_name: defaultAdmin.lastName,
-          name: defaultAdmin.name,
+          name: `${defaultAdmin.username}`,
           role: defaultAdmin.role,
         });
         console.log('Default admin created:', result);
