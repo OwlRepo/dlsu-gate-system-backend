@@ -11,6 +11,7 @@ import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
 import databaseConfig from './config/database.config';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import databaseConfig from './config/database.config';
     AdminModule,
     UsersModule,
     SuperAdminModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
