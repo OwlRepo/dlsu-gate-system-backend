@@ -21,7 +21,7 @@ Backend service for DLSU Gate System with load balancing and high availability s
 1. **Clone and Setup**
 
 ```bash
-git clone [repository-url]
+git clone git@github.com:OwlRepo/dlsu-gate-system-backend.git
 cd dlsu-gate-system-backend
 ```
 
