@@ -3,7 +3,6 @@ dist
 .git
 .gitignore
 README.md
-.env
 *.log
 nginx.conf
 docker-compose.yml 
