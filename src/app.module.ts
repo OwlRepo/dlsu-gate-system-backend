@@ -23,6 +23,12 @@ import { HealthModule } from './health/health.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         ...configService.get('database'),
+        extra: {
+          max: 30,
+          min: 5,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        },
       }),
       inject: [ConfigService],
     }),

@@ -76,7 +76,7 @@ bun test
 - **Performance**:
 
   - Compression enabled
-  - Rate limiting (100 requests/15min)
+  - Rate limiting (1000 requests/15min)
   - Static file caching
   - Connection pooling
 
@@ -173,7 +173,7 @@ docker compose up --build -d
 - **Performance**:
 
   - Compression enabled
-  - Rate limiting (100 requests/15min)
+  - Rate limiting (1000 requests/15min)
   - Static file caching
   - Connection pooling
 
