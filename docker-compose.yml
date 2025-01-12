@@ -11,6 +11,8 @@ services:
       - dlsu-gate-system-student-fe-1
       - dlsu-gate-system-student-fe-2
       - dlsu-gate-system-student-fe-3
+      - dlsu-gate-system-student-fe-4
+      - dlsu-gate-system-student-fe-5
     networks:
       - app-network
 
@@ -31,6 +33,14 @@ services:
       - postgres
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   dlsu-gate-system-student-fe-2:
     build:
@@ -78,6 +88,13 @@ services:
       - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  redis:
+    image: redis:alpine
+    ports:
+      - '6379:6379'
     networks:
       - app-network
 

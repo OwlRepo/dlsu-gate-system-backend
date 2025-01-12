@@ -4,6 +4,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import * as compression from 'compression';
+import { rateLimit } from 'express-rate-limit';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -43,6 +45,17 @@ async function bootstrap() {
 
   // Add graceful shutdown
   app.enableShutdownHooks();
+
+  // Add compression
+  app.use(compression());
+
+  // Add rate limiting
+  app.use(
+    rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // limit each IP to 100 requests per windowMs
+    }),
+  );
 
   // Use PORT environment variable with fallback to original port
   const port = process.env.PORT || 51742;
