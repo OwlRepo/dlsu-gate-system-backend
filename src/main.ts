@@ -44,6 +44,9 @@ async function bootstrap() {
   // Add graceful shutdown
   app.enableShutdownHooks();
 
-  await app.listen(process.env.PORT ?? 51742);
+  // Use PORT environment variable with fallback to original port
+  const port = process.env.PORT || 51742;
+  await app.listen(port);
+  console.log(`Application is running on port ${port}`);
 }
 bootstrap();
