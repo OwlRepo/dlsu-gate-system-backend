@@ -117,7 +117,7 @@ export class ScreensaverService {
       } else if (isRailway) {
         baseUrl = process.env.RAILWAY_STATIC_URL;
       } else {
-        // For other production environments (e.g., Docker)
+        // Production but not on Railway (e.g., Docker)
         baseUrl = this.configService.get<string>('BASE_URL') || '';
       }
 
@@ -129,6 +129,9 @@ export class ScreensaverService {
       console.log('Is Railway:', isRailway);
       console.log('Base URL:', baseUrl);
 
+      // Remove trailing slash from baseUrl if it exists
+      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+
       return {
         status: 'success',
         message: 'Screensaver found',
@@ -136,7 +139,7 @@ export class ScreensaverService {
           filename: screensaverFile,
           lastModified: stats.mtime,
           size: stats.size,
-          url: `${baseUrl}/persistent_uploads/${screensaverFile}`,
+          url: `${cleanBaseUrl}/persistent_uploads/${screensaverFile}`,
           path: join(this.uploadDir, screensaverFile),
           exists: true,
         },

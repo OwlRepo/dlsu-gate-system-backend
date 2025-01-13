@@ -37,16 +37,10 @@ async function bootstrap() {
   app.useGlobalGuards(guard);
 
   // Configure static file serving based on environment
-  if (process.env.RAILWAY_STATIC_URL) {
-    // Railway-specific static file serving
-    app.useStaticAssets(join(process.cwd(), 'persistent_uploads'), {
-      prefix: '/persistent_uploads/',
-      setHeaders: (res) => {
-        res.set('Access-Control-Allow-Origin', '*');
-      },
-    });
-  } else {
-    // Default static file serving for other environments
+  const isRailway = process.env.RAILWAY_STATIC_URL || false;
+
+  if (!isRailway) {
+    // For local Docker and development
     app.useStaticAssets(join(process.cwd(), 'persistent_uploads'), {
       prefix: '/persistent_uploads/',
     });
