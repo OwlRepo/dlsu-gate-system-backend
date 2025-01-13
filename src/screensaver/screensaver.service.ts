@@ -113,21 +113,19 @@ export class ScreensaverService {
       // Handle different environments
       let baseUrl;
       if (isDev) {
-        baseUrl = 'http://localhost';
+        baseUrl = process.env.BASE_URL || 'http://localhost';
       } else if (isRailway) {
         baseUrl = process.env.RAILWAY_STATIC_URL;
       } else {
-        // Production but not on Railway (e.g., Docker)
         baseUrl = this.configService.get<string>('BASE_URL') || '';
       }
 
       const stats = await fs.stat(join(this.uploadDir, screensaverFile));
 
-      console.log('File exists at:', join(this.uploadDir, screensaverFile));
-      console.log('File stats:', stats);
       console.log('Environment:', process.env.NODE_ENV);
       console.log('Is Railway:', isRailway);
       console.log('Base URL:', baseUrl);
+      console.log('File path:', join(this.uploadDir, screensaverFile));
 
       // Remove trailing slash from baseUrl if it exists
       const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
@@ -140,7 +138,6 @@ export class ScreensaverService {
           lastModified: stats.mtime,
           size: stats.size,
           url: `${cleanBaseUrl}/persistent_uploads/${screensaverFile}`,
-          path: join(this.uploadDir, screensaverFile),
           exists: true,
         },
       };
