@@ -41,6 +41,8 @@ services:
         reservations:
           cpus: '0.50'
           memory: 512M
+    volumes:
+      - persistent_uploads:/app/persistent_uploads
 
   dlsu-gate-system-student-fe-2:
     build:
@@ -59,6 +61,8 @@ services:
       - postgres
     networks:
       - app-network
+    volumes:
+      - persistent_uploads:/app/persistent_uploads
 
   dlsu-gate-system-student-fe-3:
     build:
@@ -77,6 +81,8 @@ services:
       - postgres
     networks:
       - app-network
+    volumes:
+      - persistent_uploads:/app/persistent_uploads
 
   dlsu-gate-system-student-fe-4:
     build:
@@ -103,6 +109,8 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+    volumes:
+      - persistent_uploads:/app/persistent_uploads
 
   dlsu-gate-system-student-fe-5:
     build:
@@ -129,6 +137,8 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+    volumes:
+      - persistent_uploads:/app/persistent_uploads
 
   postgres:
     image: postgres:latest
@@ -152,6 +162,7 @@ services:
 
 volumes:
   postgres_data:
+  persistent_uploads:
 
 networks:
   app-network:

@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class ScreensaverService {
-  private readonly uploadDir = join(process.cwd(), '..', 'persistent_uploads');
+  private readonly uploadDir = join(process.cwd(), 'persistent_uploads');
 
   constructor(
     private configService: ConfigService,
@@ -100,23 +100,37 @@ export class ScreensaverService {
       );
 
       if (!screensaverFile) {
-        return null;
+        return {
+          status: 'empty',
+          message: 'No screensaver image has been uploaded yet',
+          data: null,
+        };
       }
 
       const isDev = process.env.NODE_ENV === 'development';
       const baseUrl = isDev
         ? 'http://localhost:3000'
         : this.configService.get<string>('BASE_URL');
+
       const stats = await fs.stat(join(this.uploadDir, screensaverFile));
+
       return {
-        filename: screensaverFile,
-        lastModified: stats.mtime,
-        size: stats.size,
-        url: `${baseUrl}${isDev ? '/' : ''}persistent_uploads/${screensaverFile}`,
+        status: 'success',
+        message: 'Screensaver found',
+        data: {
+          filename: screensaverFile,
+          lastModified: stats.mtime,
+          size: stats.size,
+          url: `${baseUrl}/persistent_uploads/${screensaverFile}`,
+        },
       };
     } catch (error) {
-      console.log('Error getting screensaver info:', error);
-      return null;
+      console.error('Error getting screensaver info:', error);
+      return {
+        status: 'error',
+        message: 'Error retrieving screensaver information',
+        data: null,
+      };
     }
   }
 }
