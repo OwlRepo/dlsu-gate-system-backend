@@ -109,7 +109,7 @@ export class ScreensaverService {
 
       const isDev = process.env.NODE_ENV === 'development';
       const baseUrl = isDev
-        ? 'http://localhost:3000'
+        ? 'http://localhost:3000/'
         : this.configService.get<string>('BASE_URL');
 
       const stats = await fs.stat(join(this.uploadDir, screensaverFile));
@@ -121,7 +121,7 @@ export class ScreensaverService {
           filename: screensaverFile,
           lastModified: stats.mtime,
           size: stats.size,
-          url: `${baseUrl}${process.env.NODE_ENV === 'development' ? '/' : ''}persistent_uploads/${screensaverFile}`,
+          url: `${baseUrl}persistent_uploads/${screensaverFile}`,
         },
       };
     } catch (error) {
