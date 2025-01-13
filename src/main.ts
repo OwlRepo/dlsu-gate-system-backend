@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -30,28 +31,26 @@ async function bootstrap() {
     ],
   });
 
-  app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-  });
+  app.enableCors();
 
   const guard = app.get(JwtAuthGuard);
   app.useGlobalGuards(guard);
 
-  // Configure static file serving
-  app.useStaticAssets(join(__dirname, '..', 'public'), {
-    prefix: '/public/',
-  });
-
-  app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/static/uploads/',
-  });
-
-  // Serve files from persistent_uploads directory
-  app.useStaticAssets(join(process.cwd(), '..', 'persistent_uploads'), {
-    prefix: '/persistent_uploads',
-  });
+  // Configure static file serving based on environment
+  if (process.env.RAILWAY_STATIC_URL) {
+    // Railway-specific static file serving
+    app.useStaticAssets(join(process.cwd(), 'persistent_uploads'), {
+      prefix: '/persistent_uploads/',
+      setHeaders: (res) => {
+        res.set('Access-Control-Allow-Origin', '*');
+      },
+    });
+  } else {
+    // Default static file serving for other environments
+    app.useStaticAssets(join(process.cwd(), 'persistent_uploads'), {
+      prefix: '/persistent_uploads/',
+    });
+  }
 
   // Add graceful shutdown
   app.enableShutdownHooks();
@@ -67,9 +66,6 @@ async function bootstrap() {
     }),
   );
 
-  // Use PORT environment variable with fallback to original port
-  const port = process.env.PORT || 51742;
-  await app.listen(port);
-  console.log(`Application is running on port ${port}`);
+  await app.listen(process.env.PORT || 3000);
 }
 bootstrap();

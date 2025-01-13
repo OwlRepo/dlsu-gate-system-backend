@@ -108,16 +108,26 @@ export class ScreensaverService {
       }
 
       const isDev = process.env.NODE_ENV === 'development';
-      const baseUrl = (
-        isDev
-          ? 'http://localhost'
-          : this.configService.get<string>('BASE_URL') || ''
-      ).replace(/\/$/, '');
+      const isRailway = process.env.RAILWAY_STATIC_URL || false;
+
+      // Handle different environments
+      let baseUrl;
+      if (isDev) {
+        baseUrl = 'http://localhost';
+      } else if (isRailway) {
+        baseUrl = process.env.RAILWAY_STATIC_URL;
+      } else {
+        // For other production environments (e.g., Docker)
+        baseUrl = this.configService.get<string>('BASE_URL') || '';
+      }
 
       const stats = await fs.stat(join(this.uploadDir, screensaverFile));
 
       console.log('File exists at:', join(this.uploadDir, screensaverFile));
       console.log('File stats:', stats);
+      console.log('Environment:', process.env.NODE_ENV);
+      console.log('Is Railway:', isRailway);
+      console.log('Base URL:', baseUrl);
 
       return {
         status: 'success',
