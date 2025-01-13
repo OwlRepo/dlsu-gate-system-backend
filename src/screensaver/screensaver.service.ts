@@ -108,11 +108,16 @@ export class ScreensaverService {
       }
 
       const isDev = process.env.NODE_ENV === 'development';
-      const baseUrl = isDev
-        ? 'http://localhost:3000/'
-        : this.configService.get<string>('BASE_URL');
+      const baseUrl = (
+        isDev
+          ? 'http://localhost'
+          : this.configService.get<string>('BASE_URL') || ''
+      ).replace(/\/$/, '');
 
       const stats = await fs.stat(join(this.uploadDir, screensaverFile));
+
+      console.log('File exists at:', join(this.uploadDir, screensaverFile));
+      console.log('File stats:', stats);
 
       return {
         status: 'success',
@@ -121,7 +126,9 @@ export class ScreensaverService {
           filename: screensaverFile,
           lastModified: stats.mtime,
           size: stats.size,
-          url: `${baseUrl}persistent_uploads/${screensaverFile}`,
+          url: `${baseUrl}/persistent_uploads/${screensaverFile}`,
+          path: join(this.uploadDir, screensaverFile),
+          exists: true,
         },
       };
     } catch (error) {

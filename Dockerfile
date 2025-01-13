@@ -19,4 +19,7 @@ RUN bun run build
 EXPOSE 3000
 
 # Start the application
-CMD ["bun", "run", "start:prod"] 
+CMD ["bun", "run", "start:prod"]
+
+# Add this near the end of your Dockerfile
+RUN mkdir -p /app/persistent_uploads && chmod 777 /app/persistent_uploads 

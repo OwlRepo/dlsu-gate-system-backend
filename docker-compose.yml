@@ -7,6 +7,7 @@ services:
       - '80:80'
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - persistent_uploads:/app/persistent_uploads:ro
     depends_on:
       - dlsu-gate-system-student-fe-1
       - dlsu-gate-system-student-fe-2
