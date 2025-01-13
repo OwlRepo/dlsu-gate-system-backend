@@ -36,15 +36,10 @@ async function bootstrap() {
   const guard = app.get(JwtAuthGuard);
   app.useGlobalGuards(guard);
 
-  // Configure static file serving based on environment
-  const isRailway = process.env.RAILWAY_STATIC_URL || false;
-
-  if (!isRailway) {
-    // For local Docker and development
-    app.useStaticAssets(join(process.cwd(), 'persistent_uploads'), {
-      prefix: '/persistent_uploads/',
-    });
-  }
+  // Remove the environment check and always serve static files
+  app.useStaticAssets(join(process.cwd(), 'persistent_uploads'), {
+    prefix: '/persistent_uploads',
+  });
 
   // Add graceful shutdown
   app.enableShutdownHooks();

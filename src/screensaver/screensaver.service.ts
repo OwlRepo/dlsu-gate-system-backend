@@ -94,52 +94,59 @@ export class ScreensaverService {
 
   async getScreensaverInfo() {
     try {
-      const files = await fs.readdir(this.uploadDir);
-      const screensaverFile = files.find((file) =>
-        file.startsWith('screensaver-image.'),
-      );
+      // Add retries for file reading
+      let retryCount = 0;
+      const maxRetries = 10;
 
-      if (!screensaverFile) {
-        return {
-          status: 'empty',
-          message: 'No screensaver image has been uploaded yet',
-          data: null,
-        };
+      while (retryCount < maxRetries) {
+        try {
+          const files = await fs.readdir(this.uploadDir);
+          const screensaverFile = files.find((file) =>
+            file.startsWith('screensaver-image.'),
+          );
+
+          if (screensaverFile) {
+            const stats = await fs.stat(join(this.uploadDir, screensaverFile));
+            const isDev = process.env.NODE_ENV === 'development';
+            const isRailway = process.env.RAILWAY_STATIC_URL || false;
+
+            let baseUrl;
+            if (isDev) {
+              baseUrl = 'http://localhost';
+            } else if (isRailway) {
+              baseUrl = 'https://dlsu-portal-be-production.up.railway.app';
+            } else {
+              baseUrl = this.configService.get<string>('BASE_URL');
+            }
+
+            return {
+              status: 'success',
+              message: 'Screensaver found',
+              data: {
+                filename: screensaverFile,
+                lastModified: stats.mtime,
+                size: stats.size,
+                url: `${baseUrl}/persistent_uploads/${screensaverFile}`,
+                exists: true,
+              },
+            };
+          }
+
+          retryCount++;
+          if (retryCount < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1s between retries
+          }
+        } catch (error) {
+          retryCount++;
+          if (retryCount === maxRetries) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
       }
-
-      const isDev = process.env.NODE_ENV === 'development';
-      const isRailway = process.env.RAILWAY_STATIC_URL || false;
-
-      // Handle different environments
-      let baseUrl;
-      if (isDev) {
-        baseUrl = process.env.BASE_URL || 'http://localhost';
-      } else if (isRailway) {
-        baseUrl = process.env.RAILWAY_STATIC_URL;
-      } else {
-        baseUrl = this.configService.get<string>('BASE_URL') || '';
-      }
-
-      const stats = await fs.stat(join(this.uploadDir, screensaverFile));
-
-      console.log('Environment:', process.env.NODE_ENV);
-      console.log('Is Railway:', isRailway);
-      console.log('Base URL:', baseUrl);
-      console.log('File path:', join(this.uploadDir, screensaverFile));
-
-      // Remove trailing slash from baseUrl if it exists
-      const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
 
       return {
-        status: 'success',
-        message: 'Screensaver found',
-        data: {
-          filename: screensaverFile,
-          lastModified: stats.mtime,
-          size: stats.size,
-          url: `${cleanBaseUrl}/persistent_uploads/${screensaverFile}`,
-          exists: true,
-        },
+        status: 'empty',
+        message: 'No screensaver image has been uploaded yet',
+        data: null,
       };
     } catch (error) {
       console.error('Error getting screensaver info:', error);

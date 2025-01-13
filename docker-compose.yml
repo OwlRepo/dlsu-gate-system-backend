@@ -43,7 +43,7 @@ services:
           cpus: '0.50'
           memory: 512M
     volumes:
-      - persistent_uploads:/app/persistent_uploads
+      - screensaver_uploads:/app/persistent_uploads
 
   dlsu-gate-system-student-fe-2:
     build:
@@ -164,6 +164,8 @@ services:
 volumes:
   postgres_data:
   persistent_uploads:
+  screensaver_uploads:
+    driver: local
 
 networks:
   app-network:

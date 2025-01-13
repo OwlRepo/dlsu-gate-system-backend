@@ -18,6 +18,9 @@ RUN bun run build
 # Expose the port your app runs on
 EXPOSE 3000
 
+# Add this before the CMD line
+VOLUME ["/app/persistent_uploads"]
+
 # Start the application
 CMD ["bun", "run", "start:prod"]
 
