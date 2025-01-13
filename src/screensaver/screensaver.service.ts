@@ -121,7 +121,7 @@ export class ScreensaverService {
           filename: screensaverFile,
           lastModified: stats.mtime,
           size: stats.size,
-          url: `${baseUrl}/persistent_uploads/${screensaverFile}`,
+          url: `${baseUrl}${process.env.NODE_ENV === 'development' ? '/' : ''}persistent_uploads/${screensaverFile}`,
         },
       };
     } catch (error) {
