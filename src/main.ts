@@ -10,6 +10,8 @@ import { rateLimit } from 'express-rate-limit';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  app.set('trust proxy', 1);
+
   const config = new DocumentBuilder()
     .setTitle('DLSU Admin API')
     .setDescription('API for DLSU Admin')
