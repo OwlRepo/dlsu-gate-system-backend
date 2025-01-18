@@ -159,11 +159,22 @@ services:
     networks:
       - app-network
 
+  jenkins:
+    image: jenkins/jenkins:lts
+    ports:
+      - '8080:8080'
+      - '50000:50000'
+    volumes:
+      - jenkins_home:/var/jenkins_home
+    networks:
+      - app-network
+
 volumes:
   postgres_data:
   persistent_uploads:
   screensaver_uploads:
     driver: local
+  jenkins_home:
 
 networks:
   app-network:
