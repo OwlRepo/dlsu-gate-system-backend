@@ -12,6 +12,7 @@ import { UsersModule } from './users/users.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
 import databaseConfig from './config/database.config';
 import { HealthModule } from './health/health.module';
+import { DatabaseSyncModule } from './database-sync/database-sync.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { HealthModule } from './health/health.module';
     UsersModule,
     SuperAdminModule,
     HealthModule,
+    DatabaseSyncModule,
   ],
   controllers: [AppController],
   providers: [AppService],
