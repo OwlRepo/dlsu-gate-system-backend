@@ -10,7 +10,13 @@ import {
 import { LoginService } from './login.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { Public } from '../auth/public.decorator';
-import { ApiBody, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { SuperAdminLoginDto } from '../super-admin/dto/super-admin.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -19,6 +25,7 @@ import { EmployeeAuthService } from './services/employee-auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { ScreensaverService } from '../screensaver/screensaver.service';
 
+@ApiTags('Authentication')
 @Controller('auth')
 export class LoginController {
   constructor(
@@ -31,11 +38,42 @@ export class LoginController {
 
   @Public()
   @Post('admin')
-  @ApiOperation({ summary: 'Authenticate admin' })
+  @ApiOperation({
+    summary: 'Authenticate admin',
+    description:
+      'Authenticates an admin user and returns a JWT token. Public endpoint.',
+  })
   @ApiBody({
     schema: {
-      example: { username: 'admin', password: 'password' },
+      type: 'object',
+      properties: {
+        username: { type: 'string', example: 'admin' },
+        password: { type: 'string', example: 'password' },
+      },
+      required: ['username', 'password'],
     },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin successfully authenticated',
+    schema: {
+      type: 'object',
+      properties: {
+        access_token: { type: 'string' },
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            role: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid credentials',
   })
   authenticateAdmin(@Body() adminLoginDto: AdminLoginDto) {
     return this.loginService.validateAdminAuthentication(adminLoginDto);
@@ -55,8 +93,14 @@ export class LoginController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  @ApiOperation({ summary: 'Logout user and invalidate token' })
+  @ApiOperation({
+    summary: 'Logout user',
+    description:
+      'Logs out the user and invalidates their token. Requires authentication.',
+  })
   @ApiBearerAuth()
+  @ApiResponse({ status: 200, description: 'Successfully logged out' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid token' })
   async logout(@Request() req) {
     const token = req.headers.authorization?.split(' ')[1];
     return this.loginService.logout(token);
@@ -85,8 +129,30 @@ export class LoginController {
 
   @UseGuards(JwtAuthGuard)
   @Get('validate')
-  @ApiOperation({ summary: 'Validate token and return user information' })
+  @ApiOperation({
+    summary: 'Validate token and return user information',
+    description:
+      'Validates the provided JWT token and returns the associated user information',
+  })
   @ApiBearerAuth()
+  @ApiResponse({
+    status: 200,
+    description: 'Token is valid, user information returned',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        role: { type: 'string' },
+        // Add other relevant user properties
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async validateToken(@Request() req) {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {

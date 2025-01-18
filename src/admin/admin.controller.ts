@@ -1,28 +1,173 @@
 import { Controller, Get, Body, Patch, Param, Delete } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UpdateAdminDto } from './dto/update-admin.dto';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiTags,
+  ApiResponse,
+  ApiParam,
+  ApiSecurity,
+  ApiExtraModels,
+} from '@nestjs/swagger';
 
 @ApiTags('Admin')
+@ApiSecurity('bearer')
+@ApiExtraModels(UpdateAdminDto)
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all admins' })
+  @ApiOperation({
+    summary: 'Get all admins',
+    description: 'Retrieves a list of all admin users in the system',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of admins retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          admin_id: {
+            type: 'string',
+            example: '123e4567-e89b-12d3-a456-426614174000',
+          },
+          username: { type: 'string', example: 'admin.user' },
+          email: { type: 'string', example: 'admin@example.com' },
+          created_at: { type: 'string', format: 'date-time' },
+          updated_at: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Insufficient permissions',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 403 },
+        message: { type: 'string', example: 'Forbidden resource' },
+        error: { type: 'string', example: 'Forbidden' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
   findAll() {
     return this.adminService.findAll();
   }
 
   @Get(':admin_id')
-  @ApiOperation({ summary: 'Get admin by admin_id' })
+  @ApiOperation({
+    summary: 'Get admin by admin_id',
+    description: 'Retrieves a specific admin user by their admin_id',
+  })
+  @ApiParam({
+    name: 'admin_id',
+    required: true,
+    description: 'The unique identifier of the admin',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin found successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        admin_id: {
+          type: 'string',
+          example: '123e4567-e89b-12d3-a456-426614174000',
+        },
+        username: { type: 'string', example: 'admin.user' },
+        email: { type: 'string', example: 'admin@example.com' },
+        created_at: { type: 'string', format: 'date-time' },
+        updated_at: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Admin not found',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 404 },
+        message: { type: 'string', example: 'Admin not found' },
+        error: { type: 'string', example: 'Not Found' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
   findOne(@Param('admin_id') admin_id: string) {
     return this.adminService.findByAdminId(admin_id);
   }
 
   @Patch(':admin_id')
-  @ApiOperation({ summary: 'Update admin by admin_id' })
-  @ApiBody({ type: UpdateAdminDto })
+  @ApiOperation({
+    summary: 'Update admin by admin_id',
+    description: "Updates an admin user's information using their admin_id",
+  })
+  @ApiParam({
+    name: 'admin_id',
+    required: true,
+    description: 'The unique identifier of the admin to update',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiBody({
+    type: UpdateAdminDto,
+    description: 'The admin data to update',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        admin_id: { type: 'string' },
+        username: { type: 'string' },
+        email: { type: 'string' },
+        updated_at: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Admin not found',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 404 },
+        message: { type: 'string', example: 'Admin not found' },
+        error: { type: 'string', example: 'Not Found' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'array', items: { type: 'string' } },
+        error: { type: 'string', example: 'Bad Request' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
   update(
     @Param('admin_id') admin_id: string,
     @Body() updateAdminDto: UpdateAdminDto,
@@ -31,12 +176,104 @@ export class AdminController {
   }
 
   @Delete(':admin_id')
-  @ApiOperation({ summary: 'Delete admin by admin_id' })
+  @ApiOperation({
+    summary: 'Delete admin by admin_id',
+    description: 'Removes an admin user from the system using their admin_id',
+  })
+  @ApiParam({
+    name: 'admin_id',
+    required: true,
+    description: 'The unique identifier of the admin to delete',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'Admin deleted successfully' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Admin not found',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 404 },
+        message: { type: 'string', example: 'Admin not found' },
+        error: { type: 'string', example: 'Not Found' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
   remove(@Param('admin_id') admin_id: string) {
     return this.adminService.remove(admin_id);
   }
 
-  @Patch(':username')
+  @Patch('username/:username')
+  @ApiOperation({
+    summary: 'Update admin by username',
+    description: "Updates an admin user's information using their username",
+  })
+  @ApiParam({
+    name: 'username',
+    required: true,
+    description: 'The username of the admin to update',
+    example: 'admin.user',
+  })
+  @ApiBody({
+    type: UpdateAdminDto,
+    description: 'The admin data to update',
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        admin_id: { type: 'string' },
+        username: { type: 'string' },
+        email: { type: 'string' },
+        updated_at: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Admin not found',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 404 },
+        message: { type: 'string', example: 'Admin not found' },
+        error: { type: 'string', example: 'Not Found' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input data',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'array', items: { type: 'string' } },
+        error: { type: 'string', example: 'Bad Request' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
   updateByUsername(
     @Param('username') username: string,
     @Body() updateAdminDto: UpdateAdminDto,
