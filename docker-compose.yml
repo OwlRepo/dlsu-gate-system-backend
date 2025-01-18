@@ -162,8 +162,8 @@ services:
   jenkins:
     image: jenkins/jenkins:lts
     environment:
-      - JENKINS_OPTS=--prefix=/jenkins
-      - JENKINS_ARGS=--prefix=/jenkins
+      - JENKINS_OPTS="--prefix=/jenkins"
+      - JENKINS_ARGS="--prefix=/jenkins"
       - JENKINS_HOME=/var/jenkins_home
       # Add these for production
       - JENKINS_URL=https://dlsu-portal-be-production.up.railway.app/jenkins
