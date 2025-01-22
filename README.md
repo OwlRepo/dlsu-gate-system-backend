@@ -175,3 +175,7 @@ The only local requirements are those listed in the Prerequisites section:
 - Bun (for development)
 
 This containerized approach ensures consistent environments across development, testing, and production.
+
+## Nginx Configuration
+
+The Nginx configuration is located in the `nginx.conf` file. It is used to configure the reverse proxy and load balancer for the application.
