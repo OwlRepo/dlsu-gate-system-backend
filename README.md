@@ -78,6 +78,7 @@ docker compose logs -f
 - Health Check: `http://localhost/health`
 - Database (External): `localhost:5433`
 - Redis Cache: `localhost:6379`
+- Jenkins: `http://localhost/jenkins`
 
 ## Development
 
