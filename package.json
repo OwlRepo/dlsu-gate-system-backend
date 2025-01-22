@@ -24,8 +24,9 @@
     "migration:revert": "npm run typeorm -- migration:revert -d src/data-source.ts"
   },
   "dependencies": {
+    "@nestjs/cache-manager": "^3.0.0",
     "@nestjs/class-validator": "^0.13.4",
-    "@nestjs/common": "^10.0.0",
+    "@nestjs/common": "^11.0.4",
     "@nestjs/config": "^3.3.0",
     "@nestjs/core": "^10.0.0",
     "@nestjs/jwt": "^11.0.0",
@@ -46,6 +47,7 @@
     "express-rate-limit": "^7.5.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.13.1",
+    "redis": "^4.7.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.20"

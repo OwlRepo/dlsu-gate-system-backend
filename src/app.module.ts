@@ -13,6 +13,11 @@ import { SuperAdminModule } from './super-admin/super-admin.module';
 import databaseConfig from './config/database.config';
 import { HealthModule } from './health/health.module';
 import { DatabaseSyncModule } from './database-sync/database-sync.module';
+import { redisConfig } from './config/redis.config';
+import { CacheModule } from '@nestjs/cache-manager';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { HttpCacheInterceptor } from './interceptors/cache.interceptor';
+import { CacheService } from './services/cache.service';
 
 @Module({
   imports: [
@@ -45,8 +50,16 @@ import { DatabaseSyncModule } from './database-sync/database-sync.module';
     SuperAdminModule,
     HealthModule,
     DatabaseSyncModule,
+    CacheModule.register(redisConfig),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    CacheService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpCacheInterceptor,
+    },
+  ],
 })
 export class AppModule {}
