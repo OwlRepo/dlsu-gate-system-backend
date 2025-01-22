@@ -165,8 +165,8 @@ services:
       - JENKINS_OPTS="--prefix=/jenkins"
       - JENKINS_ARGS="--prefix=/jenkins"
       - JENKINS_HOME=/var/jenkins_home
-      - JENKINS_URL=https://${RAILWAY_PUBLIC_DOMAIN}/jenkins
-      - JENKINS_EXTERNAL_URL=https://${RAILWAY_PUBLIC_DOMAIN}/jenkins
+      - JENKINS_URL=http://192.168.100.44/jenkins
+      - JENKINS_EXTERNAL_URL=http://192.168.100.44/jenkins
     ports:
       - '8080:8080'
       - '50000:50000'
