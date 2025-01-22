@@ -158,3 +158,20 @@ For NestJS-specific documentation, please refer to [NESTJS.md](NESTJS.md)
 ## License
 
 [Your License]
+
+## Docker and Local Dependencies
+
+When running this project with Docker, you don't need to install PostgreSQL, Redis, or Jenkins locally on your machine. Docker containers provide isolated environments that include all necessary dependencies:
+
+- PostgreSQL runs in its own container with data persistence
+- Redis cache is containerized and accessible to the application
+- Jenkins CI/CD runs in its isolated container
+- All inter-service communication is handled through Docker's internal networking
+
+The only local requirements are those listed in the Prerequisites section:
+
+- Docker Desktop
+- Git
+- Bun (for development)
+
+This containerized approach ensures consistent environments across development, testing, and production.
