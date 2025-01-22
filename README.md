@@ -36,13 +36,25 @@ DB_NAME=dlsu_gate_system
 
 3. **Start Application**
 
-For Windows users, use the startup script which intelligently manages containers:
+The application can be started using the provided scripts for different operating systems:
+
+### Windows
 
 ```bash
 start-docker-app.bat
 ```
 
-The script will:
+### macOS and Linux
+
+```bash
+# First make the script executable (one-time setup)
+chmod +x start-docker-app.sh
+
+# Then run the script
+./start-docker-app.sh
+```
+
+Both scripts provide intelligent container management:
 
 - Ensure only one instance is running at a time
 - Check if containers are already running
@@ -52,7 +64,7 @@ The script will:
 
 Note: If you try to run the script while it's already running, you'll receive a notification and the new instance will not start.
 
-For Mac/Linux users:
+For manual container management:
 
 ```bash
 docker compose up --build -d
