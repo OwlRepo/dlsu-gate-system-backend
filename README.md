@@ -154,22 +154,57 @@ docker compose stop    # Stop containers (preserves data)
 
 **Load Balancing**
 
-- Nginx reverse proxy
-- Multiple application instances
-- Least connection distribution
+- Nginx reverse proxy with enhanced worker connections (4096)
+- 5 load-balanced application instances
+- Least connection distribution strategy
+- Keepalive connections: 128
 
 **Performance Optimizations**
 
-- Compression enabled
-- Rate limiting (1000 requests/15min)
-- Static file caching
+- Advanced compression with gzip
+- Intelligent rate limiting:
+  - API endpoints: 100 requests/second with 200 burst
+  - Static files: 200 requests/second with 300 burst
+- Static file caching with optimized settings
 - Connection pooling
+- TCP optimizations (tcp_nopush, tcp_nodelay)
+- File descriptor caching
+- Enhanced buffer sizes
 
 **Resource Management**
-Each instance is allocated:
 
-- CPU: max 0.5 cores (reserved 0.25)
-- Memory: max 512MB (reserved 256MB)
+Each API instance is allocated:
+
+- CPU: max 2.0 cores (reserved 1.0)
+- Memory: max 2048MB (reserved 1024MB)
+
+Database (PostgreSQL) resources:
+
+- CPU: max 4.0 cores (reserved 2.0)
+- Memory: max 4096MB (reserved 2048MB)
+- Max connections: 500
+- Shared buffers: 1GB
+- Effective cache size: 3GB
+- Work memory: 16MB
+
+Redis Cache:
+
+- CPU: max 1.0 cores (reserved 0.5)
+- Memory: max 1024MB (reserved 512MB)
+- Max memory: 768MB with LRU eviction
+
+Nginx Load Balancer:
+
+- CPU: max 2.0 cores (reserved 1.0)
+- Memory: max 2048MB (reserved 1024MB)
+
+**Timeout Configurations**
+
+- Client body timeout: 60s
+- Client header timeout: 60s
+- Keepalive timeout: 120s
+- Send timeout: 60s
+- Proxy timeouts: 120s (connect, send, read)
 
 ### Monitoring
 
@@ -186,8 +221,8 @@ curl http://localhost/health
 
 ### Configuration Files
 
-- `nginx.conf` - Load balancer and proxy settings
-- `docker-compose.yml` - Service architecture definition
+- `nginx.conf` - Load balancer and proxy settings with optimized performance configurations
+- `docker-compose.yml` - Service architecture definition with resource limits
 
 ## Additional Documentation
 

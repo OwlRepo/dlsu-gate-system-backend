@@ -12,6 +12,14 @@ services:
       - dlsu-gate-system-api-3
       - dlsu-gate-system-api-4
       - dlsu-gate-system-api-5
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 2048M
+        reservations:
+          cpus: '1.00'
+          memory: 1024M
     networks:
       - app-network
 
@@ -38,11 +46,11 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2.00'
+          memory: 2048M
+        reservations:
           cpus: '1.00'
           memory: 1024M
-        reservations:
-          cpus: '0.50'
-          memory: 512M
     volumes:
       - screensaver_uploads:/app/persistent_uploads
     restart: always
@@ -69,6 +77,14 @@ services:
       - app-network
     volumes:
       - persistent_uploads:/app/persistent_uploads
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 2048M
+        reservations:
+          cpus: '1.00'
+          memory: 1024M
 
   dlsu-gate-system-api-3:
     build:
@@ -92,6 +108,14 @@ services:
       - app-network
     volumes:
       - persistent_uploads:/app/persistent_uploads
+    deploy:
+      resources:
+        limits:
+          cpus: '2.00'
+          memory: 2048M
+        reservations:
+          cpus: '1.00'
+          memory: 1024M
 
   dlsu-gate-system-api-4:
     build:
@@ -116,11 +140,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
+          cpus: '2.00'
+          memory: 2048M
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '1.00'
+          memory: 1024M
     volumes:
       - persistent_uploads:/app/persistent_uploads
 
@@ -147,11 +171,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 512M
+          cpus: '2.00'
+          memory: 2048M
         reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '1.00'
+          memory: 1024M
     volumes:
       - persistent_uploads:/app/persistent_uploads
 
@@ -167,6 +191,24 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '4.00'
+          memory: 4096M
+        reservations:
+          cpus: '2.00'
+          memory: 2048M
+    command:
+      - 'postgres'
+      - '-c'
+      - 'max_connections=500'
+      - '-c'
+      - 'shared_buffers=1GB'
+      - '-c'
+      - 'effective_cache_size=3GB'
+      - '-c'
+      - 'work_mem=16MB'
 
   redis:
     image: redis:alpine
@@ -174,6 +216,15 @@ services:
       - '6379:6379'
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 1024M
+        reservations:
+          cpus: '0.50'
+          memory: 512M
+    command: redis-server --maxmemory 768mb --maxmemory-policy allkeys-lru
 
   jenkins:
     image: jenkins/jenkins:lts
