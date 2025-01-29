@@ -37,11 +37,11 @@ export class LoginController {
   ) {}
 
   @Public()
-  @Post('admin')
+  @Post('login')
   @ApiOperation({
-    summary: 'Authenticate admin',
+    summary: 'Unified login for admin and super-admin',
     description:
-      'Authenticates an admin user and returns a JWT token. Public endpoint.',
+      'Authenticates admin or super-admin users and returns a JWT token. User type is determined automatically from username.',
   })
   @ApiBody({
     schema: {
@@ -55,7 +55,7 @@ export class LoginController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Admin successfully authenticated',
+    description: 'User successfully authenticated',
     schema: {
       type: 'object',
       properties: {
@@ -75,20 +75,35 @@ export class LoginController {
     status: 401,
     description: 'Unauthorized - Invalid credentials',
   })
-  authenticateAdmin(@Body() adminLoginDto: AdminLoginDto) {
-    return this.loginService.validateAdminAuthentication(adminLoginDto);
-  }
-
-  @Public()
-  @Post('super-admin')
-  @ApiOperation({ summary: 'Authenticate super admin' })
-  @ApiBody({
-    schema: {
-      example: { username: 'superadmin', password: 'password' },
+  async unifiedLogin(
+    @Body()
+    loginDto: {
+      username: string;
+      password: string;
     },
-  })
-  superAdminLogin(@Body() loginDto: SuperAdminLoginDto) {
-    return this.superAdminAuthService.login(loginDto);
+  ) {
+    // First try admin login
+    try {
+      const adminResult = await this.loginService.validateAdminAuthentication({
+        username: loginDto.username,
+        password: loginDto.password,
+      });
+      return adminResult;
+    } catch (error) {
+      console.log(error);
+      // If admin login fails, try super-admin login
+      try {
+        const superAdminResult = await this.superAdminAuthService.login({
+          username: loginDto.username,
+          password: loginDto.password,
+        });
+        return superAdminResult;
+      } catch (superAdminError) {
+        console.log(superAdminError);
+        // If both fail, throw unauthorized exception
+        throw new UnauthorizedException('Invalid credentials');
+      }
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -144,7 +159,6 @@ export class LoginController {
         id: { type: 'string' },
         username: { type: 'string' },
         role: { type: 'string' },
-        // Add other relevant user properties
       },
     },
   })
