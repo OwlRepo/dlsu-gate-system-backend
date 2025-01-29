@@ -21,6 +21,7 @@ import {
   ApiBearerAuth,
   ApiProperty,
 } from '@nestjs/swagger';
+import { Role } from 'src/auth/enums/role.enum';
 
 // Define DTO for schedule update
 class UpdateScheduleDto {
@@ -86,7 +87,7 @@ class ScheduledSyncDto {
 @ApiBearerAuth()
 @Controller('database-sync')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin', 'super-admin')
+@Roles(Role.ADMIN, Role.SUPER_ADMIN)
 export class DatabaseSyncController {
   constructor(
     private readonly databaseSyncService: DatabaseSyncService,

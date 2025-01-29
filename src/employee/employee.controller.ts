@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { EmployeeService } from './employee.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -19,14 +20,20 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/enums/role.enum';
 
 @ApiTags('Employees')
 @ApiBearerAuth()
 @Controller('employee')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 
   @Post()
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Create a new employee',
     description:
@@ -64,6 +71,7 @@ export class EmployeeController {
   }
 
   @Get()
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get all employees',
     description: 'Retrieves all employees. Requires Admin privileges.',
@@ -82,6 +90,7 @@ export class EmployeeController {
   }
 
   @Get('created')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get employees created within a date range' })
   @ApiResponse({
     status: 200,
@@ -117,12 +126,14 @@ export class EmployeeController {
   }
 
   @Get('device/:device_id')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get employee by device ID' })
   findByDeviceId(@Param('device_id') device_id: string) {
     return this.employeeService.findByDeviceId(device_id);
   }
 
   @Get(':idOrUsername')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get employee by ID or username',
     description: 'Retrieves an employee using either their ID or username',
@@ -143,6 +154,7 @@ export class EmployeeController {
   }
 
   @Patch(':employee_id')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Update employee by ID',
     description:
@@ -167,8 +179,83 @@ export class EmployeeController {
   }
 
   @Delete(':employee_id')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Delete employee by ID' })
   remove(@Param('employee_id') employee_id: string) {
     return this.employeeService.remove(employee_id);
+  }
+
+  @Patch(':employee_id/deactivate')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Deactivate a single employee',
+    description:
+      'Deactivates an employee by setting their is_active status to false',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Employee successfully deactivated',
+    schema: {
+      example: {
+        success: true,
+        message: 'Employee deactivated successfully',
+        data: {
+          employee_id: '123e4567-e89b-12d3-a456-426614174000',
+          is_active: false,
+          date_deactivated: '2024-03-21T10:00:00.000Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  deactivateEmployee(@Param('employee_id') employee_id: string) {
+    return this.employeeService.deactivateEmployee(employee_id);
+  }
+
+  @Post('bulk-deactivate')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Deactivate multiple employees',
+    description:
+      'Deactivates multiple employees by their employee IDs. Employee IDs should be in the format "EMP1234".',
+  })
+  @ApiBody({
+    schema: {
+      example: {
+        employee_ids: ['EMP1234', 'EMP5678'],
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Employees successfully deactivated',
+    schema: {
+      example: {
+        success: true,
+        message: 'Employees deactivated successfully',
+        data: {
+          deactivated_count: 2,
+          deactivated_employees: [
+            {
+              employee_id: '123e4567-e89b-12d3-a456-426614174000',
+              is_active: false,
+              date_deactivated: '2024-03-21T10:00:00.000Z',
+            },
+            {
+              employee_id: '123e4567-e89b-12d3-a456-426614174001',
+              is_active: false,
+              date_deactivated: '2024-03-21T10:00:00.000Z',
+            },
+          ],
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid employee IDs',
+  })
+  bulkDeactivateEmployees(@Body() body: { employee_ids: string[] }) {
+    return this.employeeService.bulkDeactivateEmployees(body.employee_ids);
   }
 }

@@ -396,4 +396,26 @@ export class EmployeeService implements OnModuleInit {
       };
     }
   }
+
+  async deactivateEmployee(employee_id: string) {
+    return this.update(employee_id, {
+      is_active: false,
+      date_deactivated: new Date(),
+    });
+  }
+
+  async bulkDeactivateEmployees(employee_ids: string[]) {
+    const deactivatedEmployees = await Promise.all(
+      employee_ids.map((id) => this.deactivateEmployee(id)),
+    );
+
+    return {
+      success: true,
+      message: 'Employees deactivated successfully',
+      data: {
+        deactivated_count: deactivatedEmployees.length,
+        deactivated_employees: deactivatedEmployees,
+      },
+    };
+  }
 }
