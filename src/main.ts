@@ -13,16 +13,16 @@ async function bootstrap() {
   app.set('trust proxy', 1);
 
   const config = new DocumentBuilder()
-    .setTitle('DLSU Admin API')
-    .setDescription('API for DLSU Admin')
+    .setTitle('DLSU Gate System API')
+    .setDescription('API for DLSU Gate System')
     .setVersion('1.0')
-    .addTag('DLSU Admin')
+    .addTag('DLSU Gate System API')
     .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document, {
-    customSiteTitle: 'DLSU Admin API Documentation',
+    customSiteTitle: 'DLSU Gate System API Documentation',
     customfavIcon: '/favicon.ico',
     customJs: [
       'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js',
