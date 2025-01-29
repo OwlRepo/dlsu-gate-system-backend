@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository, DataSource, Table } from 'typeorm';
+import { Between, Repository, DataSource, Table, Raw } from 'typeorm';
 import { Employee } from './entities/employee.entity';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -256,14 +256,44 @@ export class EmployeeService implements OnModuleInit {
 
   async findByDateRange(startDate: string, endDate: string) {
     try {
-      const employees = await this.employeeRepository.find({
-        where: { date_created: Between(startDate, endDate) },
-      });
+      console.log('Searching with dates:', { startDate, endDate });
+
+      const employees = await this.employeeRepository
+        .createQueryBuilder('employee')
+        .select([
+          'employee.id',
+          'employee.email',
+          'employee.employee_id',
+          'employee.username',
+          'employee.first_name',
+          'employee.last_name',
+          'employee.device_id',
+          'employee.is_active',
+          'employee.date_created',
+          'employee.date_activated',
+          'employee.date_deactivated',
+        ])
+        .where('employee.date_created BETWEEN :start AND :end', {
+          start: startDate,
+          end: endDate,
+        })
+        .getMany();
+
+      console.log('Query result:', employees);
+
+      if (employees.length === 0) {
+        return {
+          success: false,
+          message: 'No employees found in the specified date range',
+        };
+      }
+
       return {
         success: true,
         data: employees,
       };
     } catch (error) {
+      console.error('Date range search error:', error);
       return {
         success: false,
         message: error.message,
