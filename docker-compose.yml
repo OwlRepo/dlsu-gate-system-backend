@@ -19,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      no_cache: true
     environment:
       - PORT=3000
       - DB_HOST=postgres
@@ -44,11 +45,13 @@ services:
           memory: 512M
     volumes:
       - screensaver_uploads:/app/persistent_uploads
+    restart: always
 
   dlsu-gate-system-student-fe-2:
     build:
       context: .
       dockerfile: Dockerfile
+      no_cache: true
     environment:
       - PORT=3000
       - DB_HOST=postgres
@@ -71,6 +74,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      no_cache: true
     environment:
       - PORT=3000
       - DB_HOST=postgres
@@ -93,6 +97,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      no_cache: true
     environment:
       - PORT=3000
       - DB_HOST=postgres
@@ -123,6 +128,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      no_cache: true
     environment:
       - PORT=3000
       - DB_HOST=postgres
