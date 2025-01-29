@@ -4,7 +4,6 @@ import { LoginService } from './login.service';
 import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Admin } from '../admin/entities/admin.entity';
-import { AdminLoginDto } from './dto/admin-login.dto';
 import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { TokenBlacklistService } from '../auth/token-blacklist.service';
 import { EmployeeAuthService } from './services/employee-auth.service';
@@ -81,9 +80,9 @@ describe('LoginController', () => {
     expect(controller).toBeDefined();
   });
 
-  describe('validateAdminAuthentication', () => {
+  describe('unifiedLogin', () => {
     it('should validate admin authentication with correct parameters', async () => {
-      const adminLoginDto: AdminLoginDto = {
+      const adminLoginDto = {
         username: 'admin',
         password: 'password123',
       };
@@ -97,7 +96,7 @@ describe('LoginController', () => {
         .spyOn(loginService, 'validateAdminAuthentication')
         .mockResolvedValue(expectedResult);
 
-      const result = await controller.authenticateAdmin(adminLoginDto);
+      const result = await controller.unifiedLogin(adminLoginDto);
 
       expect(loginService.validateAdminAuthentication).toHaveBeenCalledWith(
         adminLoginDto,

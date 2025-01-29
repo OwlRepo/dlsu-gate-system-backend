@@ -8,7 +8,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { LoginService } from './login.service';
-import { AdminLoginDto } from './dto/admin-login.dto';
 import { Public } from '../auth/public.decorator';
 import {
   ApiBody,
@@ -18,7 +17,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { SuperAdminAuthService } from './services/super-admin-auth.service';
-import { SuperAdminLoginDto } from '../super-admin/dto/super-admin.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Request } from '@nestjs/common';
 import { EmployeeAuthService } from './services/employee-auth.service';

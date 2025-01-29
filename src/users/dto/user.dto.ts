@@ -7,6 +7,9 @@ export class UserDto {
   @ApiProperty({ example: 'johndoe', description: 'Username' })
   username: string;
 
-  @ApiProperty({ enum: ['admin', 'employee'], description: 'User type' })
-  userType: 'admin' | 'employee';
+  @ApiProperty({
+    enum: ['admin', 'employee', 'super-admin'],
+    description: 'User type',
+  })
+  userType: 'admin' | 'employee' | 'super-admin';
 }
