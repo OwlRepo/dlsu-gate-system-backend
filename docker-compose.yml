@@ -7,15 +7,15 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - persistent_uploads:/app/persistent_uploads:ro
     depends_on:
-      - dlsu-gate-system-student-fe-1
-      - dlsu-gate-system-student-fe-2
-      - dlsu-gate-system-student-fe-3
-      - dlsu-gate-system-student-fe-4
-      - dlsu-gate-system-student-fe-5
+      - dlsu-gate-system-api-1
+      - dlsu-gate-system-api-2
+      - dlsu-gate-system-api-3
+      - dlsu-gate-system-api-4
+      - dlsu-gate-system-api-5
     networks:
       - app-network
 
-  dlsu-gate-system-student-fe-1:
+  dlsu-gate-system-api-1:
     build:
       context: .
       dockerfile: Dockerfile
@@ -47,7 +47,7 @@ services:
       - screensaver_uploads:/app/persistent_uploads
     restart: always
 
-  dlsu-gate-system-student-fe-2:
+  dlsu-gate-system-api-2:
     build:
       context: .
       dockerfile: Dockerfile
@@ -70,7 +70,7 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
 
-  dlsu-gate-system-student-fe-3:
+  dlsu-gate-system-api-3:
     build:
       context: .
       dockerfile: Dockerfile
@@ -93,7 +93,7 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
 
-  dlsu-gate-system-student-fe-4:
+  dlsu-gate-system-api-4:
     build:
       context: .
       dockerfile: Dockerfile
@@ -124,7 +124,7 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
 
-  dlsu-gate-system-student-fe-5:
+  dlsu-gate-system-api-5:
     build:
       context: .
       dockerfile: Dockerfile
