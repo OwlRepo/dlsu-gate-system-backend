@@ -2,7 +2,30 @@
 
 Backend service for DLSU Gate System with load balancing and high availability setup.
 
+## Table of Contents
+
+- [DLSU Gate System Backend](#dlsu-gate-system-backend)
+  - [Table of Contents](#table-of-contents)
+  - [Prerequisites](#prerequisites)
+  - [Quick Start](#quick-start)
+    - [Windows Users](#windows-users)
+    - [macOS and Linux Users](#macos-and-linux-users)
+  - [Development](#development)
+  - [Access Points](#access-points)
+  - [Container Management](#container-management)
+    - [Clean Build Process](#clean-build-process)
+    - [Manual Container Operations](#manual-container-operations)
+  - [Production Architecture](#production-architecture)
+    - [Tech Stack](#tech-stack)
+    - [System Features](#system-features)
+    - [Monitoring](#monitoring)
+    - [Configuration Files](#configuration-files)
+  - [Additional Documentation](#additional-documentation)
+  - [License](#license)
+
 ## Prerequisites
+
+Before you begin, ensure you have:
 
 - Docker Desktop
 - Git
@@ -12,14 +35,14 @@ Note: When running this project with Docker, you don't need to install PostgreSQ
 
 ## Quick Start
 
-1. **Clone and Setup**
+1. **Clone the Repository**
 
 ```bash
 git clone git@github.com:OwlRepo/dlsu-gate-system-backend.git
 cd dlsu-gate-system-backend
 ```
 
-2. **Environment Setup**
+2. **Set Up Environment**
    Create `.env` file in project root:
 
 ```env
@@ -28,86 +51,36 @@ DB_PASSWORD=your_password
 DB_NAME=dlsu_gate_system
 ```
 
-3. **Start Application**
+3. **Launch the Application**
 
-### Using Startup Scripts
+Choose your platform:
 
-#### Windows
+### Windows Users
 
 ```bash
 start-docker-app.bat
 ```
 
-#### macOS and Linux
+### macOS and Linux Users
 
 ```bash
-# First make the script executable (one-time setup)
+# Make script executable (one-time setup)
 chmod +x start-docker-app.sh
 
-# Then run the script
+# Run the application
 ./start-docker-app.sh
 ```
 
-The startup scripts provide intelligent container management:
+The startup scripts automatically:
 
-- Ensure only one instance is running at a time
-- Check if containers are already running
-- Start existing containers if they're stopped
-- Only build new containers if none exist
-- Display container logs automatically
-
-Note: If you try to run the script while it's already running, you'll receive a notification.
-
-## Container Management
-
-### Clean Build Process
-
-To perform a clean build while preserving uploaded files and data:
-
-```bash
-# Stop all containers
-docker-compose down
-
-# Clear Docker build cache
-docker builder prune -f
-
-# Rebuild and start everything
-docker-compose up --build --force-recreate
-```
-
-**Important Note About Data Persistence:**
-
-- The system uses named volumes to ensure data persistence across rebuilds
-- Images and files stored in `persistent_uploads` volume will be preserved
-- Do NOT use `docker-compose down -v` as it will remove all volumes including stored images
-
-### Manual Container Management
-
-```bash
-# Start with logs
-docker compose up --build -d
-docker compose logs -f
-
-# Check container status
-docker compose ps
-
-# Start existing containers
-docker compose start
-
-# Stop containers (preserves data)
-docker compose stop
-```
-
-## Access Points
-
-- Main Application: `http://localhost`
-- API Documentation: `http://localhost/api`
-- Health Check: `http://localhost/health`
-- Database (External): `localhost:5433`
-- Redis Cache: `localhost:6379`
-- Jenkins: `http://localhost/jenkins`
+- Ensure single instance running
+- Manage container lifecycle
+- Display logs
+- Handle container dependencies
 
 ## Development
+
+Local development setup:
 
 ```bash
 # Install dependencies
@@ -120,32 +93,80 @@ bun run dev
 bun test
 ```
 
+## Access Points
+
+Once running, access the system at:
+
+- 🌐 Main Application: `http://localhost`
+- 📚 API Documentation: `http://localhost/api`
+- 💓 Health Check: `http://localhost/health`
+- 🗄️ Database (External): `localhost:5433`
+- 📦 Redis Cache: `localhost:6379`
+- 🔧 Jenkins: `http://localhost/jenkins`
+
+## Container Management
+
+### Clean Build Process
+
+For a fresh build while preserving data:
+
+```bash
+# Stop all containers
+docker-compose down
+
+# Clear Docker build cache
+docker builder prune -f
+
+# Rebuild and start everything
+docker-compose up --build --force-recreate
+```
+
+⚠️ **Important: Data Persistence**
+
+- All data is stored in named Docker volumes
+- `persistent_uploads` volume preserves uploaded files
+- Never use `docker-compose down -v` unless you want to delete all data
+
+### Manual Container Operations
+
+```bash
+# Start with logs
+docker compose up --build -d
+docker compose logs -f
+
+# Container management
+docker compose ps      # Check status
+docker compose start   # Start containers
+docker compose stop    # Stop containers (preserves data)
+```
+
 ## Production Architecture
 
 ### Tech Stack
 
-- NestJS with TypeScript
-- PostgreSQL Database
-- Redis Cache
-- Nginx Load Balancer
-- Docker Containerization
+- 🔧 NestJS with TypeScript
+- 🗄️ PostgreSQL Database
+- 📦 Redis Cache
+- 🔄 Nginx Load Balancer
+- 🐳 Docker Containerization
 
-### Load Balancing
+### System Features
+
+**Load Balancing**
 
 - Nginx reverse proxy
 - Multiple application instances
 - Least connection distribution
 
-### Performance
+**Performance Optimizations**
 
 - Compression enabled
 - Rate limiting (1000 requests/15min)
 - Static file caching
 - Connection pooling
 
-### Container Resource Limits
-
-Each application instance is configured with:
+**Resource Management**
+Each instance is allocated:
 
 - CPU: max 0.5 cores (reserved 0.25)
 - Memory: max 512MB (reserved 256MB)
@@ -156,21 +177,21 @@ Each application instance is configured with:
 # View logs
 docker compose logs -f
 
-# Check container status
+# Check status
 docker compose ps
 
-# Health check endpoint
+# Health check
 curl http://localhost/health
 ```
 
 ### Configuration Files
 
-- Nginx configuration: `nginx.conf` - configures reverse proxy and load balancer
-- Docker configuration: `docker-compose.yml` - defines service architecture
+- `nginx.conf` - Load balancer and proxy settings
+- `docker-compose.yml` - Service architecture definition
 
 ## Additional Documentation
 
-For NestJS-specific documentation, please refer to [NESTJS.md](NESTJS.md)
+For NestJS-specific details, see [NESTJS.md](NESTJS.md)
 
 ## License
 
