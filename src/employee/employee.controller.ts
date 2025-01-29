@@ -125,7 +125,11 @@ export class EmployeeController {
   }
 
   @Patch(':employee_id')
-  @ApiOperation({ summary: 'Update employee by ID' })
+  @ApiOperation({
+    summary: 'Update employee by ID',
+    description:
+      "Updates an employee's information. Fields that don't need to be updated can be omitted from the request payload.",
+  })
   @ApiBody({
     schema: {
       example: {

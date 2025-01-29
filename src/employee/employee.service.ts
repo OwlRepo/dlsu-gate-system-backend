@@ -273,22 +273,40 @@ export class EmployeeService implements OnModuleInit {
 
   async update(employee_id: string, updateEmployeeDto: UpdateEmployeeDto) {
     try {
-      const allowedUpdates = {
-        username: updateEmployeeDto.username,
-        first_name: updateEmployeeDto.first_name,
-        last_name: updateEmployeeDto.last_name,
-        device_id: updateEmployeeDto.device_id,
-      };
-      const result = await this.employeeRepository.update(
-        employee_id,
-        allowedUpdates,
-      );
-      if (result.affected === 0) {
+      // First check if employee exists with the given employee_id
+      const employee = await this.employeeRepository.findOne({
+        where: { employee_id: employee_id },
+      });
+
+      if (!employee) {
         return {
           success: false,
           message: 'Employee not found',
         };
       }
+
+      const allowedUpdates: any = {
+        username: updateEmployeeDto.username,
+        first_name: updateEmployeeDto.first_name,
+        last_name: updateEmployeeDto.last_name,
+        device_id: updateEmployeeDto.device_id,
+      };
+
+      // If password is provided, hash it before updating
+      if (updateEmployeeDto.password) {
+        const saltRounds = 10;
+        allowedUpdates.password = await bcrypt.hash(
+          updateEmployeeDto.password,
+          saltRounds,
+        );
+      }
+
+      // Update using employee_id in where clause
+      const result = await this.employeeRepository.update(
+        { employee_id: employee_id },
+        allowedUpdates,
+      );
+
       return {
         success: true,
         message: 'Employee updated successfully',
