@@ -5,6 +5,8 @@ import {
   UseGuards,
   Req,
   ForbiddenException,
+  Patch,
+  Param,
 } from '@nestjs/common';
 import { SuperAdminService } from './super-admin.service';
 import { CreateSuperAdminDto } from './dto/super-admin.dto';
@@ -17,6 +19,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { UpdateSuperAdminDto } from './dto/update-super-admin.dto';
 
 @ApiTags('Super Admin')
 @ApiBearerAuth()
@@ -75,5 +78,43 @@ export class SuperAdminController {
       throw new ForbiddenException('Only super admins can create new admins');
     }
     return this.superAdminService.createAdmin(createAdminDto);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Update a super admin',
+    description:
+      'Updates an existing super admin account. Requires Super Admin privileges.',
+  })
+  @ApiBody({
+    type: UpdateSuperAdminDto,
+    description: 'Super admin update data',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Super admin successfully updated',
+    type: UpdateSuperAdminDto,
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request - Invalid data' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires Super Admin privileges',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not Found - Super admin not found',
+  })
+  async updateSuperAdmin(
+    @Param('id') id: string,
+    @Body() updateSuperAdminDto: UpdateSuperAdminDto,
+    @Req() req,
+  ) {
+    if (req.user.role !== 'super-admin') {
+      throw new ForbiddenException(
+        'Only super admins can update super admin accounts',
+      );
+    }
+    return this.superAdminService.update(id, updateSuperAdminDto);
   }
 }

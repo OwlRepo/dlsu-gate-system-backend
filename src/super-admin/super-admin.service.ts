@@ -12,6 +12,8 @@ import {
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Table } from 'typeorm';
+import { UpdateSuperAdminDto } from './dto/update-super-admin.dto';
+import { hash } from 'bcrypt';
 
 @Injectable()
 export class SuperAdminService implements OnModuleInit {
@@ -285,6 +287,32 @@ export class SuperAdminService implements OnModuleInit {
   }
 
   async findOneById(id: string): Promise<SuperAdmin> {
+    return this.superAdminRepository.findOne({
+      where: { super_admin_id: id },
+    });
+  }
+
+  async update(id: string, updateSuperAdminDto: UpdateSuperAdminDto) {
+    const superAdmin = await this.superAdminRepository.findOne({
+      where: { super_admin_id: id },
+    });
+
+    if (!superAdmin) {
+      throw new NotFoundException('Super admin not found');
+    }
+
+    // If password is provided, hash it before saving
+    if (updateSuperAdminDto.password) {
+      updateSuperAdminDto.password = await hash(
+        updateSuperAdminDto.password,
+        10,
+      );
+    }
+
+    await this.superAdminRepository.update(
+      { super_admin_id: id },
+      updateSuperAdminDto,
+    );
     return this.superAdminRepository.findOne({
       where: { super_admin_id: id },
     });
