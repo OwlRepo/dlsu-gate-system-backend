@@ -6,7 +6,13 @@ export class UpdateSuperAdminDto {
   @IsOptional()
   @IsString()
   @MinLength(2)
-  name?: string;
+  first_name?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  last_name?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

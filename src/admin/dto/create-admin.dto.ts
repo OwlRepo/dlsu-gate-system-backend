@@ -1,5 +1,5 @@
-import { IsNotEmpty, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAdminDto {
   @IsNotEmpty()
@@ -32,13 +32,23 @@ export class CreateAdminDto {
     example: 'admin',
     description: 'The role of the admin',
   })
-  role?: string;
+  role: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  @ApiProperty({
-    example: 'John Doe',
-    description: 'The name of the admin',
+  @ApiPropertyOptional({
+    example: 'John',
+    description: 'The first name of the admin',
+    default: 'Unknown',
   })
-  name: string;
+  first_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @ApiPropertyOptional({
+    example: 'Doe',
+    description: 'The last name of the admin',
+    default: 'Admin',
+  })
+  last_name?: string;
 }

@@ -20,8 +20,11 @@ export class Admin {
   @Column()
   admin_id: string;
 
-  @Column()
-  name: string;
+  @Column({ nullable: true, default: 'Unknown' })
+  first_name: string;
+
+  @Column({ nullable: true, default: 'Admin' })
+  last_name: string;
 
   @Column({ default: true })
   is_active: boolean;

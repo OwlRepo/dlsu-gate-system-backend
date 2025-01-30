@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import { Table } from 'typeorm';
 import { UpdateSuperAdminDto } from './dto/update-super-admin.dto';
 import { hash } from 'bcrypt';
+import { AppDataSource } from '../config/typeorm.config';
 
 @Injectable()
 export class SuperAdminService implements OnModuleInit {
@@ -28,6 +29,8 @@ export class SuperAdminService implements OnModuleInit {
   async onModuleInit() {
     await this.ensureTablesExist();
     await this.initializeDefaultUsers();
+    await AppDataSource.initialize();
+    await AppDataSource.runMigrations();
   }
 
   private async ensureTablesExist() {
@@ -71,9 +74,14 @@ export class SuperAdminService implements OnModuleInit {
                 isUnique: true,
               },
               {
-                name: 'name',
+                name: 'first_name',
                 type: 'varchar',
-                isNullable: true,
+                isNullable: false,
+              },
+              {
+                name: 'last_name',
+                type: 'varchar',
+                isNullable: false,
               },
               {
                 name: 'role',
@@ -130,7 +138,12 @@ export class SuperAdminService implements OnModuleInit {
                 isUnique: true,
               },
               {
-                name: 'name',
+                name: 'first_name',
+                type: 'varchar',
+                isNullable: false,
+              },
+              {
+                name: 'last_name',
                 type: 'varchar',
                 isNullable: false,
               },
@@ -178,7 +191,8 @@ export class SuperAdminService implements OnModuleInit {
         const result = await this.create({
           email: defaultSuperAdmin.email,
           password: 'superadmin123',
-          name: defaultSuperAdmin.name,
+          first_name: defaultSuperAdmin.name.split(' ')[0],
+          last_name: defaultSuperAdmin.name.split(' ')[1] || '',
           username: defaultSuperAdmin.username,
         });
         console.log('Default super admin created:', result);
@@ -195,7 +209,8 @@ export class SuperAdminService implements OnModuleInit {
           email: defaultAdmin.email,
           password: 'admin123',
           username: defaultAdmin.username,
-          name: `${defaultAdmin.username}`,
+          first_name: defaultAdmin.username,
+          last_name: '',
           role: defaultAdmin.role,
         });
         console.log('Default admin created:', result);
@@ -275,14 +290,15 @@ export class SuperAdminService implements OnModuleInit {
       email: createSuperAdminDto.email,
       password: hashedPassword,
       username: createSuperAdminDto.username,
-      name: createSuperAdminDto.name,
+      first_name: createSuperAdminDto.first_name,
+      last_name: createSuperAdminDto.last_name,
       role: 'super-admin',
       super_admin_id: this.generateSecureSuperAdminId(),
     });
     const savedSuperAdmin = await this.superAdminRepository.save(superAdmin);
     return {
       ...savedSuperAdmin,
-      password: createSuperAdminDto.password, // Return unhashed password
+      password: createSuperAdminDto.password,
     };
   }
 
