@@ -159,7 +159,8 @@ export class EmployeeController {
     summary: 'Update employee by ID',
     description:
       'Update specific fields of an employee. All fields are optional and only provided fields will be updated. ' +
-      'Fields that are not included in the request will remain unchanged.',
+      'Fields that are not included in the request will remain unchanged. ' +
+      'Note: To change employee active status, please use the /deactivate or /bulk-deactivate endpoints.',
   })
   @ApiBody({
     type: UpdateEmployeeDto,
@@ -183,12 +184,6 @@ export class EmployeeController {
           email: 'new.email@example.com',
         },
       },
-      statusOnly: {
-        summary: 'Update active status only',
-        value: {
-          is_active: false,
-        },
-      },
       devicesOnly: {
         summary: 'Update device IDs only',
         value: {
@@ -202,7 +197,6 @@ export class EmployeeController {
           last_name: 'Doe',
           email: 'john.doe@example.com',
           password: 'newpassword123',
-          is_active: true,
           device_id: ['DEVICE123'],
         },
       },
@@ -236,6 +230,9 @@ export class EmployeeController {
     @Param('employee_id') employee_id: string,
     @Body() updateEmployeeDto: UpdateEmployeeDto,
   ) {
+    if ('is_active' in updateEmployeeDto) {
+      delete updateEmployeeDto.is_active;
+    }
     return this.employeeService.update(employee_id, updateEmployeeDto);
   }
 
