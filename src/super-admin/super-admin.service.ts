@@ -13,7 +13,6 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { Table } from 'typeorm';
 import { UpdateSuperAdminDto } from './dto/update-super-admin.dto';
-import { AppDataSource } from '../config/typeorm.config';
 
 @Injectable()
 export class SuperAdminService implements OnModuleInit {
@@ -28,8 +27,6 @@ export class SuperAdminService implements OnModuleInit {
   async onModuleInit() {
     await this.ensureTablesExist();
     await this.initializeDefaultUsers();
-    await AppDataSource.initialize();
-    await AppDataSource.runMigrations();
   }
 
   private async ensureTablesExist() {
