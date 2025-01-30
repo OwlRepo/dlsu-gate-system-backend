@@ -9,11 +9,10 @@ import {
   defaultSuperAdmin,
   defaultAdmin,
 } from '../config/default-users.config';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { Table } from 'typeorm';
 import { UpdateSuperAdminDto } from './dto/update-super-admin.dto';
-import { hash } from 'bcrypt';
 import { AppDataSource } from '../config/typeorm.config';
 
 @Injectable()
@@ -319,7 +318,7 @@ export class SuperAdminService implements OnModuleInit {
 
     // If password is provided, hash it before saving
     if (updateSuperAdminDto.password) {
-      updateSuperAdminDto.password = await hash(
+      updateSuperAdminDto.password = await bcrypt.hash(
         updateSuperAdminDto.password,
         10,
       );

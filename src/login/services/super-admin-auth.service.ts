@@ -6,7 +6,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SuperAdminService } from '../../super-admin/super-admin.service';
 import { SuperAdminLoginDto } from '../../super-admin/dto/super-admin.dto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { SuperAdmin } from '../../super-admin/entities/super-admin.entity';
 
 @Injectable()
