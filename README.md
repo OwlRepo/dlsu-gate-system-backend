@@ -104,6 +104,32 @@ Once running, access the system at:
 - 📦 Redis Cache: `localhost:6379`
 - 🔧 Jenkins: `http://localhost/jenkins`
 
+When accessing Jenkins for the first time, you'll need the automatically generated admin password. Here's how to find it:
+
+**Method 1: Through Docker Logs**
+
+```bash
+docker compose logs jenkins | grep "Jenkins initial setup is required"
+```
+
+**Method 2: From Container File System**
+
+```bash
+docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+**Method 3: Direct File Access**
+The password is also stored in the jenkins_home volume. You can find it at:
+
+- Windows: `\\wsl$\docker-desktop-data\data\docker\volumes\dlsu-gate-system-backend_jenkins_home\_data\secrets\initialAdminPassword`
+- Linux/macOS: `/var/lib/docker/volumes/dlsu-gate-system-backend_jenkins_home/_data/secrets/initialAdminPassword`
+
+After entering this password, you'll be prompted to:
+
+1. Install suggested plugins or select specific ones
+2. Create your first admin user
+3. Configure the instance URL
+
 ## Container Management
 
 ### Clean Build Process
