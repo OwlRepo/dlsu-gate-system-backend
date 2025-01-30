@@ -111,68 +111,68 @@ export class AdminController {
     return this.adminService.findByAdminId(admin_id);
   }
 
-  @Patch(':admin_id')
+  @Patch(':id')
   @ApiOperation({
-    summary: 'Update admin by admin_id',
-    description: "Updates an admin user's information using their admin_id",
-  })
-  @ApiParam({
-    name: 'admin_id',
-    required: true,
-    description: 'The unique identifier of the admin to update',
-    example: '123e4567-e89b-12d3-a456-426614174000',
+    summary: 'Update an admin',
+    description:
+      'Update specific fields of an admin. All fields are optional and only provided fields will be updated.',
   })
   @ApiBody({
     type: UpdateAdminDto,
-    description: 'The admin data to update',
-    required: true,
+    examples: {
+      passwordOnly: {
+        summary: 'Update password only',
+        value: {
+          password: 'newpassword123',
+        },
+      },
+      namesOnly: {
+        summary: 'Update names only',
+        value: {
+          first_name: 'John',
+          last_name: 'Doe',
+        },
+      },
+      emailOnly: {
+        summary: 'Update email only',
+        value: {
+          email: 'new.email@example.com',
+        },
+      },
+      multipleFields: {
+        summary: 'Update multiple fields',
+        value: {
+          first_name: 'John',
+          last_name: 'Doe',
+          email: 'john.doe@example.com',
+          password: 'newpassword123',
+          role: 'admin',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
-    description: 'Admin updated successfully',
+    description: 'Admin has been successfully updated',
     schema: {
-      type: 'object',
-      properties: {
-        admin_id: { type: 'string' },
-        username: { type: 'string' },
-        email: { type: 'string' },
-        updated_at: { type: 'string', format: 'date-time' },
+      example: {
+        id: 1,
+        admin_id: 'ADM-123ABC',
+        username: 'johndoe',
+        email: 'john.doe@example.com',
+        first_name: 'John',
+        last_name: 'Doe',
+        role: 'admin',
+        is_active: true,
       },
     },
   })
-  @ApiResponse({
-    status: 404,
-    description: 'Admin not found',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 404 },
-        message: { type: 'string', example: 'Admin not found' },
-        error: { type: 'string', example: 'Not Found' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid input data',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 400 },
-        message: { type: 'array', items: { type: 'string' } },
-        error: { type: 'string', example: 'Bad Request' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing authentication token',
-  })
-  update(
-    @Param('admin_id') admin_id: string,
+  @ApiResponse({ status: 404, description: 'Admin not found' })
+  async update(
+    @Param('id') id: string,
     @Body() updateAdminDto: UpdateAdminDto,
   ) {
-    return this.adminService.update(admin_id, updateAdminDto);
+    return this.adminService.update(id, updateAdminDto);
   }
 
   @Delete(':admin_id')

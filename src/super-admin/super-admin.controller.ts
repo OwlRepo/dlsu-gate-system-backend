@@ -85,36 +85,61 @@ export class SuperAdminController {
   @ApiOperation({
     summary: 'Update a super admin',
     description:
-      'Updates an existing super admin account. Requires Super Admin privileges.',
+      'Update specific fields of a super admin. All fields are optional and only provided fields will be updated.',
   })
   @ApiBody({
     type: UpdateSuperAdminDto,
-    description: 'Super admin update data',
+    examples: {
+      passwordOnly: {
+        summary: 'Update password only',
+        value: {
+          password: 'newpassword123',
+        },
+      },
+      namesOnly: {
+        summary: 'Update names only',
+        value: {
+          first_name: 'John',
+          last_name: 'Doe',
+        },
+      },
+      emailOnly: {
+        summary: 'Update email only',
+        value: {
+          email: 'new.email@example.com',
+        },
+      },
+      multipleFields: {
+        summary: 'Update multiple fields',
+        value: {
+          first_name: 'John',
+          last_name: 'Doe',
+          email: 'john.doe@example.com',
+          password: 'newpassword123',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 200,
-    description: 'Super admin successfully updated',
-    type: UpdateSuperAdminDto,
+    description: 'Super admin has been successfully updated',
+    schema: {
+      example: {
+        id: 1,
+        super_admin_id: 'SAD-123ABC',
+        username: 'johndoe',
+        email: 'john.doe@example.com',
+        first_name: 'John',
+        last_name: 'Doe',
+        role: 'super-admin',
+      },
+    },
   })
-  @ApiResponse({ status: 400, description: 'Bad Request - Invalid data' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Requires Super Admin privileges',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Not Found - Super admin not found',
-  })
-  async updateSuperAdmin(
+  @ApiResponse({ status: 404, description: 'Super admin not found' })
+  async update(
     @Param('id') id: string,
     @Body() updateSuperAdminDto: UpdateSuperAdminDto,
-    @Req() req,
   ) {
-    if (req.user.role !== 'super-admin') {
-      throw new ForbiddenException(
-        'Only super admins can update super admin accounts',
-      );
-    }
     return this.superAdminService.update(id, updateSuperAdminDto);
   }
 }

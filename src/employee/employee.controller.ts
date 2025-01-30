@@ -158,18 +158,79 @@ export class EmployeeController {
   @ApiOperation({
     summary: 'Update employee by ID',
     description:
-      "Updates an employee's information. Fields that don't need to be updated can be omitted from the request payload.",
+      'Update specific fields of an employee. All fields are optional and only provided fields will be updated. ' +
+      'Fields that are not included in the request will remain unchanged.',
   })
   @ApiBody({
-    schema: {
-      example: {
-        first_name: 'John',
-        last_name: 'Doe',
-        password: 'newPassword123',
-        is_active: true,
-        device_id: ['1234567890', '1234567891'],
+    type: UpdateEmployeeDto,
+    examples: {
+      passwordOnly: {
+        summary: 'Update password only',
+        value: {
+          password: 'newpassword123',
+        },
+      },
+      namesOnly: {
+        summary: 'Update names only',
+        value: {
+          first_name: 'John',
+          last_name: 'Doe',
+        },
+      },
+      emailOnly: {
+        summary: 'Update email only',
+        value: {
+          email: 'new.email@example.com',
+        },
+      },
+      statusOnly: {
+        summary: 'Update active status only',
+        value: {
+          is_active: false,
+        },
+      },
+      devicesOnly: {
+        summary: 'Update device IDs only',
+        value: {
+          device_id: ['DEVICE123', 'DEVICE456'],
+        },
+      },
+      multipleFields: {
+        summary: 'Update multiple fields',
+        value: {
+          first_name: 'John',
+          last_name: 'Doe',
+          email: 'john.doe@example.com',
+          password: 'newpassword123',
+          is_active: true,
+          device_id: ['DEVICE123'],
+        },
       },
     },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Employee has been successfully updated',
+    schema: {
+      example: {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        employee_id: 'EMP123',
+        username: 'johndoe',
+        email: 'john.doe@example.com',
+        first_name: 'John',
+        last_name: 'Doe',
+        is_active: true,
+        device_id: ['DEVICE123'],
+        date_created: '2024-03-20T10:00:00.000Z',
+        date_activated: '2024-03-20T10:00:00.000Z',
+        date_deactivated: null,
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Employee not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires Admin privileges',
   })
   update(
     @Param('employee_id') employee_id: string,
