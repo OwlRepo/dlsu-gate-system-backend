@@ -124,6 +124,15 @@ The password is also stored in the jenkins_home volume. You can find it at:
 - Windows: `\\wsl$\docker-desktop-data\data\docker\volumes\dlsu-gate-system-backend_jenkins_home\_data\secrets\initialAdminPassword`
 - Linux/macOS: `/var/lib/docker/volumes/dlsu-gate-system-backend_jenkins_home/_data/secrets/initialAdminPassword`
 
+**Method 4: Using Docker Desktop**
+
+1. Open Docker Desktop
+2. Go to "Containers" tab
+3. Find and click on the jenkins container
+4. Click on "Logs" tab
+5. Search for "Jenkins initial setup is required" in the logs
+   - Or navigate to "Files" tab > `/var/jenkins_home/secrets/initialAdminPassword`
+
 After entering this password, you'll be prompted to:
 
 1. Install suggested plugins or select specific ones

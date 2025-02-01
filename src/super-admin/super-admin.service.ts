@@ -329,4 +329,10 @@ export class SuperAdminService implements OnModuleInit {
       where: { super_admin_id: id },
     });
   }
+
+  async findOne(super_admin_id: string) {
+    return this.superAdminRepository.findOne({
+      where: { super_admin_id },
+    });
+  }
 }

@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   UseGuards,
   Req,
@@ -141,5 +142,41 @@ export class SuperAdminController {
     @Body() updateSuperAdminDto: UpdateSuperAdminDto,
   ) {
     return this.superAdminService.update(id, updateSuperAdminDto);
+  }
+
+  @Get(':super_admin_id')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Get super admin by ID',
+    description:
+      'Retrieve super admin information using their super_admin_id. Only accessible by super-admin users.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Super admin information retrieved successfully',
+    schema: {
+      example: {
+        id: 1,
+        super_admin_id: 'SAD-123ABC',
+        username: 'johndoe',
+        email: 'john.doe@example.com',
+        first_name: 'John',
+        last_name: 'Doe',
+        role: 'super-admin',
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Super admin not found' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires Super Admin privileges',
+  })
+  async findOne(@Param('super_admin_id') super_admin_id: string, @Req() req) {
+    if (req.user.role !== 'super-admin') {
+      throw new ForbiddenException(
+        'Only super admins can access this endpoint',
+      );
+    }
+    return this.superAdminService.findOne(super_admin_id);
   }
 }
