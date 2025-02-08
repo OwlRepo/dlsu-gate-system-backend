@@ -83,6 +83,41 @@ class ScheduledSyncDto {
   lastSyncTime: Date | null;
 }
 
+class JenkinsJobStatusDto {
+  @ApiProperty({
+    description: 'Name of the Jenkins job',
+    example: 'Scheduled Sync 1',
+  })
+  jobName: string;
+
+  @ApiProperty({
+    description: 'Whether the job is currently running',
+    example: true,
+  })
+  isRunning: boolean;
+
+  @ApiProperty({
+    description: 'Status of the last build',
+    example: 'SUCCESS',
+    nullable: true,
+  })
+  lastBuildStatus: string | null;
+
+  @ApiProperty({
+    description: 'Timestamp of the last build',
+    example: '2024-03-20T14:30:00Z',
+    nullable: true,
+  })
+  lastBuildTime: Date | null;
+
+  @ApiProperty({
+    description: 'Next scheduled run time',
+    example: '2024-03-20T18:00:00Z',
+    nullable: true,
+  })
+  nextScheduledRun: Date | null;
+}
+
 @ApiTags('Database Sync')
 @ApiBearerAuth()
 @Controller('database-sync')
@@ -201,5 +236,25 @@ export class DatabaseSyncController {
   })
   async getSchedules() {
     return this.databaseSyncService.getAllSchedules();
+  }
+
+  @Get('jobs/status')
+  @ApiOperation({
+    summary: 'Get Jenkins jobs status',
+    description:
+      'Retrieves the status of all database sync Jenkins jobs (scheduled and manual).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of Jenkins jobs status',
+    type: [JenkinsJobStatusDto],
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Insufficient permissions',
+  })
+  async getJenkinsJobsStatus() {
+    return this.databaseSyncService.getJenkinsJobsStatus();
   }
 }
