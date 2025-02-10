@@ -328,8 +328,8 @@ export class DatabaseSyncService {
       const csvWriter = createObjectCsvWriter({
         path: csvFilePath,
         header: [
-          { id: 'ID_Number', title: 'user_id' },
-          { id: 'Name', title: 'name' },
+          { id: 'user_id', title: 'user_id' },
+          { id: 'name', title: 'name' },
           { id: 'department', title: 'department' },
           { id: 'user_title', title: 'user_title' },
           { id: 'phone', title: 'phone' },
@@ -337,16 +337,16 @@ export class DatabaseSyncService {
           { id: 'user_group', title: 'user_group' },
           { id: 'start_datetime', title: 'start_datetime' },
           { id: 'expiry_datetime', title: 'expiry_datetime' },
-          { id: 'Lived_Name', title: 'Lived Name' },
+          { id: 'Lived Name', title: 'Lived Name' },
           { id: 'Remarks', title: 'Remarks' },
-          { id: 'Unique_ID', title: 'csn' },
+          { id: 'csn', title: 'csn' },
         ],
       });
 
       // Transform records to match format
       const formattedRecords = allRecords.map((record) => ({
-        ID_Number: record.ID_Number,
-        Name: record.Name,
+        user_id: record.ID_Number,
+        name: record.Name,
         department: '',
         user_title: '',
         phone: '',
@@ -354,9 +354,9 @@ export class DatabaseSyncService {
         user_group: 'All Users',
         start_datetime: '2001-01-01 00:00:00',
         expiry_datetime: '2030-12-31 23:59:00',
-        Lived_Name: record.Lived_Name || '',
+        'Lived Name': record.Lived_Name || '',
         Remarks: record.Remarks || '',
-        Unique_ID: record.Unique_ID,
+        csn: 1539828941,
       }));
 
       await csvWriter.writeRecords(formattedRecords);
@@ -413,15 +413,34 @@ export class DatabaseSyncService {
             contentType: 'application/json',
           });
 
+          this.logger.log('Attempting CSV upload with payload:', {
+            url: `${this.apiBaseUrl}/api/users/csv_import`,
+            options: csvOptions,
+            headers: {
+              ...formData.getHeaders(),
+              'bs-session-id': sessionId,
+            },
+            fileInfo: {
+              name: path.basename(csvFilePath),
+              size: fs.statSync(csvFilePath).size,
+              preview: fs
+                .readFileSync(csvFilePath, 'utf8')
+                .split('\n')
+                .slice(0, 3),
+            },
+          });
+
           await axios.post(
             `${this.apiBaseUrl}/api/users/csv_import`,
             formData,
             {
               headers: {
-                ...formData.getHeaders(), // Use all headers from FormData
                 Authorization: `Bearer ${token}`,
                 'bs-session-id': sessionId,
+                'Content-Type': formData.getHeaders()['Content-Type'],
               },
+              maxBodyLength: Infinity,
+              maxContentLength: Infinity,
               timeout: 30000,
               httpsAgent: new https.Agent({
                 rejectUnauthorized: false,
