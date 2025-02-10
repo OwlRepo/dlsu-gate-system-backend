@@ -182,8 +182,8 @@ export class DatabaseSyncService {
   private async checkTableExists(pool: sql.ConnectionPool): Promise<boolean> {
     try {
       const result = await pool.request().query(`
-          SELECT OBJECT_ID('Students') as TableID;
-        `);
+        SELECT OBJECT_ID('ISGATE_MASTER_VW') as TableID;
+      `);
       return result.recordset[0].TableID !== null;
     } catch (error) {
       this.logger.error('Error checking table existence:', error);
@@ -233,12 +233,12 @@ export class DatabaseSyncService {
 
       while (true) {
         const result = await pool.request().query(`
-            SELECT * FROM Students 
-            WHERE isArchived = 0 
-            ORDER BY ID 
-            OFFSET ${offset} ROWS 
-            FETCH NEXT ${batchSize} ROWS ONLY
-          `);
+          SELECT * FROM ISGATE_MASTER_VW 
+          WHERE isArchived = 0 
+          ORDER BY ID 
+          OFFSET ${offset} ROWS 
+          FETCH NEXT ${batchSize} ROWS ONLY
+        `);
 
         if (result.recordset.length === 0) break;
         allRecords = allRecords.concat(result.recordset);
@@ -383,9 +383,9 @@ export class DatabaseSyncService {
       this.logger.log('Testing SQL Server connection...');
       pool = await sql.connect(this.sqlConfig);
 
-      // Test query to check if we can access the Students table
+      // Update table name in test query
       const result = await pool.request().query(`
-        SELECT TOP 1 * FROM Students
+        SELECT TOP 1 * FROM ISGATE_MASTER_VW
       `);
 
       this.logger.log('Connection successful');
