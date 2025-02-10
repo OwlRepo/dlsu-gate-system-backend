@@ -35,13 +35,13 @@ export class SuperAdminService implements OnModuleInit {
     try {
       await queryRunner.connect();
 
-      // Check if super_admin table exists
-      const superAdminTableExists = await queryRunner.hasTable('super_admin');
+      // Check if super-admin table exists
+      const superAdminTableExists = await queryRunner.hasTable('super-admin');
       if (!superAdminTableExists) {
-        console.log('Creating super_admin table...');
+        console.log('Creating super-admin table...');
         await queryRunner.createTable(
           new Table({
-            name: 'super_admin',
+            name: 'super-admin',
             columns: [
               {
                 name: 'id',
@@ -274,13 +274,33 @@ export class SuperAdminService implements OnModuleInit {
     });
 
     const savedAdmin = await this.adminRepository.save(admin);
-    return {
-      ...savedAdmin,
-      password: createAdminDto.password, // Return unhashed password
-    };
+    savedAdmin.password = undefined;
+    return savedAdmin;
   }
 
   async create(createSuperAdminDto: CreateSuperAdminDto) {
+    // Check for existing super admin with same username
+    const existingUsername = await this.superAdminRepository.findOne({
+      where: { username: createSuperAdminDto.username },
+    });
+
+    if (existingUsername) {
+      throw new NotFoundException(
+        `Super admin with username ${createSuperAdminDto.username} already exists`,
+      );
+    }
+
+    // Check for existing super admin with same email
+    const existingEmail = await this.superAdminRepository.findOne({
+      where: { email: createSuperAdminDto.email },
+    });
+
+    if (existingEmail) {
+      throw new NotFoundException(
+        `Super admin with email ${createSuperAdminDto.email} already exists`,
+      );
+    }
+
     const hashedPassword = await bcrypt.hash(createSuperAdminDto.password, 10);
     const superAdmin = this.superAdminRepository.create({
       email: createSuperAdminDto.email,
@@ -292,10 +312,8 @@ export class SuperAdminService implements OnModuleInit {
       super_admin_id: this.generateSecureSuperAdminId(),
     });
     const savedSuperAdmin = await this.superAdminRepository.save(superAdmin);
-    return {
-      ...savedSuperAdmin,
-      password: createSuperAdminDto.password,
-    };
+    savedSuperAdmin.password = undefined;
+    return savedSuperAdmin;
   }
 
   async findOneById(id: string): Promise<SuperAdmin> {

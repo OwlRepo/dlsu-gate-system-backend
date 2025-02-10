@@ -10,10 +10,11 @@ import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { EmployeeAuthService } from './services/employee-auth.service';
 import { AuthModule } from '../auth/auth.module';
 import { ScreensaverModule } from '../screensaver/screensaver.module';
+import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin, Employee]),
+    TypeOrmModule.forFeature([Admin, Employee, SuperAdmin]),
     JwtModule.register({
       secret:
         process.env.JWT_SECRET ||

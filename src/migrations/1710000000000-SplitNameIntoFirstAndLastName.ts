@@ -9,7 +9,7 @@ export class SplitNameIntoFirstAndLastName1710000000000
       DO $$ 
       BEGIN 
         BEGIN
-          ALTER TABLE "super_admin" 
+          ALTER TABLE "super-admin" 
           ADD COLUMN "first_name" varchar NULL DEFAULT 'Unknown',
           ADD COLUMN "last_name" varchar NULL DEFAULT 'User';
         EXCEPTION 
@@ -28,11 +28,11 @@ export class SplitNameIntoFirstAndLastName1710000000000
 
     // Update any NULL values with defaults
     await queryRunner.query(`
-      UPDATE "super_admin" 
+      UPDATE "super-admin" 
       SET first_name = 'Unknown' 
       WHERE first_name IS NULL;
 
-      UPDATE "super_admin" 
+      UPDATE "super-admin" 
       SET last_name = 'User' 
       WHERE last_name IS NULL;
 
@@ -52,10 +52,10 @@ export class SplitNameIntoFirstAndLastName1710000000000
         IF EXISTS (
           SELECT 1 
           FROM information_schema.columns 
-          WHERE table_name = 'super_admin' 
+          WHERE table_name = 'super-admin' 
           AND column_name = 'name'
         ) THEN
-          ALTER TABLE "super_admin" DROP COLUMN "name";
+          ALTER TABLE "super-admin" DROP COLUMN "name";
         END IF;
 
         IF EXISTS (
@@ -75,10 +75,10 @@ export class SplitNameIntoFirstAndLastName1710000000000
     await queryRunner.query(`
       DO $$ 
       BEGIN 
-        ALTER TABLE "super_admin" ADD COLUMN "name" varchar DEFAULT 'Unknown User';
+        ALTER TABLE "super-admin" ADD COLUMN "name" varchar DEFAULT 'Unknown User';
         ALTER TABLE "admin" ADD COLUMN "name" varchar DEFAULT 'Unknown Admin';
 
-        UPDATE "super_admin" 
+        UPDATE "super-admin" 
         SET "name" = COALESCE(first_name, 'Unknown') || 
                     CASE WHEN last_name IS NOT NULL AND last_name != '' 
                          THEN ' ' || last_name 
@@ -92,7 +92,7 @@ export class SplitNameIntoFirstAndLastName1710000000000
                          ELSE '' 
                     END;
 
-        ALTER TABLE "super_admin" DROP COLUMN "first_name", DROP COLUMN "last_name";
+        ALTER TABLE "super-admin" DROP COLUMN "first_name", DROP COLUMN "last_name";
         ALTER TABLE "admin" DROP COLUMN "first_name", DROP COLUMN "last_name";
       END $$;
     `);

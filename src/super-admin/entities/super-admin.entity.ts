@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity('super_admin')
+@Entity('super-admin')
 export class SuperAdmin {
   @PrimaryGeneratedColumn()
   id: number;

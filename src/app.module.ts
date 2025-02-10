@@ -18,6 +18,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { HttpCacheInterceptor } from './interceptors/cache.interceptor';
 import { CacheService } from './services/cache.service';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { CacheService } from './services/cache.service';
     HealthModule,
     DatabaseSyncModule,
     CacheModule.register(redisConfig),
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [

@@ -3,7 +3,7 @@ import { IsString, IsNotEmpty } from 'class-validator';
 
 export enum UserRole {
   ADMIN = 'admin',
-  SUPER_ADMIN = 'super_admin',
+  SUPER_ADMIN = 'super-admin',
 }
 
 export class CreateAdminDto {
