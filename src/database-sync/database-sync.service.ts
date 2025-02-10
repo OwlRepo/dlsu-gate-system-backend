@@ -150,15 +150,32 @@ export class DatabaseSyncService {
     });
   }
 
-  private async getApiToken(): Promise<string> {
+  private async getApiToken(): Promise<{ token: string; sessionId: string }> {
     try {
-      const response = await axios.post(`${this.apiBaseUrl}/api/login`, {
-        User: this.apiCredentials,
-      });
-      return response.data.token;
+      const response = await axios.post(
+        `${this.apiBaseUrl}/api/login`,
+        {
+          User: this.apiCredentials,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      // Get both token and session ID
+      const sessionId = response.headers['bs-session-id'];
+      const token = response.data.token;
+
+      if (!sessionId) {
+        throw new Error('No session ID received from BIOSTAR API');
+      }
+
+      return { token, sessionId };
     } catch (error) {
-      console.error('Failed to get API token:', error);
-      throw new Error('Failed to authenticate with the API');
+      this.logger.error('Failed to get API token:', error);
+      throw new Error('Failed to authenticate with the BIOSTAR API');
     }
   }
 
@@ -286,7 +303,7 @@ export class DatabaseSyncService {
       let retries = 3;
       while (retries > 0) {
         try {
-          const token = await this.getApiToken();
+          const { token, sessionId } = await this.getApiToken();
           const formData = new FormData();
           const fileStream = fs.createReadStream(csvFilePath);
           formData.append('file', fileStream, {
@@ -300,9 +317,10 @@ export class DatabaseSyncService {
             {
               headers: {
                 Authorization: `Bearer ${token}`,
+                'bs-session-id': sessionId,
                 'Content-Type': 'multipart/form-data',
               },
-              timeout: 30000, // 30 second timeout
+              timeout: 30000,
             },
           );
 
@@ -314,7 +332,7 @@ export class DatabaseSyncService {
           this.logger.warn(
             `Upload failed, retrying... (${retries} attempts left)`,
           );
-          await new Promise((resolve) => setTimeout(resolve, 5000)); // Wait 5 seconds before retry
+          await new Promise((resolve) => setTimeout(resolve, 5000));
         }
       }
 
