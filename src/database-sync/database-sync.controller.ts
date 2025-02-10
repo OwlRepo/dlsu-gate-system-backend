@@ -164,4 +164,36 @@ export class DatabaseSyncController {
   async testConnection() {
     return this.databaseSyncService.testConnection();
   }
+
+  @Get('running-syncs')
+  @ApiOperation({
+    summary: 'Get currently running syncs',
+    description: `
+      Returns a list of all currently running sync jobs.
+      Shows both manual and scheduled syncs.
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of running syncs',
+    schema: {
+      type: 'object',
+      properties: {
+        runningJobs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              jobName: { type: 'string' },
+              startedAt: { type: 'string', format: 'date-time' },
+              isManual: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getRunningSync() {
+    return this.databaseSyncService.getRunningSync();
+  }
 }

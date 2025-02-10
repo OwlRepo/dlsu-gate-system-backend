@@ -12,13 +12,15 @@ import * as fs from 'fs';
 import axios from 'axios';
 import { createObjectCsvWriter } from 'csv-writer';
 import * as path from 'path';
-import FormData from 'form-data';
+import * as FormData from 'form-data';
 import { Student } from '../students/entities/student.entity';
+import * as https from 'https';
 
 @Injectable()
 export class DatabaseSyncService {
   private readonly logger = new Logger(DatabaseSyncService.name);
   private readonly activeJobs = new Map<string, boolean>();
+  private readonly jobStartTimes = new Map<string, Date>();
   private sqlConfig: sql.config;
   private apiBaseUrl: string;
   private apiCredentials: { login_id: string; password: string };
@@ -152,6 +154,7 @@ export class DatabaseSyncService {
 
   private async getApiToken(): Promise<{ token: string; sessionId: string }> {
     try {
+      this.logger.log('Attempting to authenticate with BIOSTAR API...');
       const response = await axios.post(
         `${this.apiBaseUrl}/api/login`,
         {
@@ -161,21 +164,43 @@ export class DatabaseSyncService {
           headers: {
             'Content-Type': 'application/json',
           },
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
         },
       );
 
-      // Get both token and session ID
       const sessionId = response.headers['bs-session-id'];
       const token = response.data.token;
 
       if (!sessionId) {
-        throw new Error('No session ID received from BIOSTAR API');
+        throw new BadRequestException({
+          message: 'BIOSTAR API Authentication Failed',
+          details: 'No session ID received from BIOSTAR API',
+          step: 'authentication',
+        });
       }
 
+      this.logger.log('Successfully authenticated with BIOSTAR API');
       return { token, sessionId };
     } catch (error) {
-      this.logger.error('Failed to get API token:', error);
-      throw new Error('Failed to authenticate with the BIOSTAR API');
+      this.logger.error('BIOSTAR API Authentication Failed:', error);
+
+      // Handle different types of errors
+      if (axios.isAxiosError(error)) {
+        throw new BadRequestException({
+          message: 'BIOSTAR API Authentication Failed',
+          details: error.response?.data || error.message,
+          step: 'authentication',
+          statusCode: error.response?.status || 500,
+        });
+      }
+
+      throw new BadRequestException({
+        message: 'BIOSTAR API Authentication Failed',
+        details: 'Unable to connect to BIOSTAR API',
+        step: 'authentication',
+      });
     }
   }
 
@@ -211,6 +236,7 @@ export class DatabaseSyncService {
 
     try {
       this.activeJobs.set(jobName, true);
+      this.jobStartTimes.set(jobName, new Date());
       this.logger.log(`Starting database sync for ${jobName}`);
 
       // 1. Connect to SQL Server
@@ -236,13 +262,13 @@ export class DatabaseSyncService {
           ? `
             SELECT * FROM ISGATE_MASTER_VW 
             WHERE isArchived = 0 
-            ORDER BY ID 
+            ORDER BY ID_Number 
             OFFSET ${offset} ROWS 
             FETCH NEXT ${batchSize} ROWS ONLY
           `
           : `
             SELECT * FROM ISGATE_MASTER_VW 
-            ORDER BY ID 
+            ORDER BY ID_Number 
             OFFSET ${offset} ROWS 
             FETCH NEXT ${batchSize} ROWS ONLY
           `;
@@ -292,7 +318,7 @@ export class DatabaseSyncService {
       }
       this.logger.log(`Synced ${allRecords.length} records to PostgreSQL`);
 
-      // 5. Convert to CSV
+      // 5. Convert to CSV with specific format
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir);
@@ -301,13 +327,39 @@ export class DatabaseSyncService {
       csvFilePath = path.join(tempDir, `sync_${Date.now()}.csv`);
       const csvWriter = createObjectCsvWriter({
         path: csvFilePath,
-        header: Object.keys(allRecords[0]).map((id) => ({
-          id,
-          title: id,
-        })),
+        header: [
+          { id: 'ID_Number', title: 'user_id' },
+          { id: 'Name', title: 'name' },
+          { id: 'department', title: 'department' },
+          { id: 'user_title', title: 'user_title' },
+          { id: 'phone', title: 'phone' },
+          { id: 'email', title: 'email' },
+          { id: 'user_group', title: 'user_group' },
+          { id: 'start_datetime', title: 'start_datetime' },
+          { id: 'expiry_datetime', title: 'expiry_datetime' },
+          { id: 'Lived_Name', title: 'Lived Name' },
+          { id: 'Remarks', title: 'Remarks' },
+          { id: 'Unique_ID', title: 'csn' },
+        ],
       });
 
-      await csvWriter.writeRecords(allRecords);
+      // Transform records to match format
+      const formattedRecords = allRecords.map((record) => ({
+        ID_Number: record.ID_Number,
+        Name: record.Name,
+        department: '',
+        user_title: '',
+        phone: '',
+        email: '',
+        user_group: 'All Users',
+        start_datetime: '2001-01-01 00:00:00',
+        expiry_datetime: '2030-12-31 23:59:00',
+        Lived_Name: record.Lived_Name || '',
+        Remarks: record.Remarks || '',
+        Unique_ID: record.Unique_ID,
+      }));
+
+      await csvWriter.writeRecords(formattedRecords);
       this.logger.log(`CSV file created at ${csvFilePath}`);
 
       // 6. Upload to API with retries
@@ -317,9 +369,48 @@ export class DatabaseSyncService {
           const { token, sessionId } = await this.getApiToken();
           const formData = new FormData();
           const fileStream = fs.createReadStream(csvFilePath);
+
+          // First append the file
           formData.append('file', fileStream, {
             filename: path.basename(csvFilePath),
             contentType: 'text/csv',
+          });
+
+          // Then append the JSON as a separate part
+          const csvOptions = {
+            File: {
+              url: '',
+              fileName: path.basename(csvFilePath),
+            },
+            CsvOption: {
+              columns: {
+                total: 12,
+                rows: [
+                  'user_id',
+                  'name',
+                  'department',
+                  'user_title',
+                  'phone',
+                  'email',
+                  'user_group',
+                  'start_datetime',
+                  'expiry_datetime',
+                  'Lived Name',
+                  'Remarks',
+                  'csn',
+                ],
+              },
+              start_line: 1,
+              import_option: 1,
+            },
+            Query: {
+              headers: [],
+              columns: [],
+            },
+          };
+
+          formData.append('json', JSON.stringify(csvOptions), {
+            contentType: 'application/json',
           });
 
           await axios.post(
@@ -327,11 +418,14 @@ export class DatabaseSyncService {
             formData,
             {
               headers: {
+                ...formData.getHeaders(), // Use all headers from FormData
                 Authorization: `Bearer ${token}`,
                 'bs-session-id': sessionId,
-                'Content-Type': 'multipart/form-data',
               },
               timeout: 30000,
+              httpsAgent: new https.Agent({
+                rejectUnauthorized: false,
+              }),
             },
           );
 
@@ -375,17 +469,35 @@ export class DatabaseSyncService {
         this.logger.log('Database connection closed');
       }
       this.activeJobs.set(jobName, false);
+      this.jobStartTimes.delete(jobName);
     }
   }
 
   async triggerManualSync() {
     const queueId = uuid();
     const jobName = `manual-${queueId}`;
-    await this.executeDatabaseSync(jobName);
-    return {
-      message: 'Manual sync completed',
-      queueId,
-    };
+
+    try {
+      await this.executeDatabaseSync(jobName);
+      return {
+        success: true,
+        message: 'Manual sync completed successfully',
+        queueId,
+      };
+    } catch (error) {
+      // Handle different types of errors
+      if (error instanceof BadRequestException) {
+        throw error; // Re-throw formatted errors
+      }
+
+      this.logger.error('Manual sync failed:', error);
+      throw new BadRequestException({
+        message: 'Manual Sync Failed',
+        details: error.message,
+        step: error.step || 'unknown',
+        queueId,
+      });
+    }
   }
 
   async testConnection() {
@@ -402,8 +514,8 @@ export class DatabaseSyncService {
 
       // Test query
       const query = hasIsArchivedColumn
-        ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0`
-        : `SELECT TOP 1 * FROM ISGATE_MASTER_VW`;
+        ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0 ORDER BY ID_Number`
+        : `SELECT TOP 1 * FROM ISGATE_MASTER_VW ORDER BY ID_Number`;
 
       const result = await pool.request().query(query);
 
@@ -428,5 +540,24 @@ export class DatabaseSyncService {
         this.logger.log('Connection closed');
       }
     }
+  }
+
+  async getRunningSync() {
+    const runningJobs = [];
+
+    for (const [jobName, isActive] of this.activeJobs.entries()) {
+      if (isActive) {
+        runningJobs.push({
+          jobName,
+          startedAt: this.jobStartTimes.get(jobName),
+          isManual: jobName.startsWith('manual-'),
+        });
+      }
+    }
+
+    return {
+      runningJobs,
+      count: runningJobs.length,
+    };
   }
 }
