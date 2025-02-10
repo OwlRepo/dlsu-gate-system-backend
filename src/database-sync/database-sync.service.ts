@@ -12,9 +12,9 @@ import * as fs from 'fs';
 import axios from 'axios';
 import { createObjectCsvWriter } from 'csv-writer';
 import * as path from 'path';
-import * as FormData from 'form-data';
 import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
+import * as FormData from 'form-data';
 
 @Injectable()
 export class DatabaseSyncService {
@@ -367,16 +367,11 @@ export class DatabaseSyncService {
       while (retries > 0) {
         try {
           const { token, sessionId } = await this.getApiToken();
-          const formData = new FormData();
-          const fileStream = fs.createReadStream(csvFilePath);
 
-          // First append the file
-          formData.append('file', fileStream, {
-            filename: path.basename(csvFilePath),
-            contentType: 'text/csv',
-          });
+          // Get CSV headers to determine total columns
+          const firstLine = fs.readFileSync(csvFilePath, 'utf8').split('\n')[0];
+          const headers = firstLine.split(',');
 
-          // Then append the JSON as a separate part
           const csvOptions = {
             File: {
               url: '',
@@ -384,23 +379,10 @@ export class DatabaseSyncService {
             },
             CsvOption: {
               columns: {
-                total: 12,
-                rows: [
-                  'user_id',
-                  'name',
-                  'department',
-                  'user_title',
-                  'phone',
-                  'email',
-                  'user_group',
-                  'start_datetime',
-                  'expiry_datetime',
-                  'Lived Name',
-                  'Remarks',
-                  'csn',
-                ],
+                total: headers.length.toString(), // Dynamic total as string
+                rows: [headers[0].trim()], // First column (ID_Number) as array
               },
-              start_line: 1,
+              start_line: 2,
               import_option: 1,
             },
             Query: {
@@ -409,35 +391,21 @@ export class DatabaseSyncService {
             },
           };
 
-          formData.append('json', JSON.stringify(csvOptions), {
-            contentType: 'application/json',
-          });
-
-          this.logger.log('Attempting CSV upload with payload:', {
-            url: `${this.apiBaseUrl}/api/users/csv_import`,
-            options: csvOptions,
-            headers: {
-              ...formData.getHeaders(),
-              'bs-session-id': sessionId,
-            },
-            fileInfo: {
-              name: path.basename(csvFilePath),
-              size: fs.statSync(csvFilePath).size,
-              preview: fs
-                .readFileSync(csvFilePath, 'utf8')
-                .split('\n')
-                .slice(0, 3),
-            },
-          });
+          // Send as multipart/form-data
+          const formData = new FormData();
+          formData.append('json', JSON.stringify(csvOptions));
+          formData.append('file', fs.createReadStream(csvFilePath));
 
           await axios.post(
             `${this.apiBaseUrl}/api/users/csv_import`,
             formData,
             {
               headers: {
+                accept: 'application/json',
+                'Content-Type': 'application/json;charset=UTF-8',
                 Authorization: `Bearer ${token}`,
                 'bs-session-id': sessionId,
-                'Content-Type': formData.getHeaders()['Content-Type'],
+                ...formData.getHeaders(),
               },
               maxBodyLength: Infinity,
               maxContentLength: Infinity,
@@ -452,9 +420,17 @@ export class DatabaseSyncService {
           break;
         } catch (error) {
           retries--;
-          if (retries === 0) throw error;
+          const errorMessage = axios.isAxiosError(error)
+            ? `API Error: ${error.response?.status} - ${error.response?.data?.message || error.message}`
+            : `Upload Error: ${error.message}`;
+
+          if (retries === 0) {
+            this.logger.error(`Final upload attempt failed: ${errorMessage}`);
+            throw error;
+          }
+
           this.logger.warn(
-            `Upload failed, retrying... (${retries} attempts left)`,
+            `Upload attempt failed (${retries} retries left): ${errorMessage}`,
           );
           await new Promise((resolve) => setTimeout(resolve, 5000));
         }
