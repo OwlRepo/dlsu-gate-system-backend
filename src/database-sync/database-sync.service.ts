@@ -383,44 +383,19 @@ export class DatabaseSyncService {
         try {
           const { token, sessionId } = await this.getApiToken();
 
-          // Get CSV headers to determine total columns
-          const firstLine = fs.readFileSync(csvFilePath, 'utf8').split('\n')[0];
-          const headers = firstLine.split(',');
+          // Step 1: Upload the CSV file to /api/attachments
+          const uploadFormData = new FormData();
+          uploadFormData.append('file', fs.createReadStream(csvFilePath));
 
-          const csvOptions = {
-            File: {
-              url: '',
-              fileName: path.basename(csvFilePath),
-            },
-            CsvOption: {
-              columns: {
-                total: headers.length.toString(), // Dynamic total as string
-                rows: [headers[0].trim()], // First column (ID_Number) as array
-              },
-              start_line: 2,
-              import_option: 1,
-            },
-            Query: {
-              headers: [],
-              columns: [],
-            },
-          };
-
-          // Send as multipart/form-data
-          const formData = new FormData();
-          formData.append('json', JSON.stringify(csvOptions));
-          formData.append('file', fs.createReadStream(csvFilePath));
-
-          await axios.post(
-            `${this.apiBaseUrl}/api/users/csv_import`,
-            formData,
+          this.logger.log('Uploading CSV file to attachments...');
+          const uploadResponse = await axios.post(
+            `${this.apiBaseUrl}/api/attachments`,
+            uploadFormData,
             {
               headers: {
-                accept: 'application/json',
-                'Content-Type': 'application/json;charset=UTF-8',
+                ...uploadFormData.getHeaders(),
                 Authorization: `Bearer ${token}`,
                 'bs-session-id': sessionId,
-                ...formData.getHeaders(),
               },
               maxBodyLength: Infinity,
               maxContentLength: Infinity,
@@ -430,6 +405,110 @@ export class DatabaseSyncService {
               }),
             },
           );
+
+          if (!uploadResponse.data?.filename) {
+            throw new Error('Failed to get filename from upload response');
+          }
+
+          const uploadedFileName = uploadResponse.data.filename;
+          this.logger.log(`File uploaded successfully as: ${uploadedFileName}`);
+
+          // Step 2: Import the uploaded CSV
+          const firstLine = fs.readFileSync(csvFilePath, 'utf8').split('\n')[0];
+          const headers = firstLine.split(',');
+
+          const importPayload = {
+            File: {
+              uri: uploadedFileName,
+              fileName: uploadedFileName,
+            },
+            CsvOption: {
+              columns: {
+                total: headers.length.toString(),
+                rows: [headers[0].trim()],
+              },
+              start_line: 2,
+              import_option: 1,
+            },
+            Query: {
+              headers: headers,
+              columns: headers,
+            },
+          };
+
+          this.logger.log('Importing CSV file...');
+          const importResponse = await axios.post(
+            `${this.apiBaseUrl}/api/users/csv_import`,
+            importPayload,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+                'bs-session-id': sessionId,
+              },
+              httpsAgent: new https.Agent({
+                rejectUnauthorized: false,
+              }),
+            },
+          );
+
+          if (importResponse.data?.Response?.code === '1') {
+            // Code 1 means partial success
+            this.logger.log(
+              'Partial success detected, analyzing failed rows...',
+            );
+
+            // Log which rows failed (from CsvRowCollection)
+            if (importResponse.data.CsvRowCollection) {
+              const failedRows = importResponse.data.CsvRowCollection.rows;
+              this.logger.warn(
+                `Failed rows (line numbers): ${failedRows.join(', ')}`,
+              );
+
+              // Read original CSV to get the actual data that failed
+              const csvLines = fs.readFileSync(csvFilePath, 'utf8').split('\n');
+
+              this.logger.warn('Failed records:');
+              failedRows.forEach((rowNum) => {
+                if (rowNum < csvLines.length) {
+                  this.logger.warn(`Line ${rowNum}: ${csvLines[rowNum - 1]}`);
+                }
+              });
+
+              // Log error file name for reference
+              if (importResponse.data.File?.uri) {
+                this.logger.warn(
+                  `Error details file generated: ${importResponse.data.File.uri}`,
+                );
+              }
+
+              throw new Error(
+                `Import partially successful. ${failedRows.length} rows failed to import. Failed rows: ${failedRows.join(', ')}`,
+              );
+            }
+          } else if (importResponse.data?.Response?.code !== '0') {
+            this.logger.error('Import API Response:', importResponse.data);
+
+            // Handle specific error codes
+            switch (importResponse.data?.Response?.code) {
+              case '20':
+                throw new Error(
+                  'Permission denied. Please check API credentials and permissions.',
+                );
+              case '211':
+                throw new Error(
+                  'Field mapping error. Please check CSV format and required fields.',
+                );
+              case '105':
+                throw new Error(
+                  'Invalid query parameters. Please check CSV format and field mappings.',
+                );
+              default:
+                throw new Error(
+                  `Import Error: ${importResponse.data?.Response?.message || 'Unknown error'}`,
+                );
+            }
+          }
 
           this.logger.log('CSV file uploaded successfully');
           break;
