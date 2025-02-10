@@ -179,33 +179,24 @@ export class DatabaseSyncService {
     }
   }
 
-  private async checkTableExists(pool: sql.ConnectionPool): Promise<boolean> {
+  private async checkColumnExists(
+    pool: sql.ConnectionPool,
+    columnName: string,
+  ): Promise<boolean> {
     try {
       const result = await pool.request().query(`
-        SELECT OBJECT_ID('ISGATE_MASTER_VW') as TableID;
+        SELECT COUNT(*) as count
+        FROM sys.columns 
+        WHERE object_id = OBJECT_ID('ISGATE_MASTER_VW')
+        AND name = '${columnName}'
       `);
-      return result.recordset[0].TableID !== null;
+      return result.recordset[0].count > 0;
     } catch (error) {
-      this.logger.error('Error checking table existence:', error);
+      this.logger.error(
+        `Error checking column existence for ${columnName}:`,
+        error,
+      );
       return false;
-    }
-  }
-
-  private async createTableIfNotExists(
-    pool: sql.ConnectionPool,
-  ): Promise<void> {
-    const tableExists = await this.checkTableExists(pool);
-    if (!tableExists) {
-      await pool.request().query(`
-        CREATE TABLE Students (
-          ID INT PRIMARY KEY IDENTITY(1,1),
-          -- Add your other columns here
-          isArchived BIT DEFAULT 0,
-          CreatedAt DATETIME DEFAULT GETDATE(),
-          UpdatedAt DATETIME DEFAULT GETDATE()
-        );
-      `);
-      this.logger.log('Students table created successfully');
     }
   }
 
@@ -222,23 +213,41 @@ export class DatabaseSyncService {
       this.activeJobs.set(jobName, true);
       this.logger.log(`Starting database sync for ${jobName}`);
 
-      // 1. Connect to SQL Server and ensure table exists
+      // 1. Connect to SQL Server
       pool = await sql.connect(this.sqlConfig);
-      await this.createTableIfNotExists(pool);
 
-      // 2. Fetch data with pagination for large datasets
+      // 2. Check if isArchived column exists
+      const hasIsArchivedColumn = await this.checkColumnExists(
+        pool,
+        'isArchived',
+      );
+      this.logger.log(
+        `Table ${hasIsArchivedColumn ? 'has' : 'does not have'} isArchived column`,
+      );
+
+      // 3. Fetch data with pagination for large datasets
       const batchSize = 1000;
       let offset = 0;
       let allRecords = [];
 
       while (true) {
-        const result = await pool.request().query(`
-          SELECT * FROM ISGATE_MASTER_VW 
-          WHERE isArchived = 0 
-          ORDER BY ID 
-          OFFSET ${offset} ROWS 
-          FETCH NEXT ${batchSize} ROWS ONLY
-        `);
+        // Modify query based on isArchived column existence
+        const query = hasIsArchivedColumn
+          ? `
+            SELECT * FROM ISGATE_MASTER_VW 
+            WHERE isArchived = 0 
+            ORDER BY ID 
+            OFFSET ${offset} ROWS 
+            FETCH NEXT ${batchSize} ROWS ONLY
+          `
+          : `
+            SELECT * FROM ISGATE_MASTER_VW 
+            ORDER BY ID 
+            OFFSET ${offset} ROWS 
+            FETCH NEXT ${batchSize} ROWS ONLY
+          `;
+
+        const result = await pool.request().query(query);
 
         if (result.recordset.length === 0) break;
         allRecords = allRecords.concat(result.recordset);
@@ -246,11 +255,13 @@ export class DatabaseSyncService {
       }
 
       if (allRecords.length === 0) {
-        this.logger.log('No non-archived records to sync');
+        this.logger.log('No records to sync');
         return;
       }
 
-      // 3. Sync data to PostgreSQL
+      this.logger.log(`Found ${allRecords.length} records to sync`);
+
+      // 4. Sync data to PostgreSQL
       this.logger.log('Syncing data to PostgreSQL database');
       for (const record of allRecords) {
         // Find existing student or create new one
@@ -281,7 +292,7 @@ export class DatabaseSyncService {
       }
       this.logger.log(`Synced ${allRecords.length} records to PostgreSQL`);
 
-      // 4. Convert to CSV
+      // 5. Convert to CSV
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir);
@@ -299,7 +310,7 @@ export class DatabaseSyncService {
       await csvWriter.writeRecords(allRecords);
       this.logger.log(`CSV file created at ${csvFilePath}`);
 
-      // 5. Upload to API with retries
+      // 6. Upload to API with retries
       let retries = 3;
       while (retries > 0) {
         try {
@@ -383,10 +394,18 @@ export class DatabaseSyncService {
       this.logger.log('Testing SQL Server connection...');
       pool = await sql.connect(this.sqlConfig);
 
-      // Update table name in test query
-      const result = await pool.request().query(`
-        SELECT TOP 1 * FROM ISGATE_MASTER_VW
-      `);
+      // Check if isArchived column exists
+      const hasIsArchivedColumn = await this.checkColumnExists(
+        pool,
+        'isArchived',
+      );
+
+      // Test query
+      const query = hasIsArchivedColumn
+        ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0`
+        : `SELECT TOP 1 * FROM ISGATE_MASTER_VW`;
+
+      const result = await pool.request().query(query);
 
       this.logger.log('Connection successful');
       this.logger.log('Sample data:', result.recordset[0]);
@@ -395,6 +414,10 @@ export class DatabaseSyncService {
         success: true,
         message: 'Connection successful',
         sampleData: result.recordset[0],
+        tableInfo: {
+          hasIsArchivedColumn,
+          recordCount: result.recordset.length,
+        },
       };
     } catch (error) {
       this.logger.error('Connection test failed:', error);
