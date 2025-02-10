@@ -225,6 +225,13 @@ export class DatabaseSyncService {
     }
   }
 
+  private async convertPhotoToBase64(
+    photoBuffer: Buffer | null,
+  ): Promise<string | null> {
+    if (!photoBuffer) return null;
+    return Buffer.from(photoBuffer).toString('base64');
+  }
+
   private async executeDatabaseSync(jobName: string) {
     if (this.activeJobs.get(jobName)) {
       this.logger.warn(`Sync ${jobName} is already running`);
@@ -276,7 +283,16 @@ export class DatabaseSyncService {
         const result = await pool.request().query(query);
 
         if (result.recordset.length === 0) break;
-        allRecords = allRecords.concat(result.recordset);
+
+        // Convert photos to base64 before adding to allRecords
+        const recordsWithBase64Photos = await Promise.all(
+          result.recordset.map(async (record) => ({
+            ...record,
+            Photo: await this.convertPhotoToBase64(record.Photo),
+          })),
+        );
+
+        allRecords = allRecords.concat(recordsWithBase64Photos);
         offset += batchSize;
       }
 
@@ -290,10 +306,9 @@ export class DatabaseSyncService {
       // 4. Sync data to PostgreSQL
       this.logger.log('Syncing data to PostgreSQL database');
       for (const record of allRecords) {
-        // Find existing student or create new one
         let student = await this.studentRepository.findOne({
           where: {
-            ID_Number: record.ID_Number, // Using ID_Number as unique identifier
+            ID_Number: record.ID_Number,
           },
         });
 
@@ -307,7 +322,7 @@ export class DatabaseSyncService {
           Name: record.Name,
           Lived_Name: record.Lived_Name,
           Remarks: record.Remarks,
-          Photo: record.Photo,
+          Photo: record.Photo, // This is now already in base64
           Campus_Entry: record.Campus_Entry,
           Unique_ID: record.Unique_ID,
           isArchived: record.isArchived,
