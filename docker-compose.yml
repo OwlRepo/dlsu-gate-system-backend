@@ -209,6 +209,15 @@ services:
       - 'effective_cache_size=3GB'
       - '-c'
       - 'work_mem=16MB'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-dlsu_gate_system}',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:alpine
@@ -226,11 +235,37 @@ services:
           memory: 512M
     command: redis-server --maxmemory 768mb --maxmemory-policy allkeys-lru
 
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      SCRIPT_NAME: /pgadmin
+      PGADMIN_LISTEN_PORT: 80
+    expose:
+      - '80'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
 volumes:
   postgres_data:
   persistent_uploads:
   screensaver_uploads:
     driver: local
+  pgadmin_data:
 
 networks:
   app-network:

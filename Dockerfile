@@ -18,8 +18,8 @@ RUN bun run build
 # Expose the port your app runs on
 EXPOSE 3000
 
-# Start the application
-CMD ["bun", "run", "start:prod"]
-
-# Add this near the end of your Dockerfile
+# Add persistent uploads directory
 RUN mkdir -p /app/persistent_uploads && chmod 777 /app/persistent_uploads 
+
+# Start the application
+CMD ["bun", "run", "start:prod"] 

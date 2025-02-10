@@ -24,7 +24,9 @@
     "typeorm:revert-migration": "npm run typeorm -- migration:revert -d src/config/typeorm.config.ts",
     "migration:generate": "npm run typeorm migration:generate -- -d src/config/data-source.ts",
     "migration:run": "npm run typeorm migration:run -- -d src/config/data-source.ts",
-    "migration:revert": "npm run typeorm migration:revert -- -d src/config/data-source.ts"
+    "migration:revert": "npm run typeorm migration:revert -- -d src/config/data-source.ts",
+    "schema:sync": "typeorm-ts-node-commonjs schema:sync -d src/config/data-source.ts",
+    "start:with-sync": "bun run schema:sync && bun run start:prod"
   },
   "dependencies": {
     "@nestjs/cache-manager": "^3.0.0",
