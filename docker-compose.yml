@@ -226,28 +226,11 @@ services:
           memory: 512M
     command: redis-server --maxmemory 768mb --maxmemory-policy allkeys-lru
 
-  jenkins:
-    image: jenkins/jenkins:lts
-    environment:
-      - JENKINS_OPTS="--prefix=/jenkins"
-      - JENKINS_ARGS="--prefix=/jenkins"
-      - JENKINS_HOME=/var/jenkins_home
-      - JENKINS_URL=/jenkins
-      - JENKINS_EXTERNAL_URL=/jenkins
-    ports:
-      - '8080:8080'
-      - '50000:50000'
-    volumes:
-      - jenkins_home:/var/jenkins_home
-    networks:
-      - app-network
-
 volumes:
   postgres_data:
   persistent_uploads:
   screensaver_uploads:
     driver: local
-  jenkins_home:
 
 networks:
   app-network:

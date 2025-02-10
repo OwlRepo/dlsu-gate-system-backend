@@ -1,16 +1,18 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseSyncController } from './database-sync.controller';
 import { DatabaseSyncService } from './database-sync.service';
-import { DatabaseSyncQueueService } from './database-sync-queue.service';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { SyncSchedule } from './entities/sync-schedule.entity';
-import { SyncQueue } from './entities/sync-queue.entity';
-import { JwtModule } from '@nestjs/jwt';
+import { Student } from '../students/entities/student.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([SyncSchedule, SyncQueue]), JwtModule],
+  imports: [
+    TypeOrmModule.forFeature([SyncSchedule, Student]),
+    ScheduleModule.forRoot(),
+  ],
   controllers: [DatabaseSyncController],
-  providers: [DatabaseSyncService, DatabaseSyncQueueService],
-  exports: [DatabaseSyncService, DatabaseSyncQueueService],
+  providers: [DatabaseSyncService],
+  exports: [DatabaseSyncService],
 })
 export class DatabaseSyncModule {}

@@ -19,6 +19,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { HttpCacheInterceptor } from './interceptors/cache.interceptor';
 import { CacheService } from './services/cache.service';
 import { AuthModule } from './auth/auth.module';
+import { StudentsModule } from './students/students.module';
 
 @Module({
   imports: [
@@ -29,13 +30,16 @@ import { AuthModule } from './auth/auth.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        ...configService.get('database'),
-        extra: {
-          max: 30,
-          min: 5,
-          idleTimeoutMillis: 30000,
-          connectionTimeoutMillis: 2000,
-        },
+        type: 'postgres',
+        host: configService.get('DB_HOST'),
+        port: configService.get('DB_PORT'),
+        username: configService.get('DB_USERNAME'),
+        password: configService.get('DB_PASSWORD'),
+        database: configService.get('DB_NAME'),
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        migrations: [__dirname + '/migrations/*{.ts,.js}'],
+        synchronize: false,
+        logging: configService.get('NODE_ENV') === 'development',
       }),
       inject: [ConfigService],
     }),
@@ -53,6 +57,7 @@ import { AuthModule } from './auth/auth.module';
     DatabaseSyncModule,
     CacheModule.register(redisConfig),
     AuthModule,
+    StudentsModule,
   ],
   controllers: [AppController],
   providers: [
