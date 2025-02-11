@@ -70,7 +70,15 @@ async function bootstrap() {
     ],
   });
 
-  app.enableCors();
+  // Update CORS configuration to be more permissive
+  app.enableCors({
+    origin: true, // Allow all origins
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+    allowedHeaders: 'Content-Type, Accept, Authorization',
+    exposedHeaders: 'Authorization',
+    maxAge: 3600, // Cache preflight requests for 1 hour
+  });
 
   const guard = app.get(JwtAuthGuard);
   app.useGlobalGuards(guard);
