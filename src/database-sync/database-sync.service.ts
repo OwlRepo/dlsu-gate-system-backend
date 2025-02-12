@@ -24,6 +24,7 @@ export class DatabaseSyncService {
   private sqlConfig: sql.config;
   private apiBaseUrl: string;
   private apiCredentials: { login_id: string; password: string };
+  private readonly logDir = path.join(process.cwd(), 'logs', 'skipped-records');
 
   constructor(
     @InjectRepository(SyncSchedule)
@@ -54,6 +55,30 @@ export class DatabaseSyncService {
       login_id: this.configService.get('BIOSTAR_API_LOGIN_ID'),
       password: this.configService.get('BIOSTAR_API_PASSWORD'),
     };
+
+    this.ensureLogDirectory();
+  }
+
+  private ensureLogDirectory() {
+    if (!fs.existsSync(this.logDir)) {
+      fs.mkdirSync(this.logDir, { recursive: true });
+    }
+
+    // Cleanup logs older than 1 month
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+    fs.readdirSync(this.logDir).forEach((file) => {
+      const filePath = path.join(this.logDir, file);
+      const stats = fs.statSync(filePath);
+      if (stats.mtime < oneMonthAgo) {
+        fs.unlinkSync(filePath);
+      }
+    });
+  }
+
+  private removeSpecialChars(str: string): string {
+    return str.replace(/[^a-zA-Z0-9\s]/g, '');
   }
 
   private async initializeSchedules() {
@@ -350,29 +375,91 @@ export class DatabaseSyncService {
           { id: 'phone', title: 'phone' },
           { id: 'email', title: 'email' },
           { id: 'user_group', title: 'user_group' },
-          { id: 'start_datetime', title: 'start_datetime' },
-          { id: 'expiry_datetime', title: 'expiry_datetime' },
-          { id: 'Lived Name', title: 'Lived Name' },
-          { id: 'Remarks', title: 'Remarks' },
+          { id: 'lived_name', title: 'Lived Name' },
+          { id: 'remarks', title: 'Remarks' },
           { id: 'csn', title: 'csn' },
         ],
       });
 
       // Transform records to match format
-      const formattedRecords = allRecords.map((record) => ({
-        user_id: record.ID_Number,
-        name: record.Name,
-        department: '',
-        user_title: '',
-        phone: '',
-        email: '',
-        user_group: 'All Users',
-        start_datetime: '2001-01-01 00:00:00',
-        expiry_datetime: '2030-12-31 23:59:00',
-        'Lived Name': record.Lived_Name || '',
-        Remarks: record.Remarks || '',
-        csn: 1539828941,
-      }));
+      const skippedRecords = [];
+
+      const formattedRecords = allRecords
+        .map((record) => {
+          const userId = this.removeSpecialChars(
+            record.ID_Number?.toString()?.trim() || '',
+          );
+          const name = this.removeSpecialChars(record.Name?.trim() || '');
+          const livedName = record.Lived_Name?.trim() || '';
+          const remarks = record.Remarks?.trim() || '';
+
+          // Validate all required fields
+          const validationErrors = [];
+
+          if (!userId || userId.length > 11) {
+            validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
+          }
+
+          if (!name) {
+            validationErrors.push('Empty name');
+          }
+
+          if (name.length > 48) {
+            validationErrors.push('Name exceeds 48 characters');
+          }
+
+          if (livedName.length > 48) {
+            validationErrors.push('Lived name exceeds 48 characters');
+          }
+
+          if (remarks.length > 48) {
+            validationErrors.push('Remarks exceeds 48 characters');
+          }
+
+          if (validationErrors.length > 0) {
+            skippedRecords.push({
+              ID_Number: record.ID_Number,
+              userId,
+              name,
+              livedName,
+              remarks,
+              length: userId.length,
+              reasons: validationErrors,
+              timestamp: new Date().toISOString(),
+            });
+            this.logger.warn(
+              `Skipping record with validation errors - ID: ${record.ID_Number}, Errors: ${validationErrors.join(', ')}`,
+            );
+            return null;
+          }
+
+          return {
+            user_id: userId,
+            name: name,
+            department: 'DLSU',
+            user_title: 'Student',
+            phone: '',
+            email: '',
+            user_group: 'All Users',
+            'Lived Name': livedName,
+            Remarks: remarks,
+            csn: userId,
+          };
+        })
+        .filter((record) => record !== null);
+
+      // After processing records, write skipped records to log file
+      if (skippedRecords.length > 0) {
+        this.ensureLogDirectory();
+        const logFile = path.join(
+          this.logDir,
+          `skipped_${new Date().toISOString().split('T')[0]}.json`,
+        );
+        fs.writeFileSync(logFile, JSON.stringify(skippedRecords, null, 2));
+        this.logger.log(
+          `Saved ${skippedRecords.length} skipped records to ${logFile}`,
+        );
+      }
 
       await csvWriter.writeRecords(formattedRecords);
       this.logger.log(`CSV file created at ${csvFilePath}`);
@@ -428,7 +515,7 @@ export class DatabaseSyncService {
                 rows: [headers[0].trim()],
               },
               start_line: 2,
-              import_option: 1,
+              import_option: 2,
             },
             Query: {
               headers: headers,
@@ -508,6 +595,11 @@ export class DatabaseSyncService {
                   `Import Error: ${importResponse.data?.Response?.message || 'Unknown error'}`,
                 );
             }
+          } else {
+            // Success case (code === '0')
+            this.logger.log(
+              `CSV import successful - All ${formattedRecords.length} records processed`,
+            );
           }
 
           this.logger.log('CSV file uploaded successfully');
