@@ -15,7 +15,6 @@ import * as path from 'path';
 import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
 import * as FormData from 'form-data';
-import * as sharp from 'sharp';
 import { In } from 'typeorm';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
@@ -274,14 +273,8 @@ export class DatabaseSyncService {
         imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
       }
 
-      // Compression for 46 char limit
-      const compressedBuffer = await sharp(imageBuffer)
-        .resize(8, 8) // Larger thumbnail
-        .jpeg({ quality: 20 }) // Better quality
-        .toBuffer();
-
-      const base64String = compressedBuffer.toString('base64');
-      return `Base64: ${base64String.substring(0, 38)}`; // "Base64: " is 8 chars, leaving 38 for data
+      const base64String = imageBuffer.toString('base64');
+      return base64String;
     } catch (error) {
       this.logger.error('Error converting photo to base64:', error);
       return null;
