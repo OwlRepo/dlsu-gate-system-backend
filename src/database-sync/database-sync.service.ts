@@ -356,6 +356,9 @@ export class DatabaseSyncService {
 
       // 4. Sync data to PostgreSQL
       this.logger.log('Syncing data to PostgreSQL database');
+      let updatedCount = 0;
+      let skippedCount = 0;
+
       for (const record of allRecords) {
         let student = await this.studentRepository.findOne({
           where: {
@@ -365,24 +368,53 @@ export class DatabaseSyncService {
 
         if (!student) {
           student = this.studentRepository.create();
+          // Map SQL Server fields to PostgreSQL fields
+          Object.assign(student, {
+            ID_Number: record.ID_Number,
+            Name: record.Name,
+            Lived_Name: record.Lived_Name,
+            Remarks: record.Remarks,
+            Photo: record.Photo,
+            Campus_Entry: record.Campus_Entry,
+            Unique_ID: record.Unique_ID,
+            isArchived: record.isArchived,
+            updatedAt: new Date(),
+          });
+          await this.studentRepository.save(student);
+          updatedCount++;
+        } else {
+          // Check if any fields have changed
+          const hasChanges =
+            student.Name !== record.Name ||
+            student.Lived_Name !== record.Lived_Name ||
+            student.Remarks !== record.Remarks ||
+            student.Photo !== record.Photo ||
+            student.Campus_Entry !== record.Campus_Entry ||
+            student.Unique_ID !== record.Unique_ID ||
+            student.isArchived !== record.isArchived;
+
+          if (hasChanges) {
+            Object.assign(student, {
+              Name: record.Name,
+              Lived_Name: record.Lived_Name,
+              Remarks: record.Remarks,
+              Photo: record.Photo,
+              Campus_Entry: record.Campus_Entry,
+              Unique_ID: record.Unique_ID,
+              isArchived: record.isArchived,
+              updatedAt: new Date(),
+            });
+            await this.studentRepository.save(student);
+            updatedCount++;
+          } else {
+            skippedCount++;
+          }
         }
-
-        // Map SQL Server fields to PostgreSQL fields
-        Object.assign(student, {
-          ID_Number: record.ID_Number,
-          Name: record.Name,
-          Lived_Name: record.Lived_Name,
-          Remarks: record.Remarks,
-          Photo: record.Photo, // This is now already in base64
-          Campus_Entry: record.Campus_Entry,
-          Unique_ID: record.Unique_ID,
-          isArchived: record.isArchived,
-          updatedAt: new Date(),
-        });
-
-        await this.studentRepository.save(student);
       }
-      this.logger.log(`Synced ${allRecords.length} records to PostgreSQL`);
+
+      this.logger.log(
+        `Synced ${updatedCount} records to PostgreSQL (${skippedCount} unchanged records skipped)`,
+      );
 
       // 5. Convert to CSV with specific format
       const tempDir = path.join(process.cwd(), 'temp');
