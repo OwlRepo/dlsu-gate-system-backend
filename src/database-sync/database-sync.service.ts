@@ -16,6 +16,7 @@ import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
 import * as FormData from 'form-data';
 import * as sharp from 'sharp';
+import { In } from 'typeorm';
 
 @Injectable()
 export class DatabaseSyncService {
@@ -356,64 +357,78 @@ export class DatabaseSyncService {
 
       // 4. Sync data to PostgreSQL
       this.logger.log('Syncing data to PostgreSQL database');
-      let updatedCount = 0;
-      let skippedCount = 0;
 
+      // STEP 1: Get all existing students from database in one query
+      // - More efficient than checking one by one
+      // - Creates a baseline of what's already in our database
+      const existingStudents = await this.studentRepository.find({
+        where: { ID_Number: In(allRecords.map((r) => r.ID_Number)) },
+      });
+
+      // STEP 2: Create a quick lookup map using ID_Number
+      // - Makes it fast to check if a student exists
+      // - Avoids looping through array each time
+      const existingMap = new Map(
+        existingStudents.map((s) => [s.ID_Number, s]),
+      );
+
+      // STEP 3: Prepare lists for bulk operations
+      const toCreate = []; // Will hold new students
+      const toUpdate = []; // Will hold students that need updates
+
+      // STEP 4: Sort through all records
       for (const record of allRecords) {
-        let student = await this.studentRepository.findOne({
-          where: {
-            ID_Number: record.ID_Number,
-          },
-        });
+        // Prepare the data we want to save
+        const data = {
+          ID_Number: record.ID_Number,
+          Name: record.Name,
+          Lived_Name: record.Lived_Name,
+          Remarks: record.Remarks,
+          Photo: record.Photo,
+          Campus_Entry: record.Campus_Entry,
+          Unique_ID: record.Unique_ID,
+          isArchived: record.isArchived,
+          updatedAt: new Date(),
+        };
 
-        if (!student) {
-          student = this.studentRepository.create();
-          // Map SQL Server fields to PostgreSQL fields
-          Object.assign(student, {
-            ID_Number: record.ID_Number,
-            Name: record.Name,
-            Lived_Name: record.Lived_Name,
-            Remarks: record.Remarks,
-            Photo: record.Photo,
-            Campus_Entry: record.Campus_Entry,
-            Unique_ID: record.Unique_ID,
-            isArchived: record.isArchived,
-            updatedAt: new Date(),
-          });
-          await this.studentRepository.save(student);
-          updatedCount++;
-        } else {
-          // Check if any fields have changed
-          const hasChanges =
-            student.Name !== record.Name ||
-            student.Lived_Name !== record.Lived_Name ||
-            student.Remarks !== record.Remarks ||
-            student.Photo !== record.Photo ||
-            student.Campus_Entry !== record.Campus_Entry ||
-            student.Unique_ID !== record.Unique_ID ||
-            student.isArchived !== record.isArchived;
+        // Check if student already exists
+        const existing = existingMap.get(record.ID_Number);
 
-          if (hasChanges) {
-            Object.assign(student, {
-              Name: record.Name,
-              Lived_Name: record.Lived_Name,
-              Remarks: record.Remarks,
-              Photo: record.Photo,
-              Campus_Entry: record.Campus_Entry,
-              Unique_ID: record.Unique_ID,
-              isArchived: record.isArchived,
-              updatedAt: new Date(),
-            });
-            await this.studentRepository.save(student);
-            updatedCount++;
-          } else {
-            skippedCount++;
-          }
+        if (!existing) {
+          // CASE 1: New student - add to creation list
+          toCreate.push(data);
+        } else if (
+          // CASE 2: Existing student - check if anything changed
+          existing.Name !== record.Name ||
+          existing.Lived_Name !== record.Lived_Name ||
+          existing.Remarks !== record.Remarks ||
+          existing.Photo !== record.Photo ||
+          existing.Campus_Entry !== record.Campus_Entry ||
+          existing.Unique_ID !== record.Unique_ID ||
+          existing.isArchived !== record.isArchived
+        ) {
+          // Something changed - add to update list
+          toUpdate.push({ ...data, id: existing.id });
         }
+        // CASE 3: No changes - do nothing (skip)
       }
 
+      // STEP 5: Perform bulk operations
+      // Create all new records at once
+      if (toCreate.length) {
+        await this.studentRepository.insert(toCreate);
+      }
+
+      // Update all changed records at once
+      if (toUpdate.length) {
+        await this.studentRepository.save(toUpdate);
+      }
+
+      // STEP 6: Log the results
       this.logger.log(
-        `Synced ${updatedCount} records to PostgreSQL (${skippedCount} unchanged records skipped)`,
+        `Synced ${toCreate.length + toUpdate.length} records (${
+          allRecords.length - (toCreate.length + toUpdate.length)
+        } unchanged)`,
       );
 
       // 5. Convert to CSV with specific format
