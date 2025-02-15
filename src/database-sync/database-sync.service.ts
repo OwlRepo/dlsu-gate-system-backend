@@ -15,6 +15,7 @@ import * as path from 'path';
 import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
 import * as FormData from 'form-data';
+import * as sharp from 'sharp';
 
 @Injectable()
 export class DatabaseSyncService {
@@ -250,11 +251,34 @@ export class DatabaseSyncService {
     }
   }
 
-  private async convertPhotoToBase64(
-    photoBuffer: Buffer | null,
-  ): Promise<string | null> {
-    if (!photoBuffer) return null;
-    return Buffer.from(photoBuffer).toString('base64');
+  private async convertPhotoToBase64(photoData: any): Promise<string | null> {
+    try {
+      let imageBuffer: Buffer;
+
+      if (typeof photoData === 'string' && photoData.length > 0) {
+        try {
+          imageBuffer = fs.readFileSync(photoData);
+        } catch {
+          imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+        }
+      } else if (photoData instanceof Buffer) {
+        imageBuffer = photoData;
+      } else {
+        imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+      }
+
+      // Compression for 46 char limit
+      const compressedBuffer = await sharp(imageBuffer)
+        .resize(8, 8) // Larger thumbnail
+        .jpeg({ quality: 20 }) // Better quality
+        .toBuffer();
+
+      const base64String = compressedBuffer.toString('base64');
+      return `Base64: ${base64String.substring(0, 38)}`; // "Base64: " is 8 chars, leaving 38 for data
+    } catch (error) {
+      this.logger.error('Error converting photo to base64:', error);
+      return null;
+    }
   }
 
   private async executeDatabaseSync(jobName: string) {
@@ -378,75 +402,79 @@ export class DatabaseSyncService {
           { id: 'lived_name', title: 'Lived Name' },
           { id: 'remarks', title: 'Remarks' },
           { id: 'csn', title: 'csn' },
+          { id: 'photo', title: 'photo' },
         ],
       });
 
       // Transform records to match format
       const skippedRecords = [];
 
-      const formattedRecords = allRecords
-        .map((record) => {
-          const userId = this.removeSpecialChars(
-            record.ID_Number?.toString()?.trim() || '',
-          );
-          const name = this.removeSpecialChars(record.Name?.trim() || '');
-          const livedName = record.Lived_Name?.trim() || '';
-          const remarks = record.Remarks?.trim() || '';
-
-          // Validate all required fields
-          const validationErrors = [];
-
-          if (!userId || userId.length > 11) {
-            validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
-          }
-
-          if (!name) {
-            validationErrors.push('Empty name');
-          }
-
-          if (name.length > 48) {
-            validationErrors.push('Name exceeds 48 characters');
-          }
-
-          if (livedName.length > 48) {
-            validationErrors.push('Lived name exceeds 48 characters');
-          }
-
-          if (remarks.length > 48) {
-            validationErrors.push('Remarks exceeds 48 characters');
-          }
-
-          if (validationErrors.length > 0) {
-            skippedRecords.push({
-              ID_Number: record.ID_Number,
-              userId,
-              name,
-              livedName,
-              remarks,
-              length: userId.length,
-              reasons: validationErrors,
-              timestamp: new Date().toISOString(),
-            });
-            this.logger.warn(
-              `Skipping record with validation errors - ID: ${record.ID_Number}, Errors: ${validationErrors.join(', ')}`,
+      const formattedRecords = (
+        await Promise.all(
+          allRecords.map(async (record) => {
+            const userId = this.removeSpecialChars(
+              record.ID_Number?.toString()?.trim() || '',
             );
-            return null;
-          }
+            const name = this.removeSpecialChars(record.Name?.trim() || '');
+            const livedName = record.Lived_Name?.trim() || '';
+            const remarks = record.Remarks?.trim() || '';
 
-          return {
-            user_id: userId,
-            name: name,
-            department: 'DLSU',
-            user_title: 'Student',
-            phone: '',
-            email: '',
-            user_group: 'All Users',
-            'Lived Name': livedName,
-            Remarks: remarks,
-            csn: userId,
-          };
-        })
-        .filter((record) => record !== null);
+            // Validate all required fields
+            const validationErrors = [];
+
+            if (!userId || userId.length > 11) {
+              validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
+            }
+
+            if (!name) {
+              validationErrors.push('Empty name');
+            }
+
+            if (name.length > 48) {
+              validationErrors.push('Name exceeds 48 characters');
+            }
+
+            if (livedName.length > 48) {
+              validationErrors.push('Lived name exceeds 48 characters');
+            }
+
+            if (remarks.length > 48) {
+              validationErrors.push('Remarks exceeds 48 characters');
+            }
+
+            if (validationErrors.length > 0) {
+              skippedRecords.push({
+                ID_Number: record.ID_Number,
+                userId,
+                name,
+                livedName,
+                remarks,
+                length: userId.length,
+                reasons: validationErrors,
+                timestamp: new Date().toISOString(),
+              });
+              this.logger.warn(
+                `Skipping record with validation errors - ID: ${record.ID_Number}, Errors: ${validationErrors.join(', ')}`,
+              );
+              return null;
+            }
+
+            return {
+              user_id: userId,
+              name: name,
+              department: 'DLSU',
+              user_title: 'Student',
+              phone: '',
+              email: '',
+              user_group: 'All Users',
+              'Lived Name': livedName,
+              Remarks: remarks,
+              csn: userId,
+              photo: await this.convertPhotoToBase64(record.Photo),
+            };
+          }),
+        )
+      ).filter((record) => record !== null);
 
       // After processing records, write skipped records to log file
       if (skippedRecords.length > 0) {
