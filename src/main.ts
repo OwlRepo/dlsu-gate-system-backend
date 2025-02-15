@@ -50,27 +50,7 @@ async function bootstrap() {
 
   app.set('trust proxy', 1);
 
-  const config = new DocumentBuilder()
-    .setTitle('DLSU Gate System API')
-    .setDescription('API for DLSU Gate System')
-    .setVersion('1.0')
-    .addTag('DLSU Gate System API')
-    .addBearerAuth()
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document, {
-    customSiteTitle: 'DLSU Gate System API Documentation',
-    customfavIcon: '/favicon.ico',
-    customJs: [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js',
-    ],
-    customCssUrl: [
-      'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
-    ],
-  });
-
-  // Update CORS configuration to be more permissive
+  // Enable CORS
   app.enableCors({
     origin: true, // Allow all origins
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
@@ -79,6 +59,15 @@ async function bootstrap() {
     exposedHeaders: 'Authorization',
     maxAge: 3600, // Cache preflight requests for 1 hour
   });
+
+  // Setup Swagger
+  const config = new DocumentBuilder()
+    .setTitle('DLSU Gate System API')
+    .setDescription('API documentation for DLSU Gate System')
+    .setVersion('1.0')
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
 
   const guard = app.get(JwtAuthGuard);
   app.useGlobalGuards(guard);
