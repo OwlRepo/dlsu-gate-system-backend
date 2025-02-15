@@ -910,7 +910,7 @@ ${formattedRecords
     };
   }
 
-  async deleteUsers(userIds: string[]) {
+  public async deleteUsers(userIds: string[]) {
     if (!userIds?.length) {
       throw new BadRequestException('No user IDs provided for deletion');
     }
@@ -931,47 +931,65 @@ ${formattedRecords
       // 2. Delete from BIOSTAR API
       const { token, sessionId } = await this.getApiToken();
 
-      // Format user IDs as required by BIOSTAR API
-      const formattedIds = userIds
-        .map((id) => encodeURIComponent(id))
-        .join('%2B');
-
       try {
-        const url = `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`;
-        const deleteResponse = await axios.delete(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'bs-session-id': sessionId,
-            accept: 'application/json',
+        // First API call - Delete card records
+        const deleteCardPayload = {
+          mobile: {
+            user_id: userIds,
+            card_id: [],
+            param: {
+              UserIDs: userIds,
+              query: {},
+            },
           },
-          httpsAgent: new https.Agent({
-            rejectUnauthorized: false,
-          }),
-        });
+        };
 
-        // Check response
-        if (deleteResponse.data?.Response?.code === '1003') {
-          this.logger.log('Successfully deleted users from BIOSTAR API');
-          return {
-            success: true,
-            message: 'Users successfully deleted',
-            deletedCount: updateResult.affected,
-            biostarResponse: deleteResponse.data,
-          };
-        } else {
-          throw new Error(
-            `Unexpected BIOSTAR API response: ${JSON.stringify(
-              deleteResponse.data,
-            )}`,
-          );
-        }
+        await axios.post(
+          `${this.apiBaseUrl}/api/v2/mobile/delete`,
+          deleteCardPayload,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'bs-session-id': sessionId,
+              'Content-Type': 'application/json',
+            },
+            httpsAgent: new https.Agent({
+              rejectUnauthorized: false,
+            }),
+          },
+        );
+
+        this.logger.log(
+          'Successfully deleted user card records from BIOSTAR API',
+        );
+
+        // Second API call - Delete user records
+        const formattedIds = userIds
+          .map((id) => encodeURIComponent(id))
+          .join('%2B');
+        const deleteUserResponse = await axios.delete(
+          `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'bs-session-id': sessionId,
+              accept: 'application/json',
+            },
+            httpsAgent: new https.Agent({
+              rejectUnauthorized: false,
+            }),
+          },
+        );
+
+        this.logger.log('Successfully deleted user records from BIOSTAR API');
+        return {
+          success: true,
+          message: 'Users and their card records successfully deleted',
+          deletedCount: updateResult.affected,
+          biostarResponse: deleteUserResponse.data,
+        };
       } catch (error) {
-        this.logger.error('BIOSTAR API request failed:', {
-          url: `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`,
-          error: error.message,
-        });
-
-        // If BIOSTAR deletion fails, revert PostgreSQL changes
+        // Revert PostgreSQL changes on BIOSTAR API failure
         await this.studentRepository
           .createQueryBuilder()
           .update(Student)
@@ -987,7 +1005,6 @@ ${formattedRecords
           biostarMessage: axios.isAxiosError(error)
             ? error.response?.data?.Response?.message
             : undefined,
-          requestUrl: `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`,
           step: 'biostar-deletion',
         });
       }
