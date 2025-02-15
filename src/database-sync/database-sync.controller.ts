@@ -20,6 +20,7 @@ import {
 import { Role } from '../auth/enums/role.enum';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduledSyncDto } from './dto/scheduled-sync.dto';
+import { DeleteUsersDto } from './dto/delete-users.dto';
 
 @ApiTags('Database Sync')
 @ApiBearerAuth()
@@ -195,5 +196,29 @@ export class DatabaseSyncController {
   })
   async getRunningSync() {
     return this.databaseSyncService.getRunningSync();
+  }
+
+  @Post('delete-users')
+  @ApiOperation({
+    summary: 'Bulk delete users',
+    description: `
+      Deletes multiple users from both PostgreSQL and BIOSTAR databases.
+      
+      Process:
+      1. Sets isArchived=true in PostgreSQL database
+      2. Deletes users from BIOSTAR API
+      
+      Only admins can perform bulk deletion.
+    `,
+  })
+  @ApiBody({ type: DeleteUsersDto })
+  @ApiResponse({ status: 200, description: 'Users successfully deleted' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request or deletion failed',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async deleteUsers(@Body() payload: DeleteUsersDto) {
+    return this.databaseSyncService.deleteUsers(payload.userIds);
   }
 }

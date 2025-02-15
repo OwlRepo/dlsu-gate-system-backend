@@ -203,6 +203,7 @@ export class DatabaseSyncService {
         throw new BadRequestException({
           message: 'BIOSTAR API Authentication Failed',
           details: 'No session ID received from BIOSTAR API',
+          biostarMessage: response.data?.Response?.message,
           step: 'authentication',
         });
       }
@@ -217,6 +218,7 @@ export class DatabaseSyncService {
         throw new BadRequestException({
           message: 'BIOSTAR API Authentication Failed',
           details: error.response?.data || error.message,
+          biostarMessage: error.response?.data?.Response?.message,
           step: 'authentication',
           statusCode: error.response?.status || 500,
         });
@@ -597,32 +599,41 @@ export class DatabaseSyncService {
                 );
               }
 
-              throw new Error(
-                `Import partially successful. ${failedRows.length} rows failed to import. Failed rows: ${failedRows.join(', ')}`,
-              );
+              throw new BadRequestException({
+                message: `Import partially successful. ${failedRows.length} rows failed to import.`,
+                details: `Failed rows: ${failedRows.join(', ')}`,
+                biostarMessage: importResponse.data?.Response?.message,
+                failedRows: failedRows,
+              });
             }
           } else if (importResponse.data?.Response?.code !== '0') {
             this.logger.error('Import API Response:', importResponse.data);
 
-            // Handle specific error codes
+            // Handle specific error codes with enhanced messages
+            let errorMessage;
             switch (importResponse.data?.Response?.code) {
               case '20':
-                throw new Error(
-                  'Permission denied. Please check API credentials and permissions.',
-                );
+                errorMessage =
+                  'Permission denied. Please check API credentials and permissions.';
+                break;
               case '211':
-                throw new Error(
-                  'Field mapping error. Please check CSV format and required fields.',
-                );
+                errorMessage =
+                  'Field mapping error. Please check CSV format and required fields.';
+                break;
               case '105':
-                throw new Error(
-                  'Invalid query parameters. Please check CSV format and field mappings.',
-                );
+                errorMessage =
+                  'Invalid query parameters. Please check CSV format and field mappings.';
+                break;
               default:
-                throw new Error(
-                  `Import Error: ${importResponse.data?.Response?.message || 'Unknown error'}`,
-                );
+                errorMessage = 'Unknown error occurred during import';
             }
+
+            throw new BadRequestException({
+              message: errorMessage,
+              details: importResponse.data,
+              biostarMessage: importResponse.data?.Response?.message,
+              step: 'csv-import',
+            });
           } else {
             // Success case (code === '0')
             this.logger.log(
@@ -640,7 +651,14 @@ export class DatabaseSyncService {
 
           if (retries === 0) {
             this.logger.error(`Final upload attempt failed: ${errorMessage}`);
-            throw error;
+            throw new BadRequestException({
+              message: 'CSV upload failed after all retries',
+              details: errorMessage,
+              biostarMessage: axios.isAxiosError(error)
+                ? error.response?.data?.Response?.message
+                : undefined,
+              step: 'csv-upload',
+            });
           }
 
           this.logger.warn(
@@ -694,15 +712,15 @@ export class DatabaseSyncService {
         queueId,
       };
     } catch (error) {
-      // Handle different types of errors
       if (error instanceof BadRequestException) {
-        throw error; // Re-throw formatted errors
+        throw error;
       }
 
       this.logger.error('Manual sync failed:', error);
       throw new BadRequestException({
         message: 'Manual Sync Failed',
         details: error.message,
+        biostarMessage: error.response?.data?.Response?.message,
         step: error.step || 'unknown',
         queueId,
       });
@@ -768,5 +786,97 @@ export class DatabaseSyncService {
       runningJobs,
       count: runningJobs.length,
     };
+  }
+
+  async deleteUsers(userIds: string[]) {
+    if (!userIds?.length) {
+      throw new BadRequestException('No user IDs provided for deletion');
+    }
+
+    try {
+      this.logger.log(`Starting bulk deletion for ${userIds.length} users`);
+
+      // 1. Update PostgreSQL records
+      const updateResult = await this.studentRepository
+        .createQueryBuilder()
+        .update(Student)
+        .set({ isArchived: true })
+        .where('ID_Number IN (:...userIds)', { userIds })
+        .execute();
+
+      this.logger.log(`Updated ${updateResult.affected} records in PostgreSQL`);
+
+      // 2. Delete from BIOSTAR API
+      const { token, sessionId } = await this.getApiToken();
+
+      // Format user IDs as required by BIOSTAR API
+      const formattedIds = userIds
+        .map((id) => encodeURIComponent(id))
+        .join('%2B');
+
+      try {
+        const url = `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`;
+        const deleteResponse = await axios.delete(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'bs-session-id': sessionId,
+            accept: 'application/json',
+          },
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+        });
+
+        // Check response
+        if (deleteResponse.data?.Response?.code === '1003') {
+          this.logger.log('Successfully deleted users from BIOSTAR API');
+          return {
+            success: true,
+            message: 'Users successfully deleted',
+            deletedCount: updateResult.affected,
+            biostarResponse: deleteResponse.data,
+          };
+        } else {
+          throw new Error(
+            `Unexpected BIOSTAR API response: ${JSON.stringify(
+              deleteResponse.data,
+            )}`,
+          );
+        }
+      } catch (error) {
+        this.logger.error('BIOSTAR API request failed:', {
+          url: `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`,
+          error: error.message,
+        });
+
+        // If BIOSTAR deletion fails, revert PostgreSQL changes
+        await this.studentRepository
+          .createQueryBuilder()
+          .update(Student)
+          .set({ isArchived: false })
+          .where('ID_Number IN (:...userIds)', { userIds })
+          .execute();
+
+        throw new BadRequestException({
+          message: 'Failed to delete users from BIOSTAR API',
+          details: axios.isAxiosError(error)
+            ? error.response?.data
+            : error.message,
+          biostarMessage: axios.isAxiosError(error)
+            ? error.response?.data?.Response?.message
+            : undefined,
+          requestUrl: `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`,
+          step: 'biostar-deletion',
+        });
+      }
+    } catch (error) {
+      this.logger.error('Bulk deletion failed:', error);
+      throw new BadRequestException({
+        message: 'Bulk deletion failed',
+        details: error.message,
+        biostarMessage: error.response?.biostarMessage,
+        step: error.step || 'unknown',
+      });
+    }
   }
 }
