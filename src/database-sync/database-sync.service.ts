@@ -17,6 +17,10 @@ import * as https from 'https';
 import * as FormData from 'form-data';
 import * as sharp from 'sharp';
 import { In } from 'typeorm';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+
+dayjs.extend(utc);
 
 @Injectable()
 export class DatabaseSyncService {
@@ -452,11 +456,28 @@ export class DatabaseSyncService {
           { id: 'remarks', title: 'Remarks' },
           { id: 'csn', title: 'csn' },
           { id: 'photo', title: 'photo' },
+          { id: 'start_datetime', title: 'start_datetime' },
+          { id: 'expiry_datetime', title: 'expiry_datetime' },
+          { id: 'original_campus_entry', title: 'original_campus_entry' },
         ],
       });
 
       // Transform records to match format
       const skippedRecords = [];
+
+      const currentDate = dayjs().utc();
+      const startDate = currentDate
+        .subtract(10, 'year')
+        .format('YYYYMMDD HH:mm:ss.SSS');
+
+      // Calculate expiry dates
+      const startDateObj = dayjs().utc().subtract(10, 'year'); // For start date
+      const expiryDateEnabled = startDateObj
+        .add(dayjs().year() - startDateObj.year() + 10, 'year') // Add years from current year + 10
+        .format('YYYYMMDD HH:mm:ss.SSS');
+      const expiryDateDisabled = currentDate // Use current date instead of start date
+        .subtract(1, 'month') // Subtract 1 month from current date
+        .format('YYYYMMDD HH:mm:ss.SSS');
 
       const formattedRecords = (
         await Promise.all(
@@ -520,10 +541,63 @@ export class DatabaseSyncService {
               Remarks: remarks,
               csn: userId,
               photo: await this.convertPhotoToBase64(record.Photo),
+              start_datetime: startDate,
+              expiry_datetime:
+                record.Campus_Entry.toString().toUpperCase() === 'N'
+                  ? expiryDateDisabled
+                  : expiryDateEnabled,
+              original_campus_entry: record.Campus_Entry,
             };
           }),
         )
       ).filter((record) => record !== null);
+
+      // Add logging for disabled accounts
+      const disabledCount = formattedRecords.filter(
+        (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
+      ).length;
+      this.logger.log(
+        `${disabledCount} student accounts are disabled (Campus Entry: N)`,
+      );
+
+      // Add after formattedRecords is created and before the disabled count logging
+      const enabledCount = formattedRecords.filter(
+        (r) => r.original_campus_entry.toString().toUpperCase() === 'Y',
+      ).length;
+      this.logger.log(
+        `
+Data Summary:
+-------------
+Total Records: ${formattedRecords.length}
+Enabled Accounts (Campus Entry: Y): ${enabledCount}
+Disabled Accounts (Campus Entry: N): ${disabledCount}
+-------------`,
+      );
+
+      // Update the log table format to match the new date format width
+      this.logger.log(
+        `
+CSV Contents to be uploaded:
+-----------------------------------------------------------------------------
+| ID Number | Name                 | Campus Entry | Expiry DateTime          |
+-----------------------------------------------------------------------------
+${formattedRecords
+  .slice(0, 100)
+  .map(
+    (r) =>
+      `| ${r.user_id.padEnd(9)} | ${r.name.slice(0, 20).padEnd(20)} | ${r.original_campus_entry
+        .toString()
+        .toUpperCase()
+        .padEnd(11)} | ${(r.expiry_datetime || 'N/A').padEnd(21)} |`,
+  )
+  .join('\n')}
+-----------------------------------------------------------------------------
+... ${
+          formattedRecords.length > 100
+            ? `and ${formattedRecords.length - 100} more records`
+            : ''
+        }`,
+      );
 
       // After processing records, write skipped records to log file
       if (skippedRecords.length > 0) {
@@ -589,7 +663,8 @@ export class DatabaseSyncService {
             CsvOption: {
               columns: {
                 total: headers.length.toString(),
-                rows: [headers[0].trim()],
+                rows: headers,
+                formats: headers.map(() => 'Text'),
               },
               start_line: 2,
               import_option: 2,
