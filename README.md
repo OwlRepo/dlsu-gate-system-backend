@@ -35,6 +35,16 @@ Backend service for DLSU Gate System with load balancing and high availability s
     - [Cache Management](#cache-management)
     - [Monitoring Redis](#monitoring-redis)
     - [Best Practices](#best-practices)
+  - [Technology Stack Overview](#technology-stack-overview)
+    - [NestJS Implementation](#nestjs-implementation)
+    - [PostgreSQL Implementation](#postgresql-implementation)
+    - [Redis Implementation](#redis-implementation)
+    - [Nginx Implementation](#nginx-implementation)
+    - [Docker Implementation](#docker-implementation)
+    - [TypeScript Implementation](#typescript-implementation)
+    - [Testing Framework](#testing-framework)
+    - [Monitoring and Logging](#monitoring-and-logging)
+    - [Security Implementation](#security-implementation)
 
 ## Prerequisites
 
@@ -502,3 +512,231 @@ redis-cli INFO stats
    - Implement fallback mechanisms
    - Handle Redis connection failures
    - Log cache-related errors
+
+## Technology Stack Overview
+
+### NestJS Implementation
+
+**Core Features**
+
+- Built with TypeScript for type safety and better developer experience
+- RESTful API architecture with OpenAPI/Swagger documentation
+- JWT-based authentication and role-based authorization
+- Request validation and DTO transformations
+- Global exception handling and custom error responses
+
+**Key Components**
+
+- Controllers: Handle HTTP requests and route management
+- Services: Implement business logic and data operations
+- Guards: Protect routes with authentication and authorization
+- Interceptors: Transform request/response data
+- Pipes: Validate and transform input data
+
+### PostgreSQL Implementation
+
+**Database Structure**
+
+- Relational database design with referential integrity
+- Optimized indexes for frequent queries
+- Partitioned tables for large datasets
+- Connection pooling for efficient resource usage
+
+**Key Features**
+
+- Complex queries with JOIN operations
+- Transaction management
+- Concurrent access handling
+- Full-text search capabilities
+- Database migrations and versioning
+
+### Redis Implementation
+
+**Container Settings**
+
+```yaml
+Maximum Memory: 768MB
+Eviction Policy: allkeys-lru
+Port: 6389 (external), 6379 (internal)
+Resource Limits:
+  - CPU: 1.00 (max), 0.50 (reserved)
+  - Memory: 1024MB (max), 512MB (reserved)
+```
+
+**Connection Settings**
+
+```env
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+
+**TTL (Time To Live) Settings**
+
+- Session data: 24 hours
+- Rate limit counters: 15 minutes
+- API response cache: 5 minutes
+- User profile cache: 1 hour
+
+**Cache Categories**
+
+1. **Short-lived Cache (1-5 minutes)**
+
+   - API responses
+   - Validation results
+   - Temporary tokens
+
+2. **Medium-lived Cache (1-24 hours)**
+
+   - User sessions
+   - Authentication tokens
+   - User profiles
+
+3. **Persistent Cache (until evicted)**
+   - System configurations
+   - Common reference data
+
+### Nginx Implementation
+
+**Load Balancing**
+
+- Round-robin distribution across 5 API instances
+- Health checks for backend services
+- Session persistence configuration
+- SSL/TLS termination
+
+**Performance Optimizations**
+
+- Gzip compression for responses
+- Static file caching
+- Buffer size optimizations
+- Keep-alive connection management
+- HTTP/2 support
+
+**Security Features**
+
+- Rate limiting configuration
+- DDoS protection
+- Header security policies
+- Cross-origin resource sharing (CORS)
+
+### Docker Implementation
+
+**Container Architecture**
+
+- Multi-container deployment with docker-compose
+- Layered image building for optimal caching
+- Volume management for persistent data
+- Network isolation between services
+
+**Resource Management**
+
+- CPU and memory limits per container
+- Restart policies
+- Health checks
+- Log rotation
+
+**Development Features**
+
+- Hot-reload configuration
+- Development vs production environments
+- Multi-stage builds
+- Docker layer caching
+
+### TypeScript Implementation
+
+**Language Features**
+
+- Strong typing system
+- Interface definitions
+- Decorators for metadata
+- Advanced type utilities
+
+**Project Structure**
+
+- Modular architecture
+- Shared types and interfaces
+- Utility functions
+- Type guards and assertions
+
+**Development Tools**
+
+- ESLint configuration
+- Prettier code formatting
+- TypeScript compiler options
+- Path aliases
+
+### Testing Framework
+
+**Unit Testing**
+
+- Jest test runner
+- Mocking utilities
+- Test coverage reporting
+- Snapshot testing
+
+**Integration Testing**
+
+- Supertest for HTTP testing
+- Database testing utilities
+- Redis integration tests
+- Mock services
+
+**E2E Testing**
+
+- Full API endpoint testing
+- Authentication flow testing
+- Error handling scenarios
+- Performance benchmarks
+
+### Monitoring and Logging
+
+**Application Monitoring**
+
+- Health check endpoints
+- Performance metrics
+- Error tracking
+- Resource usage statistics
+
+**Logging System**
+
+- Structured JSON logging
+- Log levels and categories
+- Request/response logging
+- Error and exception logging
+
+**Metrics Collection**
+
+- Response time tracking
+- Database query performance
+- Cache hit/miss ratios
+- API usage statistics
+
+### Security Implementation
+
+**Authentication**
+
+- JWT token management
+- Refresh token rotation
+- Session handling
+- Password hashing
+
+**Authorization**
+
+- Role-based access control
+- Permission management
+- API key authentication
+- IP whitelisting
+
+**Data Protection**
+
+- Input validation
+- SQL injection prevention
+- XSS protection
+- CSRF tokens
+
+**Network Security**
+
+- SSL/TLS configuration
+- Secure headers
+- Rate limiting
+- DDoS protection
