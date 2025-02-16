@@ -30,6 +30,23 @@ export class DatabaseSyncService {
   private apiBaseUrl: string;
   private apiCredentials: { login_id: string; password: string };
   private readonly logDir = path.join(process.cwd(), 'logs', 'skipped-records');
+  private readonly syncedDir = path.join(
+    process.cwd(),
+    'logs',
+    'synced-records',
+  );
+  private readonly syncedJsonDir = path.join(
+    process.cwd(),
+    'logs',
+    'synced-records',
+    'json',
+  );
+  private readonly syncedCsvDir = path.join(
+    process.cwd(),
+    'logs',
+    'synced-records',
+    'csv',
+  );
 
   constructor(
     @InjectRepository(SyncSchedule)
@@ -65,20 +82,31 @@ export class DatabaseSyncService {
   }
 
   private ensureLogDirectory() {
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true });
-    }
+    const directories = [
+      this.logDir,
+      this.syncedDir,
+      this.syncedJsonDir,
+      this.syncedCsvDir,
+    ];
+
+    directories.forEach((dir) => {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    });
 
     // Cleanup logs older than 1 month
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
 
-    fs.readdirSync(this.logDir).forEach((file) => {
-      const filePath = path.join(this.logDir, file);
-      const stats = fs.statSync(filePath);
-      if (stats.mtime < oneMonthAgo) {
-        fs.unlinkSync(filePath);
-      }
+    directories.forEach((dir) => {
+      fs.readdirSync(dir).forEach((file) => {
+        const filePath = path.join(dir, file);
+        const stats = fs.statSync(filePath);
+        if (stats.mtime < oneMonthAgo) {
+          fs.unlinkSync(filePath);
+        }
+      });
     });
   }
 
@@ -279,6 +307,61 @@ export class DatabaseSyncService {
       this.logger.error('Error converting photo to base64:', error);
       return null;
     }
+  }
+
+  private async logSyncedRecords(formattedRecords: any[], jobName: string) {
+    // Format the date as YYYY_MM_DD
+    const dateString = new Date()
+      .toISOString()
+      .split('T')[0]
+      .replace(/-/g, '_');
+
+    // Get sync type from jobName (e.g., 'sync-1' -> 'sync1', 'manual-uuid' -> 'manual')
+    const syncType = jobName.startsWith('manual-')
+      ? 'manual'
+      : jobName.replace('-', '');
+
+    // Prepare the synced records data
+    const syncedData = formattedRecords.map((record) => ({
+      user_id: record.user_id,
+      name: record.name,
+      lived_name: record['Lived Name'],
+      remarks: record.Remarks,
+      campus_entry: record.original_campus_entry,
+      expiry_datetime: record.expiry_datetime,
+      sync_timestamp: new Date().toISOString(),
+    }));
+
+    // Save JSON format
+    const jsonFilePath = path.join(
+      this.syncedJsonDir,
+      `synced_${syncType}_${dateString}.json`,
+    );
+    fs.writeFileSync(jsonFilePath, JSON.stringify(syncedData, null, 2));
+
+    // Save CSV format
+    const csvFilePath = path.join(
+      this.syncedCsvDir,
+      `synced_${syncType}_${dateString}.csv`,
+    );
+    const csvWriter = createObjectCsvWriter({
+      path: csvFilePath,
+      header: [
+        { id: 'user_id', title: 'User ID' },
+        { id: 'name', title: 'Name' },
+        { id: 'lived_name', title: 'Lived Name' },
+        { id: 'remarks', title: 'Remarks' },
+        { id: 'campus_entry', title: 'Campus Entry' },
+        { id: 'expiry_datetime', title: 'Expiry DateTime' },
+        { id: 'sync_timestamp', title: 'Sync Timestamp' },
+      ],
+    });
+
+    await csvWriter.writeRecords(syncedData);
+
+    this.logger.log(`Saved ${syncedData.length} synced records to:`);
+    this.logger.log(`- JSON: ${jsonFilePath}`);
+    this.logger.log(`- CSV: ${csvFilePath}`);
   }
 
   private async executeDatabaseSync(jobName: string) {
@@ -607,6 +690,9 @@ ${formattedRecords
 
       await csvWriter.writeRecords(formattedRecords);
       this.logger.log(`CSV file created at ${csvFilePath}`);
+
+      // After successful CSV upload and before cleanup
+      await this.logSyncedRecords(formattedRecords, jobName);
 
       // 6. Upload to API with retries
       let retries = 3;
