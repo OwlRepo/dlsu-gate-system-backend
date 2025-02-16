@@ -128,25 +128,41 @@ cd dlsu-gate-system-backend
    Create a `.env` file:
 
 ```env
+# JWT Configuration
+JWT_SECRET=your-jwt-secret-key                    # Secret key for JWT tokens
+
+# Environment Configuration
+NODE_ENV=development                              # Application environment
+PORT=51742                                        # Application port
+
 # Database Configuration
-DB_USERNAME=postgres
-DB_PASSWORD=your_secure_password
-DB_NAME=dlsu_gate_system
+DB_HOST=localhost                                 # Database host
+DB_PORT=5432                                      # Database port
+DB_USERNAME=postgres                              # Database username
+DB_PASSWORD=your_secure_password                  # Database password
+DB_NAME=dlsu_gate_system                         # Database name
 
-# Admin Access
-PGADMIN_EMAIL=admin@admin.com
-PGADMIN_PASSWORD=admin_password
+# Source Database Configuration
+SOURCE_DB_HOST=your_source_host                   # Source database host
+SOURCE_DB_PORT=your_source_port                   # Source database port
+SOURCE_DB_USERNAME=your_source_username           # Source database username
+SOURCE_DB_PASSWORD=your_source_password           # Source database password
+SOURCE_DB_NAME=your_source_db                     # Source database name
 
-# API Configuration
-API_PORT=9580
-NODE_ENV=production
-RATE_LIMIT=100
-RATE_LIMIT_WINDOW=15
+# BIOSTAR API Configuration
+BIOSTAR_API_BASE_URL=your_biostar_url            # BIOSTAR API URL
+BIOSTAR_API_LOGIN_ID=your_biostar_username       # BIOSTAR username
+BIOSTAR_API_PASSWORD=your_biostar_password       # BIOSTAR password
 
-# Redis Configuration
-REDIS_HOST=redis
-REDIS_PORT=6379
+# Application URLs
+BASE_URL=http://localhost                         # Base application URL
+RAILWAY_STATIC_URL=your_railway_url              # Railway deployment URL
+
+# Docker Configuration
+DOCKER_ENVIRONMENT=true                          # Docker environment flag
 ```
+
+> **Important**: For the official production environment variables and credentials, please contact the repository maintainers. The above example is for development purposes only.
 
 3. **Launch the System**
 
