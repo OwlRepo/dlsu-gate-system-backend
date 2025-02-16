@@ -1,4 +1,12 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  UseGuards,
+  Post,
+  Body,
+  Res,
+} from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import {
   ApiTags,
@@ -8,6 +16,7 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Response } from 'express';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -19,8 +28,19 @@ export class ReportsController {
   @Get()
   @ApiOperation({
     summary: 'Get all reports',
-    description:
-      'Retrieves a list of all available reports. Requires Admin privileges.',
+    description: `
+      Retrieves a list of all available reports.
+      
+      Returns:
+      - Report ID
+      - Report title
+      - Creation date
+      - Report status
+      - Associated metadata
+      
+      Only authenticated users can access reports.
+      Results are paginated with 50 items per page.
+    `,
   })
   @ApiResponse({
     status: 200,
@@ -31,14 +51,18 @@ export class ReportsController {
         type: 'object',
         properties: {
           id: { type: 'string' },
-          // Add other report properties
+          title: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+          status: { type: 'string', enum: ['draft', 'published', 'archived'] },
+          metadata: { type: 'object' },
         },
       },
     },
   })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires Admin privileges',
+    description: 'Forbidden - Insufficient permissions',
   })
   findAll() {
     return this.reportsService.findAll();
@@ -47,18 +71,42 @@ export class ReportsController {
   @Get('search-contains')
   @ApiOperation({
     summary: 'Search reports',
-    description: 'Search for reports containing the specified search string',
+    description: `
+      Search for reports containing the specified search string.
+      
+      Search covers:
+      - Report title
+      - Report content
+      - Associated metadata
+      - Tags
+      
+      Results are ordered by relevance and limited to 50 items.
+      Partial matches are supported.
+    `,
   })
   @ApiQuery({
     name: 'searchString',
     required: true,
     type: String,
-    description: 'String to search for in reports',
+    description: 'String to search for in reports. Minimum 3 characters.',
   })
   @ApiResponse({
     status: 200,
     description: 'Reports matching search criteria',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          relevanceScore: { type: 'number' },
+          matchedFields: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
   })
+  @ApiResponse({ status: 400, description: 'Invalid search string' })
   searchContains(@Query('searchString') searchString: string) {
     return this.reportsService.searchContains(searchString);
   }
@@ -66,7 +114,16 @@ export class ReportsController {
   @Get('date-range')
   @ApiOperation({
     summary: 'Get reports by date range',
-    description: 'Retrieves reports within the specified date range',
+    description: `
+      Retrieves reports within the specified date range.
+      
+      Features:
+      - Dates must be in YYYY-MM-DD format
+      - Maximum range of 90 days
+      - Results are sorted by date (newest first)
+      - Includes both creation and modification dates
+      - Timezone is UTC
+    `,
   })
   @ApiQuery({
     name: 'startDate',
@@ -82,12 +139,104 @@ export class ReportsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Reports within date range retrieved successfully',
+    description: 'Reports within date range',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+          modifiedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
   })
+  @ApiResponse({ status: 400, description: 'Invalid date format or range' })
   findByDateRange(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
     return this.reportsService.findByDateRange(startDate, endDate);
+  }
+
+  @Post()
+  @ApiOperation({
+    summary: 'Create new report',
+    description: `
+      Creates a new report with the provided data.
+      
+      Required fields:
+      - title: Report title
+      - content: Report content
+      - type: Report type
+      
+      Optional fields:
+      - tags: Array of tag strings
+      - metadata: Additional JSON metadata
+      - attachments: Array of file references
+      
+      The report will be saved as a draft by default.
+    `,
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Report created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string' },
+        createdAt: { type: 'string', format: 'date-time' },
+        status: { type: 'string', enum: ['draft'] },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid report data' })
+  create(@Body() createReportDto: any) {
+    return this.reportsService.create(createReportDto);
+  }
+
+  @Get('generate-csv')
+  @ApiOperation({
+    summary: 'Generate CSV report',
+    description: `
+      Generates and downloads a CSV report of all reports.
+      
+      CSV includes:
+      - Report ID
+      - Title
+      - Creation date
+      - Status
+      - Associated metadata
+      
+      Features:
+      - UTF-8 encoding
+      - Includes headers
+      - Automatic file cleanup after download
+      - Maximum 10,000 records
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'CSV file download',
+    schema: {
+      type: 'string',
+      format: 'binary',
+    },
+  })
+  @ApiResponse({ status: 500, description: 'Error generating CSV' })
+  async generateCSV(@Res() res: Response) {
+    const { filePath, fileName } =
+      await this.reportsService.generateCSVReport();
+
+    res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error('Error downloading file:', err);
+      }
+      // Cleanup file after download
+      this.reportsService.cleanupFile(filePath);
+    });
   }
 }

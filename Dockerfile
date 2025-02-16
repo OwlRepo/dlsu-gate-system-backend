@@ -1,32 +1,26 @@
-FROM oven/bun:1
+FROM oven/bun:1.0.25
 
 WORKDIR /app
 
-# Install netcat for database connection checking
-RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+COPY package*.json ./
 
-# Copy package files
-COPY package.json .
-COPY bun.lockb .
+# Install system dependencies for canvas
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    build-essential \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libjpeg-dev \
+    libgif-dev \
+    librsvg2-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-RUN bun install
+RUN bun install --legacy-peer-deps
 
-# Copy the rest of the application
 COPY . .
 
-# Build the application
-RUN bun run build
-
-# Add persistent uploads directory
-RUN mkdir -p /app/persistent_uploads && chmod 777 /app/persistent_uploads
-
-# Make the entrypoint script executable (works on both Windows and macOS)
-COPY docker-entrypoint.sh .
-RUN chmod +x docker-entrypoint.sh
-
-# Expose the port your app runs on
 EXPOSE 3000
 
-# Use the entrypoint script
-ENTRYPOINT ["./docker-entrypoint.sh"] 
+CMD ["bun", "start"] 
