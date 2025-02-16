@@ -231,6 +231,7 @@ export class ReportsController {
         this.reportsService.cleanupFile(filePath);
       });
     } catch (error) {
+      console.error('Error generating CSV file:', error);
       throw new UnprocessableEntityException('Error generating CSV file');
     }
   }
