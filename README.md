@@ -38,7 +38,7 @@ Before you begin, ensure you have:
 - Git
 - Bun (for development)
 
-Note: When running this project with Docker, you don't need to install PostgreSQL, Redis, or Jenkins locally. All dependencies are containerized.
+Note: When running this project with Docker, you don't need to install PostgreSQL or Redis locally. All dependencies are containerized.
 
 ## Quick Start
 
