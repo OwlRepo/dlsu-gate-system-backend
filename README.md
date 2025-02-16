@@ -37,14 +37,19 @@ Backend service for DLSU Gate System with load balancing and high availability s
     - [Best Practices](#best-practices)
   - [Technology Stack Overview](#technology-stack-overview)
     - [NestJS Implementation](#nestjs-implementation)
+    - [Redis Usage Overview](#redis-usage-overview)
     - [PostgreSQL Implementation](#postgresql-implementation)
-    - [Redis Implementation](#redis-implementation)
+    - [PostgreSQL Usage Overview](#postgresql-usage-overview)
+    - [PostgreSQL Configuration](#postgresql-configuration)
+    - [Database Management](#database-management)
     - [Nginx Implementation](#nginx-implementation)
+    - [Nginx Usage Overview](#nginx-usage-overview)
+    - [Nginx Configuration](#nginx-configuration)
+    - [Performance Tuning](#performance-tuning)
     - [Docker Implementation](#docker-implementation)
-    - [TypeScript Implementation](#typescript-implementation)
-    - [Testing Framework](#testing-framework)
-    - [Monitoring and Logging](#monitoring-and-logging)
-    - [Security Implementation](#security-implementation)
+    - [Docker Usage Overview](#docker-usage-overview)
+    - [Docker Configuration](#docker-configuration)
+    - [Container Management](#container-management-1)
 
 ## Prerequisites
 
@@ -517,226 +522,301 @@ redis-cli INFO stats
 
 ### NestJS Implementation
 
-**Core Features**
+### Redis Usage Overview
 
-- Built with TypeScript for type safety and better developer experience
-- RESTful API architecture with OpenAPI/Swagger documentation
-- JWT-based authentication and role-based authorization
-- Request validation and DTO transformations
-- Global exception handling and custom error responses
+Redis serves several critical functions in the DLSU Gate System:
 
-**Key Components**
+**1. Session Management**
 
-- Controllers: Handle HTTP requests and route management
-- Services: Implement business logic and data operations
-- Guards: Protect routes with authentication and authorization
-- Interceptors: Transform request/response data
-- Pipes: Validate and transform input data
+- Stores user session data
+- Enables session sharing across multiple API instances
+- Configurable TTL (Time To Live) for sessions
+- Handles user logout by invalidating sessions
+
+**2. Rate Limiting**
+
+- Tracks API request counts across distributed instances
+- Implements sliding window rate limiting
+- Stores rate limit counters with automatic expiration
+- Ensures consistent rate limiting across all API instances
+
+**3. Caching Layer**
+
+- Caches frequently accessed data:
+  - User profiles
+  - Authentication tokens
+  - Common API responses
+- Reduces database load
+- Improves response times
+- Uses LRU (Least Recently Used) eviction policy
+
+**4. Real-time Data Synchronization**
+
+- Facilitates real-time updates across API instances
+- Manages distributed locks for synchronized operations
+- Enables pub/sub messaging between services
 
 ### PostgreSQL Implementation
 
-**Database Structure**
+### PostgreSQL Usage Overview
 
-- Relational database design with referential integrity
-- Optimized indexes for frequent queries
-- Partitioned tables for large datasets
-- Connection pooling for efficient resource usage
+PostgreSQL serves as the primary database in the DLSU Gate System:
 
-**Key Features**
+**1. Data Storage and Management**
 
-- Complex queries with JOIN operations
-- Transaction management
-- Concurrent access handling
-- Full-text search capabilities
-- Database migrations and versioning
+- Stores user profiles and authentication data
+- Manages gate access logs and records
+- Handles system configurations and settings
+- Maintains audit trails and activity logs
 
-### Redis Implementation
+**2. Transaction Management**
+
+- Ensures ACID compliance for critical operations
+- Handles concurrent access and updates
+- Manages data integrity constraints
+- Provides rollback capabilities
+
+**3. Performance Optimization**
+
+- Implements connection pooling
+- Uses prepared statements
+- Maintains optimized indexes
+- Handles query caching
+
+**4. High Availability**
+
+- Supports database replication
+- Implements backup and recovery
+- Manages failover scenarios
+- Handles data consistency across nodes
+
+### PostgreSQL Configuration
 
 **Container Settings**
 
 ```yaml
-Maximum Memory: 768MB
-Eviction Policy: allkeys-lru
-Port: 6389 (external), 6379 (internal)
+Maximum Connections: 500
+Shared Buffers: 1GB
+Effective Cache Size: 3GB
+Work Memory: 16MB
+Port: 5438 (external), 5432 (internal)
 Resource Limits:
-  - CPU: 1.00 (max), 0.50 (reserved)
-  - Memory: 1024MB (max), 512MB (reserved)
+  - CPU: 4.00 (max), 2.00 (reserved)
+  - Memory: 4096MB (max), 2048MB (reserved)
 ```
 
 **Connection Settings**
 
 ```env
-REDIS_HOST=redis
-REDIS_PORT=6379
+DB_HOST=postgres
+DB_PORT=5432
+DB_USERNAME=${DB_USERNAME:-postgres}
+DB_PASSWORD=${DB_PASSWORD:-postgres}
+DB_NAME=${DB_NAME:-dlsu_gate_system}
 ```
 
-**TTL (Time To Live) Settings**
+### Database Management
 
-- Session data: 24 hours
-- Rate limit counters: 15 minutes
-- API response cache: 5 minutes
-- User profile cache: 1 hour
+**Backup Schedules**
 
-**Cache Categories**
+- Full backup: Daily at midnight
+- Incremental backup: Every 6 hours
+- Transaction logs: Continuous archiving
+- Retention period: 30 days
 
-1. **Short-lived Cache (1-5 minutes)**
+**Maintenance Operations**
 
-   - API responses
-   - Validation results
-   - Temporary tokens
+1. **Regular Maintenance**
 
-2. **Medium-lived Cache (1-24 hours)**
+   - VACUUM operations
+   - Index rebuilding
+   - Statistics updates
+   - Dead tuple cleanup
 
-   - User sessions
-   - Authentication tokens
-   - User profiles
+2. **Performance Monitoring**
 
-3. **Persistent Cache (until evicted)**
-   - System configurations
-   - Common reference data
+   - Query performance analysis
+   - Index usage statistics
+   - Table bloat monitoring
+   - Connection pool status
+
+3. **Data Archival**
+   - Historical data management
+   - Data partitioning
+   - Archive storage
+   - Retrieval procedures
 
 ### Nginx Implementation
 
-**Load Balancing**
+### Nginx Usage Overview
 
-- Round-robin distribution across 5 API instances
-- Health checks for backend services
-- Session persistence configuration
-- SSL/TLS termination
+Nginx serves as the load balancer and reverse proxy:
 
-**Performance Optimizations**
+**1. Load Distribution**
 
-- Gzip compression for responses
-- Static file caching
-- Buffer size optimizations
-- Keep-alive connection management
-- HTTP/2 support
+- Manages traffic across 5 API instances
+- Implements health checking
+- Handles failover scenarios
+- Maintains session persistence
 
-**Security Features**
+**2. Request Processing**
 
-- Rate limiting configuration
-- DDoS protection
-- Header security policies
-- Cross-origin resource sharing (CORS)
+- Handles SSL/TLS termination
+- Manages static file serving
+- Implements request compression
+- Processes HTTP/2 connections
+
+**3. Security Management**
+
+- Implements rate limiting
+- Manages access control
+- Handles DDoS protection
+- Controls request validation
+
+**4. Performance Optimization**
+
+- Manages connection pooling
+- Implements caching strategies
+- Handles request buffering
+- Optimizes static content delivery
+
+### Nginx Configuration
+
+**Server Settings**
+
+```nginx
+Worker Processes: auto
+Worker Connections: 4096
+Keepalive: 128
+Port: 9580
+Resource Limits:
+  - CPU: 2.00 (max), 1.00 (reserved)
+  - Memory: 2048MB (max), 1024MB (reserved)
+```
+
+**Timeout Settings**
+
+```nginx
+client_body_timeout: 60s
+client_header_timeout: 60s
+keepalive_timeout: 120s
+send_timeout: 60s
+proxy_timeouts: 120s
+```
+
+### Performance Tuning
+
+**Buffer Settings**
+
+- Client body buffer: 128k
+- Client header buffer: 1k
+- Large client header buffers: 4 8k
+- Output buffers: 4 32k
+
+**Optimization Categories**
+
+1. **Connection Optimization**
+
+   - Keep-alive settings
+   - Worker process tuning
+   - Connection queue management
+   - Backlog configuration
+
+2. **Content Optimization**
+
+   - Gzip compression
+   - Static file caching
+   - ETags configuration
+   - Content encoding
+
+3. **SSL Optimization**
+   - Session caching
+   - OCSP stapling
+   - Cipher suite selection
+   - SSL buffer size
 
 ### Docker Implementation
 
-**Container Architecture**
+### Docker Usage Overview
 
-- Multi-container deployment with docker-compose
-- Layered image building for optimal caching
-- Volume management for persistent data
-- Network isolation between services
+Docker manages the containerized environment:
 
-**Resource Management**
+**1. Container Orchestration**
 
-- CPU and memory limits per container
-- Restart policies
-- Health checks
-- Log rotation
+- Manages multi-container deployment
+- Handles service dependencies
+- Controls container lifecycle
+- Manages resource allocation
 
-**Development Features**
+**2. Resource Management**
 
-- Hot-reload configuration
-- Development vs production environments
-- Multi-stage builds
-- Docker layer caching
+- Implements CPU limiting
+- Controls memory allocation
+- Manages disk I/O
+- Handles network resources
 
-### TypeScript Implementation
+**3. Volume Management**
 
-**Language Features**
+- Manages persistent storage
+- Handles data backups
+- Controls file permissions
+- Implements volume sharing
 
-- Strong typing system
-- Interface definitions
-- Decorators for metadata
-- Advanced type utilities
+**4. Network Configuration**
 
-**Project Structure**
+- Manages container networking
+- Implements service discovery
+- Handles port mapping
+- Controls network isolation
 
-- Modular architecture
-- Shared types and interfaces
-- Utility functions
-- Type guards and assertions
+### Docker Configuration
 
-**Development Tools**
+**Resource Allocation**
 
-- ESLint configuration
-- Prettier code formatting
-- TypeScript compiler options
-- Path aliases
+```yaml
+API Services (each):
+  CPU: 2.00 (max), 1.00 (reserved)
+  Memory: 2048MB (max), 1024MB (reserved)
+Database:
+  CPU: 4.00 (max), 2.00 (reserved)
+  Memory: 4096MB (max), 2048MB (reserved)
+Redis:
+  CPU: 1.00 (max), 0.50 (reserved)
+  Memory: 1024MB (max), 512MB (reserved)
+```
 
-### Testing Framework
+**Volume Configuration**
 
-**Unit Testing**
+```yaml
+Persistent Volumes:
+  - postgres_data
+  - persistent_uploads
+  - screensaver_uploads
+  - pgadmin_data
+Network:
+  - app-network (bridge)
+```
 
-- Jest test runner
-- Mocking utilities
-- Test coverage reporting
-- Snapshot testing
+### Container Management
 
-**Integration Testing**
+**Deployment Strategies**
 
-- Supertest for HTTP testing
-- Database testing utilities
-- Redis integration tests
-- Mock services
+1. **Build Process**
 
-**E2E Testing**
+   - Multi-stage builds
+   - Layer optimization
+   - Cache management
+   - Image size reduction
 
-- Full API endpoint testing
-- Authentication flow testing
-- Error handling scenarios
-- Performance benchmarks
+2. **Runtime Management**
 
-### Monitoring and Logging
+   - Health checking
+   - Auto-restart policies
+   - Log rotation
+   - Resource monitoring
 
-**Application Monitoring**
-
-- Health check endpoints
-- Performance metrics
-- Error tracking
-- Resource usage statistics
-
-**Logging System**
-
-- Structured JSON logging
-- Log levels and categories
-- Request/response logging
-- Error and exception logging
-
-**Metrics Collection**
-
-- Response time tracking
-- Database query performance
-- Cache hit/miss ratios
-- API usage statistics
-
-### Security Implementation
-
-**Authentication**
-
-- JWT token management
-- Refresh token rotation
-- Session handling
-- Password hashing
-
-**Authorization**
-
-- Role-based access control
-- Permission management
-- API key authentication
-- IP whitelisting
-
-**Data Protection**
-
-- Input validation
-- SQL injection prevention
-- XSS protection
-- CSRF tokens
-
-**Network Security**
-
-- SSL/TLS configuration
-- Secure headers
-- Rate limiting
-- DDoS protection
+3. **Maintenance Operations**
+   - Container updates
+   - Image cleanup
+   - Volume backups
+   - Network maintenance
