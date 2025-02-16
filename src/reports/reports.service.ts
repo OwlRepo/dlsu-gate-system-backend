@@ -4,7 +4,6 @@ import { Repository, Between, Like } from 'typeorm';
 import { Report } from './entities/report.entity';
 import * as fs from 'fs';
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { createObjectCsvWriter } from 'csv-writer';
 
 @Injectable()
@@ -46,23 +45,25 @@ export class ReportsService {
 
   async generateCSVReport(): Promise<{ filePath: string; fileName: string }> {
     const reports = await this.reportRepository.find();
-    const fileName = `report-${uuidv4()}.csv`;
-    const filePath = path.join('temp', fileName);
+    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const fileName = `reports-${dateStr}.csv`;
+    const uploadDir = path.join(process.cwd(), 'persistent_uploads', 'reports');
+    const filePath = path.join(uploadDir, fileName);
 
-    // Ensure temp directory exists
-    if (!fs.existsSync('temp')) {
-      fs.mkdirSync('temp');
+    // Ensure directory exists
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
     }
 
     const csvWriter = createObjectCsvWriter({
       path: filePath,
       header: [
-        { id: 'datetime', title: 'Date' },
-        { id: 'type', title: 'Type' },
-        { id: 'name', title: 'Name' },
-        { id: 'user_id', title: 'User ID' },
-        { id: 'status', title: 'Status' },
-        { id: 'remarks', title: 'Remarks' },
+        { id: 'datetime', title: 'datetime' },
+        { id: 'type', title: 'type' },
+        { id: 'name', title: 'name' },
+        { id: 'user_id', title: 'user_id' },
+        { id: 'status', title: 'status' },
+        { id: 'remarks', title: 'remarks' },
       ],
     });
 
