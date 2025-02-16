@@ -6,47 +6,9 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import * as compression from 'compression';
 import { rateLimit } from 'express-rate-limit';
-import { DataSource } from 'typeorm';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-
-  // Get the DataSource from the application context
-  const dataSource = app.get(DataSource);
-
-  // Initialize database
-  try {
-    // Create tables if they don't exist
-    await dataSource.query(`
-      CREATE TABLE IF NOT EXISTS sync_schedule (
-        id SERIAL PRIMARY KEY,
-        "scheduleNumber" INTEGER UNIQUE NOT NULL,
-        time VARCHAR(5) NOT NULL,
-        "cronExpression" VARCHAR(100) NOT NULL,
-        "lastSyncTime" TIMESTAMP,
-        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS students (
-        id SERIAL PRIMARY KEY,
-        "ID_Number" VARCHAR(255) UNIQUE NOT NULL,
-        "Name" VARCHAR(255),
-        "Lived_Name" VARCHAR(255),
-        "Remarks" TEXT,
-        "Photo" TEXT,
-        "Campus_Entry" VARCHAR(255),
-        "Unique_ID" VARCHAR(255),
-        "isArchived" BOOLEAN DEFAULT false,
-        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    console.log('Database tables initialized successfully');
-  } catch (error) {
-    console.error('Database initialization failed:', error);
-    process.exit(1);
-  }
 
   app.set('trust proxy', 1);
 
