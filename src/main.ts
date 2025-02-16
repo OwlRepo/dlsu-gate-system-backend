@@ -27,6 +27,7 @@ async function bootstrap() {
     .setTitle('DLSU Gate System API')
     .setDescription('API documentation for DLSU Gate System')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
