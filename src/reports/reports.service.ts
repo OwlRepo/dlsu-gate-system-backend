@@ -5,6 +5,7 @@ import { Report } from './entities/report.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
+import { CreateReportDto } from './dto/create-report.dto';
 
 @Injectable()
 export class ReportsService {
@@ -13,7 +14,7 @@ export class ReportsService {
     private reportRepository: Repository<Report>,
   ) {}
 
-  async create(createReportDto: any) {
+  async create(createReportDto: CreateReportDto) {
     const report = this.reportRepository.create({
       ...createReportDto,
       datetime: new Date(createReportDto.datetime),
@@ -22,7 +23,18 @@ export class ReportsService {
   }
 
   async findAll() {
-    return await this.reportRepository.find();
+    return await this.reportRepository.find({
+      select: [
+        'id',
+        'datetime',
+        'type',
+        'user_id',
+        'name',
+        'remarks',
+        'status',
+        'created_at',
+      ],
+    });
   }
 
   async searchContains(searchString: string) {

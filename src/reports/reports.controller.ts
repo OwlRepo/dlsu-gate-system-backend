@@ -17,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Response } from 'express';
+import { CreateReportDto } from './dto/create-report.dto';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -28,19 +29,7 @@ export class ReportsController {
   @Get()
   @ApiOperation({
     summary: 'Get all reports',
-    description: `
-      Retrieves a list of all available reports.
-      
-      Returns:
-      - Report ID
-      - Report title
-      - Creation date
-      - Report status
-      - Associated metadata
-      
-      Only authenticated users can access reports.
-      Results are paginated with 50 items per page.
-    `,
+    description: 'Retrieves all reports with complete data from the database',
   })
   @ApiResponse({
     status: 200,
@@ -50,11 +39,14 @@ export class ReportsController {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string' },
-          title: { type: 'string' },
-          createdAt: { type: 'string', format: 'date-time' },
-          status: { type: 'string', enum: ['draft', 'published', 'archived'] },
-          metadata: { type: 'object' },
+          id: { type: 'string', format: 'uuid' },
+          datetime: { type: 'string', format: 'date-time' },
+          type: { type: 'string' },
+          user_id: { type: 'string' },
+          name: { type: 'string' },
+          remarks: { type: 'string' },
+          status: { type: 'string' },
+          created_at: { type: 'string', format: 'date-time' },
         },
       },
     },
@@ -164,37 +156,13 @@ export class ReportsController {
   @Post()
   @ApiOperation({
     summary: 'Create new report',
-    description: `
-      Creates a new report with the provided data.
-      
-      Required fields:
-      - title: Report title
-      - content: Report content
-      - type: Report type
-      
-      Optional fields:
-      - tags: Array of tag strings
-      - metadata: Additional JSON metadata
-      - attachments: Array of file references
-      
-      The report will be saved as a draft by default.
-    `,
+    description: 'Creates a new report with the provided data',
   })
   @ApiResponse({
     status: 201,
     description: 'Report created successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        title: { type: 'string' },
-        createdAt: { type: 'string', format: 'date-time' },
-        status: { type: 'string', enum: ['draft'] },
-      },
-    },
   })
-  @ApiResponse({ status: 400, description: 'Invalid report data' })
-  create(@Body() createReportDto: any) {
+  create(@Body() createReportDto: CreateReportDto) {
     return this.reportsService.create(createReportDto);
   }
 
