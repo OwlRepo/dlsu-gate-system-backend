@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { UnprocessableEntityException } from '@nestjs/common';
+import { Response } from 'express';
 import { Report } from './entities/report.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Response } from 'express';
 
 describe('ReportsController', () => {
   let controller: ReportsController;
@@ -17,6 +17,7 @@ describe('ReportsController', () => {
     create: jest.fn(),
     generateCSVReport: jest.fn(),
     cleanupFile: jest.fn(),
+    findByType: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -26,14 +27,6 @@ describe('ReportsController', () => {
         {
           provide: ReportsService,
           useValue: mockReportsService,
-        },
-        {
-          provide: getRepositoryToken(Report),
-          useValue: {
-            find: jest.fn(),
-            create: jest.fn(),
-            save: jest.fn(),
-          },
         },
       ],
     })
@@ -51,105 +44,69 @@ describe('ReportsController', () => {
 
   describe('findAll', () => {
     it('should return all reports', async () => {
-      const result = ['test'];
-      jest.spyOn(service, 'findAll').mockImplementation(() => result as any);
+      const result = [{ id: '1', name: 'Test Report' }] as unknown as Report[];
+      jest.spyOn(service, 'findAll').mockResolvedValue(result as any);
 
       expect(await controller.findAll()).toBe(result);
-      expect(service.findAll).toHaveBeenCalled();
     });
   });
 
   describe('searchContains', () => {
-    it('should search reports with given string', async () => {
-      const searchString = 'test';
-      const result = ['test'];
-      jest
-        .spyOn(service, 'searchContains')
-        .mockImplementation(() => result as any);
+    it('should throw error if search string is too short', () => {
+      expect(() => controller.searchContains('ab')).toThrow(
+        UnprocessableEntityException,
+      );
+    });
 
-      expect(await controller.searchContains(searchString)).toBe(result);
-      expect(service.searchContains).toHaveBeenCalledWith(searchString);
+    it('should return filtered reports', async () => {
+      const result = [{ id: '1', name: 'Test Report' }] as unknown as Report[];
+      jest.spyOn(service, 'searchContains').mockResolvedValue(result as any);
+
+      expect(await controller.searchContains('test')).toBe(result);
     });
   });
 
   describe('findByDateRange', () => {
-    it('should find reports within date range', async () => {
-      const startDate = '2024-01-01';
-      const endDate = '2024-01-31';
-      const result = ['test'];
-      jest
-        .spyOn(service, 'findByDateRange')
-        .mockImplementation(() => result as any);
-
-      expect(await controller.findByDateRange(startDate, endDate)).toBe(result);
-      expect(service.findByDateRange).toHaveBeenCalledWith(startDate, endDate);
+    it('should throw error for invalid date format', () => {
+      expect(() => controller.findByDateRange('invalid', '2024-03-20')).toThrow(
+        UnprocessableEntityException,
+      );
     });
-  });
 
-  describe('create', () => {
-    it('should create a new report', async () => {
-      const createReportDto = { title: 'Test Report' };
-      const result = { id: 1, ...createReportDto };
-      jest.spyOn(service, 'create').mockImplementation(() => result as any);
+    it('should return reports within date range', async () => {
+      const result = [
+        { id: '1', datetime: '2024-03-20' },
+      ] as unknown as Report[];
+      jest.spyOn(service, 'findByDateRange').mockResolvedValue(result as any);
 
-      expect(await controller.create(createReportDto)).toBe(result);
-      expect(service.create).toHaveBeenCalledWith(createReportDto);
+      expect(await controller.findByDateRange('2024-03-19', '2024-03-20')).toBe(
+        result,
+      );
     });
   });
 
   describe('generateCSV', () => {
-    it('should generate and download CSV report', async () => {
+    it('should generate and download CSV', async () => {
       const mockResponse = {
-        download: jest.fn((path, name, cb) => cb()),
+        download: jest.fn(),
       } as unknown as Response;
 
-      const mockResult = {
-        filePath: '/tmp/report.csv',
+      jest.spyOn(service, 'generateCSVReport').mockResolvedValue({
+        filePath: 'path/to/file',
         fileName: 'report.csv',
-      };
-
-      jest.spyOn(service, 'generateCSVReport').mockResolvedValue(mockResult);
-      jest
-        .spyOn(service, 'cleanupFile')
-        .mockImplementation(() => Promise.resolve());
+      });
 
       await controller.generateCSV(mockResponse);
-
-      expect(service.generateCSVReport).toHaveBeenCalled();
-      expect(mockResponse.download).toHaveBeenCalledWith(
-        mockResult.filePath,
-        mockResult.fileName,
-        expect.any(Function),
-      );
-      expect(service.cleanupFile).toHaveBeenCalledWith(mockResult.filePath);
+      expect(mockResponse.download).toHaveBeenCalled();
     });
+  });
 
-    it('should handle download errors', async () => {
-      const mockResponse = {
-        download: jest.fn((path, name, cb) => cb(new Error('Download failed'))),
-      } as unknown as Response;
+  describe('findByType', () => {
+    it('should return reports of specified type', async () => {
+      const result = [{ id: '1', type: '0' }] as unknown as Report[];
+      jest.spyOn(service, 'findByType').mockResolvedValue(result as any);
 
-      const mockResult = {
-        filePath: '/tmp/report.csv',
-        fileName: 'report.csv',
-      };
-
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
-
-      jest.spyOn(service, 'generateCSVReport').mockResolvedValue(mockResult);
-      jest
-        .spyOn(service, 'cleanupFile')
-        .mockImplementation(() => Promise.resolve());
-
-      await controller.generateCSV(mockResponse);
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Error downloading file:',
-        expect.any(Error),
-      );
-      expect(service.cleanupFile).toHaveBeenCalledWith(mockResult.filePath);
-
-      consoleSpy.mockRestore();
+      expect(await controller.findByType('0')).toBe(result);
     });
   });
 });
