@@ -6,6 +6,7 @@ import {
   Post,
   Body,
   Res,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import {
@@ -63,24 +64,14 @@ export class ReportsController {
   @Get('search-contains')
   @ApiOperation({
     summary: 'Search reports',
-    description: `
-      Search for reports containing the specified search string.
-      
-      Search covers:
-      - Report title
-      - Report content
-      - Associated metadata
-      - Tags
-      
-      Results are ordered by relevance and limited to 50 items.
-      Partial matches are supported.
-    `,
+    description:
+      'Search for reports containing the specified search string in name, remarks, or type',
   })
   @ApiQuery({
     name: 'searchString',
     required: true,
     type: String,
-    description: 'String to search for in reports. Minimum 3 characters.',
+    description: 'String to search for in reports',
   })
   @ApiResponse({
     status: 200,
@@ -90,32 +81,49 @@ export class ReportsController {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string' },
-          title: { type: 'string' },
-          relevanceScore: { type: 'number' },
-          matchedFields: { type: 'array', items: { type: 'string' } },
+          id: { type: 'string', format: 'uuid' },
+          datetime: { type: 'string', format: 'date-time' },
+          type: { type: 'string' },
+          user_id: { type: 'string' },
+          name: { type: 'string' },
+          remarks: { type: 'string' },
+          status: { type: 'string' },
+          created_at: { type: 'string', format: 'date-time' },
         },
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Invalid search string' })
+  @ApiResponse({
+    status: 422,
+    description: 'Invalid search string',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 422 },
+        message: {
+          type: 'string',
+          example: 'Search string must be at least 3 characters long',
+        },
+        error: { type: 'string', example: 'Unprocessable Entity' },
+      },
+    },
+  })
   searchContains(@Query('searchString') searchString: string) {
-    return this.reportsService.searchContains(searchString);
+    try {
+      if (!searchString || searchString.length < 3) {
+        throw new Error('Search string must be at least 3 characters long');
+      }
+      return this.reportsService.searchContains(searchString);
+    } catch (error) {
+      throw new UnprocessableEntityException(error.message);
+    }
   }
 
   @Get('date-range')
   @ApiOperation({
     summary: 'Get reports by date range',
-    description: `
-      Retrieves reports within the specified date range.
-      
-      Features:
-      - Dates must be in YYYY-MM-DD format
-      - Maximum range of 90 days
-      - Results are sorted by date (newest first)
-      - Includes both creation and modification dates
-      - Timezone is UTC
-    `,
+    description:
+      'Retrieves reports within the specified date range with complete data',
   })
   @ApiQuery({
     name: 'startDate',
@@ -137,20 +145,49 @@ export class ReportsController {
       items: {
         type: 'object',
         properties: {
-          id: { type: 'string' },
-          title: { type: 'string' },
-          createdAt: { type: 'string', format: 'date-time' },
-          modifiedAt: { type: 'string', format: 'date-time' },
+          id: { type: 'string', format: 'uuid' },
+          datetime: { type: 'string', format: 'date-time' },
+          type: { type: 'string' },
+          user_id: { type: 'string' },
+          name: { type: 'string' },
+          remarks: { type: 'string' },
+          status: { type: 'string' },
+          created_at: { type: 'string', format: 'date-time' },
         },
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Invalid date format or range' })
+  @ApiResponse({
+    status: 422,
+    description: 'Invalid date format',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 422 },
+        message: {
+          type: 'string',
+          example: 'Invalid date format. Use YYYY-MM-DD format.',
+        },
+        error: { type: 'string', example: 'Unprocessable Entity' },
+      },
+    },
+  })
   findByDateRange(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
   ) {
-    return this.reportsService.findByDateRange(startDate, endDate);
+    try {
+      // Validate date format
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+      ) {
+        throw new Error('Invalid date format. Use YYYY-MM-DD format.');
+      }
+      return this.reportsService.findByDateRange(startDate, endDate);
+    } catch (error) {
+      throw new UnprocessableEntityException(error.message);
+    }
   }
 
   @Post()
@@ -169,22 +206,8 @@ export class ReportsController {
   @Get('generate-csv')
   @ApiOperation({
     summary: 'Generate CSV report',
-    description: `
-      Generates and downloads a CSV report of all reports.
-      
-      CSV includes:
-      - Report ID
-      - Title
-      - Creation date
-      - Status
-      - Associated metadata
-      
-      Features:
-      - UTF-8 encoding
-      - Includes headers
-      - Automatic file cleanup after download
-      - Maximum 10,000 records
-    `,
+    description:
+      'Generates and downloads a CSV report containing all reports data',
   })
   @ApiResponse({
     status: 200,
@@ -196,15 +219,74 @@ export class ReportsController {
   })
   @ApiResponse({ status: 500, description: 'Error generating CSV' })
   async generateCSV(@Res() res: Response) {
-    const { filePath, fileName } =
-      await this.reportsService.generateCSVReport();
+    try {
+      const { filePath, fileName } =
+        await this.reportsService.generateCSVReport();
 
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error('Error downloading file:', err);
-      }
-      // Cleanup file after download
-      this.reportsService.cleanupFile(filePath);
-    });
+      res.download(filePath, fileName, (err) => {
+        if (err) {
+          console.error('Error downloading file:', err);
+        }
+        // Cleanup file after download
+        this.reportsService.cleanupFile(filePath);
+      });
+    } catch (error) {
+      throw new UnprocessableEntityException('Error generating CSV file');
+    }
+  }
+
+  @Get('by-type')
+  @ApiOperation({
+    summary: 'Get reports by type',
+    description: 'Retrieves reports filtered by type (0 or 1)',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: true,
+    type: String,
+    enum: ['0', '1'],
+    description: 'Report type to filter by',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Reports retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          datetime: { type: 'string', format: 'date-time' },
+          type: { type: 'string', enum: ['0', '1'] },
+          user_id: { type: 'string' },
+          name: { type: 'string' },
+          remarks: { type: 'string' },
+          status: { type: 'string' },
+          created_at: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Invalid type provided',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 422 },
+        message: {
+          type: 'string',
+          example: 'Invalid type. Only types "0" and "1" are allowed.',
+        },
+        error: { type: 'string', example: 'Unprocessable Entity' },
+      },
+    },
+  })
+  findByType(@Query('type') type: string) {
+    try {
+      return this.reportsService.findByType(type);
+    } catch (error) {
+      throw new UnprocessableEntityException(error.message);
+    }
   }
 }

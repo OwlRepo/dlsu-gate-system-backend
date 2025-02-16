@@ -39,6 +39,16 @@ export class ReportsService {
 
   async searchContains(searchString: string) {
     return await this.reportRepository.find({
+      select: [
+        'id',
+        'datetime',
+        'type',
+        'user_id',
+        'name',
+        'remarks',
+        'status',
+        'created_at',
+      ],
       where: [
         { name: Like(`%${searchString}%`) },
         { remarks: Like(`%${searchString}%`) },
@@ -49,14 +59,44 @@ export class ReportsService {
 
   async findByDateRange(startDate: string, endDate: string) {
     return await this.reportRepository.find({
+      select: [
+        'id',
+        'datetime',
+        'type',
+        'user_id',
+        'name',
+        'remarks',
+        'status',
+        'created_at',
+      ],
       where: {
         datetime: Between(new Date(startDate), new Date(endDate)),
       },
     });
   }
 
+  async findByType(type: string) {
+    if (type !== '0' && type !== '1') {
+      throw new Error('Invalid type. Only types "0" and "1" are allowed.');
+    }
+    return await this.reportRepository.find({
+      where: { type },
+    });
+  }
+
   async generateCSVReport(): Promise<{ filePath: string; fileName: string }> {
-    const reports = await this.reportRepository.find();
+    const reports = await this.reportRepository.find({
+      select: [
+        'id',
+        'datetime',
+        'type',
+        'user_id',
+        'name',
+        'remarks',
+        'status',
+        'created_at',
+      ],
+    });
     const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     const fileName = `reports-${dateStr}.csv`;
     const uploadDir = path.join(process.cwd(), 'persistent_uploads', 'reports');
@@ -70,12 +110,14 @@ export class ReportsService {
     const csvWriter = createObjectCsvWriter({
       path: filePath,
       header: [
-        { id: 'datetime', title: 'datetime' },
-        { id: 'type', title: 'type' },
-        { id: 'name', title: 'name' },
-        { id: 'user_id', title: 'user_id' },
-        { id: 'status', title: 'status' },
-        { id: 'remarks', title: 'remarks' },
+        { id: 'id', title: 'ID' },
+        { id: 'datetime', title: 'Date Time' },
+        { id: 'type', title: 'Type' },
+        { id: 'user_id', title: 'User ID' },
+        { id: 'name', title: 'Name' },
+        { id: 'remarks', title: 'Remarks' },
+        { id: 'status', title: 'Status' },
+        { id: 'created_at', title: 'Created At' },
       ],
     });
 
@@ -83,6 +125,7 @@ export class ReportsService {
       reports.map((report) => ({
         ...report,
         datetime: report.datetime.toISOString(),
+        created_at: report.created_at.toISOString(),
       })),
     );
 
