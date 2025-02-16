@@ -8,8 +8,6 @@ Backend service for DLSU Gate System with load balancing and high availability s
   - [Table of Contents](#table-of-contents)
   - [Prerequisites](#prerequisites)
   - [Quick Start](#quick-start)
-    - [Windows Users](#windows-users)
-    - [macOS and Linux Users](#macos-and-linux-users)
   - [Development](#development)
   - [Access Points](#access-points)
   - [Container Management](#container-management)
@@ -49,26 +47,14 @@ cd dlsu-gate-system-backend
 DB_USERNAME=postgres
 DB_PASSWORD=your_password
 DB_NAME=dlsu_gate_system
+PGADMIN_EMAIL=admin@admin.com
+PGADMIN_PASSWORD=admin
 ```
 
-3. **Launch the Application**
-
-Choose your platform:
-
-### Windows Users
+3. **Launch Services**
 
 ```bash
-start-docker-app.bat
-```
-
-### macOS and Linux Users
-
-```bash
-# Make script executable (one-time setup)
-chmod +x start-docker-app.sh
-
-# Run the application
-./start-docker-app.sh
+docker-compose up -d
 ```
 
 The startup scripts automatically:
@@ -98,46 +84,11 @@ bun test
 Once running, access the system at:
 
 - 🌐 Main Application: `http://localhost`
-- 📚 API Documentation: `http://localhost/api`
+- 📚 API Documentation: `http://localhost:9580/api/docs/`
 - 💓 Health Check: `http://localhost/health`
-- 🗄️ Database (External): `localhost:5433`
-- 📦 Redis Cache: `localhost:6379`
-- 🔧 Jenkins: `http://localhost/jenkins`
-
-When accessing Jenkins for the first time, you'll need the automatically generated admin password. Here's how to find it:
-
-**Method 1: Through Docker Logs**
-
-```bash
-docker compose logs jenkins | grep "Jenkins initial setup is required"
-```
-
-**Method 2: From Container File System**
-
-```bash
-docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
-```
-
-**Method 3: Direct File Access**
-The password is also stored in the jenkins_home volume. You can find it at:
-
-- Windows: `\\wsl$\docker-desktop-data\data\docker\volumes\dlsu-gate-system-backend_jenkins_home\_data\secrets\initialAdminPassword`
-- Linux/macOS: `/var/lib/docker/volumes/dlsu-gate-system-backend_jenkins_home/_data/secrets/initialAdminPassword`
-
-**Method 4: Using Docker Desktop**
-
-1. Open Docker Desktop
-2. Go to "Containers" tab
-3. Find and click on the jenkins container
-4. Click on "Logs" tab
-5. Search for "Jenkins initial setup is required" in the logs
-   - Or navigate to "Files" tab > `/var/jenkins_home/secrets/initialAdminPassword`
-
-After entering this password, you'll be prompted to:
-
-1. Install suggested plugins or select specific ones
-2. Create your first admin user
-3. Configure the instance URL
+- 🗄️ Database (External): `localhost:5438`
+- 📦 Redis Cache: `localhost:6389`
+- 🔧 PgAdmin: `http://localhost:9580/pgadmin`
 
 ## Container Management
 
@@ -193,6 +144,24 @@ docker compose stop    # Stop containers (preserves data)
 - 5 load-balanced application instances
 - Least connection distribution strategy
 - Keepalive connections: 128
+
+**Rate Limiting**
+
+- API endpoints: 100 requests/second with 200 burst
+- Static files: 200 requests/second with 300 burst
+
+**Port Configuration**
+
+- API/Frontend: 9580 (nginx)
+- PostgreSQL: 5438
+- Redis: 6389
+- Internal API instances: 3000
+
+**PgAdmin Access**
+
+- URL: `http://localhost:9580/pgadmin`
+- Default email: `admin@admin.com`
+- Default password: `admin`
 
 **Performance Optimizations**
 
