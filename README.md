@@ -29,6 +29,12 @@ Backend service for DLSU Gate System with load balancing and high availability s
     - [Configuration Files](#configuration-files)
   - [Additional Documentation](#additional-documentation)
   - [License](#license)
+  - [Redis Implementation](#redis-implementation)
+    - [Redis Usage Overview](#redis-usage-overview)
+    - [Redis Configuration](#redis-configuration)
+    - [Cache Management](#cache-management)
+    - [Monitoring Redis](#monitoring-redis)
+    - [Best Practices](#best-practices)
 
 ## Prerequisites
 
@@ -368,3 +374,131 @@ For NestJS-specific details, see [NESTJS.md](NESTJS.md)
 ## License
 
 [Your License]
+
+## Redis Implementation
+
+### Redis Usage Overview
+
+Redis serves several critical functions in the DLSU Gate System:
+
+**1. Session Management**
+
+- Stores user session data
+- Enables session sharing across multiple API instances
+- Configurable TTL (Time To Live) for sessions
+- Handles user logout by invalidating sessions
+
+**2. Rate Limiting**
+
+- Tracks API request counts across distributed instances
+- Implements sliding window rate limiting
+- Stores rate limit counters with automatic expiration
+- Ensures consistent rate limiting across all API instances
+
+**3. Caching Layer**
+
+- Caches frequently accessed data:
+  - User profiles
+  - Authentication tokens
+  - Common API responses
+- Reduces database load
+- Improves response times
+- Uses LRU (Least Recently Used) eviction policy
+
+**4. Real-time Data Synchronization**
+
+- Facilitates real-time updates across API instances
+- Manages distributed locks for synchronized operations
+- Enables pub/sub messaging between services
+
+### Redis Configuration
+
+**Container Settings**
+
+```yaml
+Maximum Memory: 768MB
+Eviction Policy: allkeys-lru
+Port: 6389 (external), 6379 (internal)
+Resource Limits:
+  - CPU: 1.00 (max), 0.50 (reserved)
+  - Memory: 1024MB (max), 512MB (reserved)
+```
+
+**Connection Settings**
+
+```env
+REDIS_HOST=redis
+REDIS_PORT=6379
+```
+
+### Cache Management
+
+**TTL (Time To Live) Settings**
+
+- Session data: 24 hours
+- Rate limit counters: 15 minutes
+- API response cache: 5 minutes
+- User profile cache: 1 hour
+
+**Cache Categories**
+
+1. **Short-lived Cache (1-5 minutes)**
+
+   - API responses
+   - Validation results
+   - Temporary tokens
+
+2. **Medium-lived Cache (1-24 hours)**
+
+   - User sessions
+   - Authentication tokens
+   - User profiles
+
+3. **Persistent Cache (until evicted)**
+   - System configurations
+   - Common reference data
+
+### Monitoring Redis
+
+**View Redis Statistics**
+
+```bash
+# Connect to Redis CLI
+docker exec -it dlsu-portal-be-redis-1 redis-cli
+
+# Monitor real-time commands
+redis-cli MONITOR
+
+# Check memory usage
+redis-cli INFO memory
+
+# View cache statistics
+redis-cli INFO stats
+```
+
+**Key Performance Metrics**
+
+- Memory usage
+- Hit/miss ratio
+- Connected clients
+- Operations per second
+- Eviction count
+
+### Best Practices
+
+1. **Data Storage**
+
+   - Use appropriate data structures
+   - Implement proper key naming conventions
+   - Set reasonable TTL values
+
+2. **Memory Management**
+
+   - Monitor memory usage
+   - Adjust maxmemory based on usage patterns
+   - Review eviction policies
+
+3. **Error Handling**
+   - Implement fallback mechanisms
+   - Handle Redis connection failures
+   - Log cache-related errors
