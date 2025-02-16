@@ -844,30 +844,31 @@ ${formattedRecords
 
   async testConnection() {
     let pool: sql.ConnectionPool | null = null;
+    let sqlServerConnected = false;
+    let biostarConnected = false;
+    let postgresConnected = false;
+
     try {
       this.logger.log('Testing all connections...');
 
       // Test 1: SQL Server Connection
       this.logger.log('1. Testing SQL Server connection...');
       pool = await sql.connect(this.sqlConfig);
-
-      // Check if isArchived column exists
       const hasIsArchivedColumn = await this.checkColumnExists(
         pool,
         'isArchived',
       );
-
-      // Test query
       const query = hasIsArchivedColumn
         ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0 ORDER BY ID_Number`
         : `SELECT TOP 1 * FROM ISGATE_MASTER_VW ORDER BY ID_Number`;
-
       const sqlResult = await pool.request().query(query);
+      sqlServerConnected = true;
       this.logger.log('SQL Server connection successful');
 
       // Test 2: BIOSTAR API Connection
       this.logger.log('2. Testing BIOSTAR API connection...');
       const { token, sessionId } = await this.getApiToken();
+      biostarConnected = true;
       this.logger.log('BIOSTAR API connection successful');
 
       // Test 3: PostgreSQL Connection
@@ -877,11 +878,15 @@ ${formattedRecords
         .select('COUNT(*)')
         .from(Student, 'student')
         .getRawOne();
+      postgresConnected = true;
       this.logger.log('PostgreSQL connection successful');
 
       return {
         success: true,
         message: 'All connections successful',
+        postgresConnected,
+        biostarConnected,
+        sqlServerConnected,
         connections: {
           sqlServer: {
             status: 'connected',
@@ -905,7 +910,7 @@ ${formattedRecords
     } catch (error) {
       this.logger.error('Connection test failed:', error);
 
-      // Determine which connection failed
+      // Determine which connection failed based on where the error occurred
       let failedConnection = 'unknown';
       if (error.message?.includes('SQL Server')) {
         failedConnection = 'SQL Server';
@@ -918,6 +923,9 @@ ${formattedRecords
       throw new BadRequestException({
         message: `Connection test failed`,
         failedConnection,
+        postgresConnected,
+        biostarConnected,
+        sqlServerConnected,
         error: error.message,
         details: axios.isAxiosError(error) ? error.response?.data : undefined,
       });
