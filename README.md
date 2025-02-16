@@ -60,6 +60,8 @@ PGADMIN_EMAIL=admin@admin.com
 PGADMIN_PASSWORD=admin
 ```
 
+> Note: For a complete set of environment variables needed for production deployment, please reach out to the repository maintainers.
+
 3. **Launch Services**
 
 ```bash
