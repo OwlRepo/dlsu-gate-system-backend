@@ -845,7 +845,10 @@ ${formattedRecords
   async testConnection() {
     let pool: sql.ConnectionPool | null = null;
     try {
-      this.logger.log('Testing SQL Server connection...');
+      this.logger.log('Testing all connections...');
+
+      // Test 1: SQL Server Connection
+      this.logger.log('1. Testing SQL Server connection...');
       pool = await sql.connect(this.sqlConfig);
 
       // Check if isArchived column exists
@@ -859,27 +862,69 @@ ${formattedRecords
         ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0 ORDER BY ID_Number`
         : `SELECT TOP 1 * FROM ISGATE_MASTER_VW ORDER BY ID_Number`;
 
-      const result = await pool.request().query(query);
+      const sqlResult = await pool.request().query(query);
+      this.logger.log('SQL Server connection successful');
 
-      this.logger.log('Connection successful');
-      this.logger.log('Sample data:', result.recordset[0]);
+      // Test 2: BIOSTAR API Connection
+      this.logger.log('2. Testing BIOSTAR API connection...');
+      const { token, sessionId } = await this.getApiToken();
+      this.logger.log('BIOSTAR API connection successful');
+
+      // Test 3: PostgreSQL Connection
+      this.logger.log('3. Testing PostgreSQL connection...');
+      const pgResult = await this.studentRepository
+        .createQueryBuilder()
+        .select('COUNT(*)')
+        .from(Student, 'student')
+        .getRawOne();
+      this.logger.log('PostgreSQL connection successful');
 
       return {
         success: true,
-        message: 'Connection successful',
-        sampleData: result.recordset[0],
-        tableInfo: {
-          hasIsArchivedColumn,
-          recordCount: result.recordset.length,
+        message: 'All connections successful',
+        connections: {
+          sqlServer: {
+            status: 'connected',
+            sampleData: sqlResult.recordset[0],
+            tableInfo: {
+              hasIsArchivedColumn,
+              recordCount: sqlResult.recordset.length,
+            },
+          },
+          biostarApi: {
+            status: 'connected',
+            sessionId: sessionId ? 'valid' : 'invalid',
+            token: token ? 'valid' : 'invalid',
+          },
+          postgresql: {
+            status: 'connected',
+            totalRecords: pgResult?.count || 0,
+          },
         },
       };
     } catch (error) {
       this.logger.error('Connection test failed:', error);
-      throw new BadRequestException(`Connection failed: ${error.message}`);
+
+      // Determine which connection failed
+      let failedConnection = 'unknown';
+      if (error.message?.includes('SQL Server')) {
+        failedConnection = 'SQL Server';
+      } else if (error.message?.includes('BIOSTAR API')) {
+        failedConnection = 'BIOSTAR API';
+      } else if (error.message?.includes('PostgreSQL')) {
+        failedConnection = 'PostgreSQL';
+      }
+
+      throw new BadRequestException({
+        message: `Connection test failed`,
+        failedConnection,
+        error: error.message,
+        details: axios.isAxiosError(error) ? error.response?.data : undefined,
+      });
     } finally {
       if (pool) {
         await pool.close();
-        this.logger.log('Connection closed');
+        this.logger.log('SQL Server connection closed');
       }
     }
   }
