@@ -290,4 +290,138 @@ export class ReportsController {
       throw new UnprocessableEntityException(error.message);
     }
   }
+
+  @Get('type-date-range')
+  @ApiOperation({
+    summary: 'Get reports by type and date range',
+    description:
+      'Retrieves reports filtered by type and date range. Optionally returns data as CSV file.',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: true,
+    type: String,
+    enum: ['0', '1'],
+    description: 'Report type to filter by (0 or 1)',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: true,
+    type: String,
+    description: 'Start date in YYYY-MM-DD format',
+    example: '2024-03-01',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: true,
+    type: String,
+    description: 'End date in YYYY-MM-DD format',
+    example: '2024-03-31',
+  })
+  @ApiQuery({
+    name: 'format',
+    required: false,
+    type: String,
+    enum: ['json', 'csv'],
+    description:
+      'Optional response format - use "json" for table data or "csv" for downloadable file (default: json)',
+    example: 'json',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Reports retrieved successfully. Returns JSON data for tables or downloadable CSV file.',
+    schema: {
+      oneOf: [
+        {
+          type: 'object',
+          description: 'JSON response for table rendering (when format=json)',
+          properties: {
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  datetime: { type: 'string', format: 'date-time' },
+                  type: { type: 'string', enum: ['0', '1'] },
+                  user_id: { type: 'string' },
+                  name: { type: 'string' },
+                  remarks: { type: 'string' },
+                  status: { type: 'string' },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+            total: { type: 'number', description: 'Total number of records' },
+            message: { type: 'string' },
+          },
+        },
+        {
+          type: 'string',
+          format: 'binary',
+          description: 'Downloadable CSV file (when format=csv)',
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Validation error',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 422 },
+        message: {
+          type: 'string',
+          example: 'Invalid type. Only types "0" and "1" are allowed.',
+        },
+        error: { type: 'string', example: 'Unprocessable Entity' },
+      },
+    },
+  })
+  async findByTypeAndDateRange(
+    @Query('type') type: string,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+    @Query('format') format = 'json',
+    @Res() res: Response,
+  ) {
+    try {
+      if (type !== '0' && type !== '1') {
+        throw new Error('Invalid type. Only types "0" and "1" are allowed.');
+      }
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+      ) {
+        throw new Error('Invalid date format. Use YYYY-MM-DD format.');
+      }
+
+      const reports = await this.reportsService.findByTypeAndDateRange(
+        type,
+        startDate,
+        endDate,
+      );
+
+      if (format === 'csv') {
+        const { filePath, fileName } =
+          await this.reportsService.generateCSVReport(reports);
+        return res.download(filePath, fileName, (err) => {
+          if (err) {
+            console.error('Error downloading file:', err);
+          }
+          this.reportsService.cleanupFile(filePath);
+        });
+      }
+
+      return res.json({
+        data: reports,
+        total: reports.length,
+        message: 'Reports retrieved successfully',
+      });
+    } catch (error) {
+      throw new UnprocessableEntityException(error.message);
+    }
+  }
 }

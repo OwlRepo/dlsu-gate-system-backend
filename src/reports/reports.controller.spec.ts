@@ -18,6 +18,7 @@ describe('ReportsController', () => {
     generateCSVReport: jest.fn(),
     cleanupFile: jest.fn(),
     findByType: jest.fn(),
+    findByTypeAndDateRange: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -107,6 +108,77 @@ describe('ReportsController', () => {
       jest.spyOn(service, 'findByType').mockResolvedValue(result as any);
 
       expect(await controller.findByType('0')).toBe(result);
+    });
+  });
+
+  describe('findByTypeAndDateRange', () => {
+    const mockResponse = {
+      json: jest.fn(),
+      download: jest.fn(),
+    } as unknown as Response;
+
+    it('should return filtered reports as JSON', async () => {
+      const result = [
+        { id: '1', type: '0', datetime: '2024-03-20' },
+      ] as unknown as Report[];
+      jest.spyOn(service, 'findByTypeAndDateRange').mockResolvedValue(result);
+
+      await controller.findByTypeAndDateRange(
+        '0',
+        '2024-03-19',
+        '2024-03-20',
+        'json',
+        mockResponse,
+      );
+      expect(mockResponse.json).toHaveBeenCalledWith({
+        data: result,
+        total: result.length,
+        message: 'Reports retrieved successfully',
+      });
+    });
+
+    it('should return CSV for filtered reports', async () => {
+      const result = [
+        { id: '1', type: '0', datetime: '2024-03-20' },
+      ] as unknown as Report[];
+      jest.spyOn(service, 'findByTypeAndDateRange').mockResolvedValue(result);
+      jest.spyOn(service, 'generateCSVReport').mockResolvedValue({
+        filePath: 'path/to/file',
+        fileName: 'report.csv',
+      });
+
+      await controller.findByTypeAndDateRange(
+        '0',
+        '2024-03-19',
+        '2024-03-20',
+        'csv',
+        mockResponse,
+      );
+      expect(mockResponse.download).toHaveBeenCalled();
+    });
+
+    it('should throw error for invalid type', async () => {
+      await expect(
+        controller.findByTypeAndDateRange(
+          '2',
+          '2024-03-19',
+          '2024-03-20',
+          'json',
+          mockResponse,
+        ),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('should throw error for invalid date format', async () => {
+      await expect(
+        controller.findByTypeAndDateRange(
+          '0',
+          'invalid',
+          '2024-03-20',
+          'json',
+          mockResponse,
+        ),
+      ).rejects.toThrow(UnprocessableEntityException);
     });
   });
 });

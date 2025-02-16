@@ -84,20 +84,27 @@ export class ReportsService {
     });
   }
 
-  async generateCSVReport(): Promise<{ filePath: string; fileName: string }> {
-    const reports = await this.reportRepository.find({
-      select: [
-        'id',
-        'datetime',
-        'type',
-        'user_id',
-        'name',
-        'remarks',
-        'status',
-        'created_at',
-      ],
+  async findByTypeAndDateRange(
+    type: string,
+    startDate: string,
+    endDate: string,
+  ) {
+    return await this.reportRepository.find({
+      where: {
+        type,
+        datetime: Between(new Date(startDate), new Date(endDate)),
+      },
     });
-    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  }
+
+  async generateCSVReport(
+    reports?: Report[],
+  ): Promise<{ filePath: string; fileName: string }> {
+    if (!reports) {
+      reports = await this.reportRepository.find();
+    }
+
+    const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `reports-${dateStr}.csv`;
     const uploadDir = path.join(process.cwd(), 'persistent_uploads', 'reports');
     const filePath = path.join(uploadDir, fileName);
