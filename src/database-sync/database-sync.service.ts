@@ -18,6 +18,7 @@ import * as FormData from 'form-data';
 import { In } from 'typeorm';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
+import * as Table from 'cli-table3';
 
 dayjs.extend(utc);
 
@@ -654,42 +655,158 @@ Disabled Accounts (Campus Entry: N): ${disabledCount}
 -------------`,
       );
 
-      // Update the log table format to match exact CSV headers
+      const tableConfig = {
+        head: [
+          'user_id (varchar)',
+          'name (varchar)',
+          'department (varc',
+          'user_title (varc',
+          'phone (varchar)',
+          'email (varchar)',
+          'user_group (',
+          'start_datetime (datet',
+          'expiry_datetime (datet',
+          'Lived Name (varchar)',
+          'Remarks (varchar)',
+          'csn (varchar)',
+          'photo (varchar)',
+          'face_image_file1 (varchar)',
+          'face_image_file2 (varchar)',
+        ],
+        chars: {
+          top: '─',
+          'top-mid': '┬',
+          'top-left': '┌',
+          'top-right': '┐',
+          bottom: '─',
+          'bottom-mid': '┴',
+          'bottom-left': '└',
+          'bottom-right': '┘',
+          left: '│',
+          'left-mid': '├',
+          mid: '─',
+          'mid-mid': '┼',
+          right: '│',
+          'right-mid': '┤',
+          middle: '│',
+        },
+        colWidths: [15, 20, 15, 15, 14, 14, 12, 18, 18, 17, 16, 12, 15, 20, 20],
+      };
+
+      const table = new Table({
+        ...tableConfig,
+        style: {
+          head: ['green'],
+          border: ['green'],
+        },
+      });
+
+      // Add all records to the table
+      formattedRecords.slice(0, 100).forEach((r) => {
+        table.push([
+          r.user_id,
+          r.name,
+          r.department,
+          r.user_title,
+          r.phone || '',
+          r.email || '',
+          r.user_group,
+          r.start_datetime,
+          r.expiry_datetime,
+          r['Lived Name'] || '',
+          r.Remarks || '',
+          r.csn,
+          r.photo ? '(set)' : '(none)',
+          r.face_image_file1 ? '(set)' : '(none)',
+          r.face_image_file2 ? '(set)' : '(none)',
+        ]);
+      });
+
+      // Create failed records table
+      const failedRecords = formattedRecords.filter(
+        (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
+      );
+
+      const failedTable = new Table({
+        ...tableConfig,
+        style: {
+          head: ['red'],
+          border: ['red'],
+        },
+      });
+
+      // Add failed records to the table
+      failedRecords.slice(0, 14).forEach((r) => {
+        failedTable.push([
+          r.user_id,
+          r.name,
+          r.department,
+          r.user_title,
+          r.phone || '',
+          r.email || '',
+          r.user_group,
+          r.start_datetime,
+          r.expiry_datetime,
+          r['Lived Name'] || '',
+          r.Remarks || '',
+          r.csn,
+          r.photo ? '(set)' : '(none)',
+          r.face_image_file1 ? '(set)' : '(none)',
+          r.face_image_file2 ? '(set)' : '(none)',
+        ]);
+      });
+
       this.logger.log(
         `
 CSV Contents to be uploaded:
------------------------------------------------------------------------------------------------------------------------------------------
-| user_id | name     | department | user_title | phone | email | user_group | Lived Name | Remarks | photo | face_image_file1 | face_image_file2 |
------------------------------------------------------------------------------------------------------------------------------------------
-${formattedRecords
-  .slice(0, 100)
-  .map(
-    (r) =>
-      `| ${r.user_id.slice(0, 7).padEnd(7)} ` +
-      `| ${r.name.slice(0, 8).padEnd(8)} ` +
-      `| ${r.department.slice(0, 10).padEnd(10)} ` +
-      `| ${r.user_title.slice(0, 10).padEnd(10)} ` +
-      `| ${(r.phone || '').slice(0, 5).padEnd(5)} ` +
-      `| ${(r.email || '').slice(0, 5).padEnd(5)} ` +
-      `| ${r.user_group.slice(0, 10).padEnd(10)} ` +
-      `| ${(r['Lived Name'] || '').slice(0, 10).padEnd(10)} ` +
-      `| ${(r.Remarks || '').slice(0, 7).padEnd(7)} ` +
-      `| ${r.photo ? '(set)' : '(none)'} ` +
-      `| ${r.face_image_file1 ? '(set)' : '(none)'} ` +
-      `| ${r.face_image_file2 ? '(set)' : '(none)'} |`,
-  )
-  .join('\n')}
------------------------------------------------------------------------------------------------------------------------------------------
+${table.toString()}
 ... ${formattedRecords.length > 100 ? `and ${formattedRecords.length - 100} more records` : ''}
-Status Summary:
-- Total Records: ${formattedRecords.length}
-- Records with Photos: ${formattedRecords.filter((r) => r.photo).length}
-- Records without Photos: ${formattedRecords.filter((r) => !r.photo).length}
+
+Failed Records (${failedRecords.length} total):
+${failedTable.toString()}
 `,
       );
 
       // After processing records, write skipped records to log file
       if (skippedRecords.length > 0) {
+        const skippedTable = new Table({
+          ...tableConfig,
+          style: {
+            head: ['yellow'], // Using yellow since cli-table3 doesn't support orange
+            border: ['yellow'],
+          },
+        });
+
+        // Add skipped records to table
+        skippedRecords.forEach((r) => {
+          skippedTable.push([
+            r.ID_Number,
+            r.Name,
+            'DLSU',
+            'Student',
+            '',
+            '',
+            'All Users',
+            startDate,
+            r.Campus_Entry?.toString()?.toUpperCase() === 'N'
+              ? expiryDateDisabled
+              : expiryDateEnabled,
+            r.Lived_Name || '',
+            r.Remarks || '',
+            r.ID_Number,
+            r.Photo ? '(set)' : '(none)',
+            r.Photo ? '(set)' : '(none)',
+            r.Photo ? '(set)' : '(none)',
+          ]);
+        });
+
+        this.logger.log(
+          `
+Skipped Records (${skippedRecords.length} total):
+${skippedTable.toString()}
+`,
+        );
+
         this.ensureLogDirectory();
         const logFile = path.join(
           this.logDir,
