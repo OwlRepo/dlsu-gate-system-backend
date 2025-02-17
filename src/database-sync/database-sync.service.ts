@@ -532,6 +532,8 @@ export class DatabaseSyncService {
           { id: 'remarks', title: 'Remarks' },
           { id: 'csn', title: 'csn' },
           { id: 'photo', title: 'photo' },
+          { id: 'face_image_file1', title: 'face_image_file1' },
+          { id: 'face_image_file2', title: 'face_image_file2' },
           { id: 'start_datetime', title: 'start_datetime' },
           { id: 'expiry_datetime', title: 'expiry_datetime' },
           { id: 'original_campus_entry', title: 'original_campus_entry' },
@@ -617,6 +619,8 @@ export class DatabaseSyncService {
               Remarks: remarks,
               csn: userId,
               photo: await this.convertPhotoToBase64(record.Photo),
+              face_image_file1: await this.convertPhotoToBase64(record.Photo),
+              face_image_file2: await this.convertPhotoToBase64(record.Photo),
               start_datetime: startDate,
               expiry_datetime:
                 record.Campus_Entry.toString().toUpperCase() === 'N'
@@ -650,29 +654,38 @@ Disabled Accounts (Campus Entry: N): ${disabledCount}
 -------------`,
       );
 
-      // Update the log table format to match the new date format width
+      // Update the log table format to match exact CSV headers
       this.logger.log(
         `
 CSV Contents to be uploaded:
------------------------------------------------------------------------------
-| ID Number | Name                 | Campus Entry | Expiry DateTime          |
------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------
+| user_id | name     | department | user_title | phone | email | user_group | Lived Name | Remarks | photo | face_image_file1 | face_image_file2 |
+-----------------------------------------------------------------------------------------------------------------------------------------
 ${formattedRecords
   .slice(0, 100)
   .map(
     (r) =>
-      `| ${r.user_id.padEnd(9)} | ${r.name.slice(0, 20).padEnd(20)} | ${r.original_campus_entry
-        .toString()
-        .toUpperCase()
-        .padEnd(11)} | ${(r.expiry_datetime || 'N/A').padEnd(21)} |`,
+      `| ${r.user_id.slice(0, 7).padEnd(7)} ` +
+      `| ${r.name.slice(0, 8).padEnd(8)} ` +
+      `| ${r.department.slice(0, 10).padEnd(10)} ` +
+      `| ${r.user_title.slice(0, 10).padEnd(10)} ` +
+      `| ${(r.phone || '').slice(0, 5).padEnd(5)} ` +
+      `| ${(r.email || '').slice(0, 5).padEnd(5)} ` +
+      `| ${r.user_group.slice(0, 10).padEnd(10)} ` +
+      `| ${(r['Lived Name'] || '').slice(0, 10).padEnd(10)} ` +
+      `| ${(r.Remarks || '').slice(0, 7).padEnd(7)} ` +
+      `| ${r.photo ? '(set)' : '(none)'} ` +
+      `| ${r.face_image_file1 ? '(set)' : '(none)'} ` +
+      `| ${r.face_image_file2 ? '(set)' : '(none)'} |`,
   )
   .join('\n')}
------------------------------------------------------------------------------
-... ${
-          formattedRecords.length > 100
-            ? `and ${formattedRecords.length - 100} more records`
-            : ''
-        }`,
+-----------------------------------------------------------------------------------------------------------------------------------------
+... ${formattedRecords.length > 100 ? `and ${formattedRecords.length - 100} more records` : ''}
+Status Summary:
+- Total Records: ${formattedRecords.length}
+- Records with Photos: ${formattedRecords.filter((r) => r.photo).length}
+- Records without Photos: ${formattedRecords.filter((r) => !r.photo).length}
+`,
       );
 
       // After processing records, write skipped records to log file
