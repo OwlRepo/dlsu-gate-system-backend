@@ -1,4 +1,12 @@
-import { Controller, Get, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UpdateAdminDto } from './dto/update-admin.dto';
 import {
@@ -9,7 +17,9 @@ import {
   ApiParam,
   ApiSecurity,
   ApiExtraModels,
+  ApiQuery,
 } from '@nestjs/swagger';
+import { BasePaginationDto } from '../common/dto/base-pagination.dto';
 
 @ApiTags('Admin')
 @ApiSecurity('bearer')
@@ -20,26 +30,54 @@ export class AdminController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get all admins',
-    description: 'Retrieves a list of all admin users in the system',
+    summary: 'Get all admins with pagination',
+    description:
+      'Retrieves a paginated list of admin users with optional filtering',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term for username or email',
   })
   @ApiResponse({
     status: 200,
-    description: 'List of admins retrieved successfully',
+    description: 'Returns paginated list of admins',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          admin_id: {
-            type: 'string',
-            example: '123e4567-e89b-12d3-a456-426614174000',
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              admin_id: { type: 'string' },
+              username: { type: 'string' },
+              email: { type: 'string' },
+              first_name: { type: 'string' },
+              last_name: { type: 'string' },
+              role: { type: 'string' },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
           },
-          username: { type: 'string', example: 'admin.user' },
-          email: { type: 'string', example: 'admin@example.com' },
-          created_at: { type: 'string', format: 'date-time' },
-          updated_at: { type: 'string', format: 'date-time' },
         },
+        total: { type: 'number', description: 'Total number of records' },
+        page: { type: 'number', description: 'Current page' },
+        limit: { type: 'number', description: 'Items per page' },
+        totalPages: { type: 'number', description: 'Total number of pages' },
       },
     },
   })
@@ -59,8 +97,8 @@ export class AdminController {
     status: 401,
     description: 'Unauthorized - Invalid or missing authentication token',
   })
-  findAll() {
-    return this.adminService.findAll();
+  findAll(@Query() query: BasePaginationDto) {
+    return this.adminService.findAll(query);
   }
 
   @Get(':admin_id')

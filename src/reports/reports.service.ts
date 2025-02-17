@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
 import { CreateReportDto } from './dto/create-report.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @Injectable()
 export class ReportsService {
@@ -22,33 +23,35 @@ export class ReportsService {
     return await this.reportRepository.save(report);
   }
 
-  async findAll() {
-    return await this.reportRepository.find({
-      select: [
-        'id',
-        'datetime',
-        'type',
-        'user_id',
-        'name',
-        'remarks',
-        'status',
-        'created_at',
-      ],
-    });
+  async findAll(query: PaginationQueryDto) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.reportRepository.createQueryBuilder('report');
+
+    if (search) {
+      queryBuilder.where(
+        '(report.name LIKE :search OR report.remarks LIKE :search OR report.type LIKE :search OR report.user_id LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const [items, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async searchContains(searchString: string) {
     return await this.reportRepository.find({
-      select: [
-        'id',
-        'datetime',
-        'type',
-        'user_id',
-        'name',
-        'remarks',
-        'status',
-        'created_at',
-      ],
       where: [
         { name: Like(`%${searchString}%`) },
         { remarks: Like(`%${searchString}%`) },
@@ -59,16 +62,6 @@ export class ReportsService {
 
   async findByDateRange(startDate: string, endDate: string) {
     return await this.reportRepository.find({
-      select: [
-        'id',
-        'datetime',
-        'type',
-        'user_id',
-        'name',
-        'remarks',
-        'status',
-        'created_at',
-      ],
       where: {
         datetime: Between(new Date(startDate), new Date(endDate)),
       },

@@ -19,6 +19,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Response } from 'express';
 import { CreateReportDto } from './dto/create-report.dto';
+import { BasePaginationDto } from '../common/dto/base-pagination.dto';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -29,26 +30,54 @@ export class ReportsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get all reports',
-    description: 'Retrieves all reports with complete data from the database',
+    summary: 'Get all reports with pagination',
+    description:
+      'Retrieves a paginated list of reports with optional filtering',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term for name or remarks',
   })
   @ApiResponse({
     status: 200,
-    description: 'List of reports retrieved successfully',
+    description: 'Returns paginated list of reports',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' },
-          datetime: { type: 'string', format: 'date-time' },
-          type: { type: 'string' },
-          user_id: { type: 'string' },
-          name: { type: 'string' },
-          remarks: { type: 'string' },
-          status: { type: 'string' },
-          created_at: { type: 'string', format: 'date-time' },
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              datetime: { type: 'string', format: 'date-time' },
+              type: { type: 'string' },
+              user_id: { type: 'string' },
+              name: { type: 'string' },
+              remarks: { type: 'string' },
+              status: { type: 'string' },
+              created_at: { type: 'string', format: 'date-time' },
+            },
+          },
         },
+        total: { type: 'number', description: 'Total number of records' },
+        page: { type: 'number', description: 'Current page' },
+        limit: { type: 'number', description: 'Items per page' },
+        totalPages: { type: 'number', description: 'Total number of pages' },
       },
     },
   })
@@ -57,8 +86,8 @@ export class ReportsController {
     status: 403,
     description: 'Forbidden - Insufficient permissions',
   })
-  findAll() {
-    return this.reportsService.findAll();
+  findAll(@Query() query: BasePaginationDto) {
+    return this.reportsService.findAll(query);
   }
 
   @Get('search-contains')

@@ -5,6 +5,7 @@ import { UpdateAdminDto } from './dto/update-admin.dto';
 import { Admin } from './entities/admin.entity';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @Injectable()
 export class AdminService {
@@ -31,22 +32,36 @@ export class AdminService {
   }
 
   private generateSecureAdminId(): string {
-    // Generate a secure random string and format it as ADM-XXXXXXXXXXXX
     const randomBytes = crypto.randomBytes(6);
     const randomHex = randomBytes.toString('hex').toUpperCase();
     return `ADM-${randomHex}`;
   }
 
-  async findAll() {
-    return this.adminRepository.find();
-  }
+  async findAll(query: PaginationQueryDto) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
 
-  async findOne(id: number) {
-    const admin = await this.adminRepository.findOne({ where: { id } });
-    if (!admin) {
-      throw new NotFoundException(`Admin with ID ${id} not found`);
+    const queryBuilder = this.adminRepository.createQueryBuilder('admin');
+
+    if (search) {
+      queryBuilder.where(
+        '(admin.username LIKE :search OR admin.email LIKE :search OR admin.first_name LIKE :search OR admin.last_name LIKE :search)',
+        { search: `%${search}%` },
+      );
     }
-    return admin;
+
+    const [items, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findByAdminId(admin_id: string) {

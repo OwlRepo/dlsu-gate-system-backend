@@ -1,14 +1,9 @@
-import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { UserDto } from './dto/user.dto';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiOkResponse,
-  ApiQuery,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { ApiBearerAuth } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { UserPaginationDto } from './dto/user-pagination.dto';
 
 @ApiTags('Users')
 @Controller('users')
@@ -18,9 +13,9 @@ export class UsersController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get all users',
+    summary: 'Get all users with pagination',
     description:
-      'Retrieves a list of users in the system. Can be filtered by user type if specified.',
+      'Retrieves a paginated list of users in the system. Can be filtered by user type and search term.',
   })
   @ApiQuery({
     name: 'type',
@@ -29,10 +24,55 @@ export class UsersController {
       'Filter users by type (admin, employee, super-admin). If not provided, returns all users',
     enum: ['admin', 'employee', 'super-admin'],
   })
-  @ApiOkResponse({
-    description: 'List of users retrieved successfully',
-    type: [UserDto],
-    isArray: true,
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term for username or email',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns paginated list of users',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              username: { type: 'string' },
+              email: { type: 'string' },
+              first_name: { type: 'string' },
+              last_name: { type: 'string' },
+              userType: {
+                type: 'string',
+                enum: ['admin', 'employee', 'super-admin'],
+              },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+        total: { type: 'number', description: 'Total number of records' },
+        page: { type: 'number', description: 'Current page' },
+        limit: { type: 'number', description: 'Items per page' },
+        totalPages: { type: 'number', description: 'Total number of pages' },
+      },
+    },
   })
   @ApiResponse({
     status: 401,
@@ -42,66 +82,116 @@ export class UsersController {
     status: 403,
     description: 'Forbidden - User does not have sufficient permissions',
   })
-  async getAllUsers(
-    @Query('type') type?: 'admin' | 'employee' | 'super-admin',
-  ): Promise<UserDto[]> {
-    if (type && !['admin', 'employee', 'super-admin'].includes(type)) {
-      throw new BadRequestException(
-        `Invalid user type: ${type}. Valid types are: admin, employee, super-admin`,
-      );
-    }
-
-    if (type === 'admin') {
-      return this.usersService.getAdminUsers();
-    } else if (type === 'employee') {
-      return this.usersService.getEmployeeUsers();
-    } else if (type === 'super-admin') {
-      return this.usersService.getSuperAdminUsers();
-    }
-    return this.usersService.getAllUsers();
+  async getAllUsers(@Query() query: UserPaginationDto) {
+    return this.usersService.getAllUsers(query);
   }
 
   @Get('admins')
   @ApiOperation({
-    summary: 'Get all admin users',
-    description: 'Retrieves a list of all users with administrator privileges',
+    summary: 'Get all admin users with pagination',
+    description:
+      'Retrieves a paginated list of all users with administrator privileges',
   })
-  @ApiOkResponse({
-    description: 'List of admin users retrieved successfully',
-    type: [UserDto],
-    isArray: true,
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term for username or email',
   })
   @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - JWT token is missing or invalid',
+    status: 200,
+    description: 'Returns paginated list of admin users',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              username: { type: 'string' },
+              email: { type: 'string' },
+              userType: { type: 'string', enum: ['admin'] },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
+        totalPages: { type: 'number' },
+      },
+    },
   })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - User does not have sufficient permissions',
-  })
-  async getAdminUsers(): Promise<UserDto[]> {
-    return this.usersService.getAdminUsers();
+  async getAdminUsers(@Query() query: PaginationQueryDto) {
+    return this.usersService.getAdminUsers(query);
   }
 
   @Get('employees')
   @ApiOperation({
-    summary: 'Get all employee users',
-    description: 'Retrieves a list of all users with employee role',
+    summary: 'Get all employee users with pagination',
+    description: 'Retrieves a paginated list of all users with employee role',
   })
-  @ApiOkResponse({
-    description: 'List of employee users retrieved successfully',
-    type: [UserDto],
-    isArray: true,
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 10)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term for username or email',
   })
   @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - JWT token is missing or invalid',
+    status: 200,
+    description: 'Returns paginated list of employee users',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              username: { type: 'string' },
+              email: { type: 'string' },
+              userType: { type: 'string', enum: ['employee'] },
+              created_at: { type: 'string', format: 'date-time' },
+              updated_at: { type: 'string', format: 'date-time' },
+            },
+          },
+        },
+        total: { type: 'number' },
+        page: { type: 'number' },
+        limit: { type: 'number' },
+        totalPages: { type: 'number' },
+      },
+    },
   })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - User does not have sufficient permissions',
-  })
-  async getEmployeeUsers(): Promise<UserDto[]> {
-    return this.usersService.getEmployeeUsers();
+  async getEmployeeUsers(@Query() query: PaginationQueryDto) {
+    return this.usersService.getEmployeeUsers(query);
   }
 }
