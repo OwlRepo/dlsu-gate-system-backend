@@ -41,7 +41,7 @@ describe('AdminController', () => {
 
       mockAdminService.findAll.mockResolvedValue(expected);
 
-      const result = await controller.findAll();
+      const result = await controller.findAll({ page: 1, limit: 10 });
 
       expect(result).toEqual(expected);
       expect(mockAdminService.findAll).toHaveBeenCalled();

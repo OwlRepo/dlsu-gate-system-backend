@@ -48,7 +48,7 @@ describe('ReportsController', () => {
       const result = [{ id: '1', name: 'Test Report' }] as unknown as Report[];
       jest.spyOn(service, 'findAll').mockResolvedValue(result as any);
 
-      expect(await controller.findAll()).toBe(result);
+      expect(await controller.findAll({ page: 1, limit: 10 })).toBe(result);
     });
   });
 

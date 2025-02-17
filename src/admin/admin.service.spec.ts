@@ -13,6 +13,18 @@ describe('AdminService', () => {
     find: jest.fn(),
     findOne: jest.fn(),
     remove: jest.fn(),
+    createQueryBuilder: jest.fn(() => ({
+      where: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([
+        [
+          { id: 1, username: 'admin1', password: 'pass1' },
+          { id: 2, username: 'admin2', password: 'pass2' },
+        ],
+        2,
+      ]),
+    })),
   };
 
   beforeEach(async () => {
@@ -35,36 +47,47 @@ describe('AdminService', () => {
 
   describe('findAll', () => {
     it('should return an array of admins', async () => {
-      const expected = [
+      const admins = [
         { id: 1, username: 'admin1', password: 'pass1' },
         { id: 2, username: 'admin2', password: 'pass2' },
       ];
 
-      mockRepository.find.mockResolvedValue(expected);
+      mockRepository
+        .createQueryBuilder()
+        .getManyAndCount.mockResolvedValue([admins, 2]);
 
-      const result = await service.findAll();
+      const result = await service.findAll({ page: 1, limit: 10 });
 
-      expect(result).toEqual(expected);
-      expect(mockRepository.find).toHaveBeenCalled();
+      expect(result).toEqual({
+        items: admins,
+        total: 2,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      });
     });
   });
 
-  describe('findOne', () => {
+  describe('findByAdminId', () => {
     it('should return a single admin', async () => {
       const expected = { id: 1, username: 'admin1', password: 'pass1' };
 
       mockRepository.findOne.mockResolvedValue(expected);
 
-      const result = await service.findOne(1);
+      const result = await service.findByAdminId('ADM-123456789012');
 
       expect(result).toEqual(expected);
-      expect(mockRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(mockRepository.findOne).toHaveBeenCalledWith({
+        where: { admin_id: 'ADM-123456789012' },
+      });
     });
 
     it('should throw NotFoundException when admin is not found', async () => {
       mockRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findOne(1)).rejects.toThrow(NotFoundException);
+      await expect(service.findByAdminId('ADM-123456789012')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
