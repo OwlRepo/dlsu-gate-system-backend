@@ -246,22 +246,88 @@ export class ReportsController {
       format: 'binary',
     },
   })
-  @ApiResponse({ status: 500, description: 'Error generating CSV' })
+  @ApiResponse({
+    status: 500,
+    description: 'Error generating CSV',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 500 },
+        message: { type: 'string', example: 'Failed to generate CSV report' },
+        error: { type: 'string', example: 'Internal Server Error' },
+      },
+    },
+  })
   async generateCSV(@Res() res: Response) {
-    try {
-      const { filePath, fileName } =
-        await this.reportsService.generateCSVReport();
+    let filePath: string | undefined;
 
-      res.download(filePath, fileName, (err) => {
+    try {
+      const result = await this.reportsService.generateCSVReport();
+      filePath = result.filePath;
+
+      if (!filePath || !result.fileName) {
+        throw new Error(
+          'Failed to generate CSV file - missing file information',
+        );
+      }
+
+      return res.download(filePath, result.fileName, (err) => {
         if (err) {
-          console.error('Error downloading file:', err);
+          console.error('Error during file download:', err);
+          // Only cleanup if download failed
+          if (filePath) {
+            this.reportsService
+              .cleanupFile(filePath)
+              .catch((cleanupErr) =>
+                console.error('Error cleaning up file:', cleanupErr),
+              );
+          }
+          // Check if headers are not sent yet
+          if (!res.headersSent) {
+            res.status(500).json({
+              statusCode: 500,
+              message: 'Failed to download CSV file',
+              error: 'Internal Server Error',
+            });
+          }
+          return;
         }
-        // Cleanup file after download
-        this.reportsService.cleanupFile(filePath);
+
+        // Cleanup after successful download
+        if (filePath) {
+          this.reportsService
+            .cleanupFile(filePath)
+            .catch((cleanupErr) =>
+              console.error(
+                'Error cleaning up file after download:',
+                cleanupErr,
+              ),
+            );
+        }
       });
     } catch (error) {
-      console.error('Error generating CSV file:', error);
-      throw new UnprocessableEntityException('Error generating CSV file');
+      console.error('Error in CSV generation:', error);
+
+      // Cleanup on error
+      if (filePath) {
+        try {
+          await this.reportsService.cleanupFile(filePath);
+        } catch (cleanupErr) {
+          console.error(
+            'Error cleaning up file after generation failure:',
+            cleanupErr,
+          );
+        }
+      }
+
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Failed to generate CSV report',
+        error: 'Unprocessable Entity',
+      });
     }
   }
 
@@ -417,14 +483,40 @@ export class ReportsController {
     @Res() res: Response,
   ) {
     try {
-      if (type !== '0' && type !== '1') {
-        throw new Error('Invalid type. Only types "0" and "1" are allowed.');
+      // Validate type parameter
+      if (!type) {
+        throw new Error('Type parameter is required');
       }
-      if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
-      ) {
+
+      // Ensure type is a string and matches allowed values
+      const validTypes = ['0', '1'];
+      if (!validTypes.includes(type)) {
+        throw new Error(
+          `Invalid type "${type}". Only types "0" and "1" are allowed.`,
+        );
+      }
+
+      // Validate date parameters
+      if (!startDate || !endDate) {
+        throw new Error('Both startDate and endDate are required');
+      }
+
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
         throw new Error('Invalid date format. Use YYYY-MM-DD format.');
+      }
+
+      // Validate date values
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error('Invalid date values provided');
+      }
+
+      if (start > end) {
+        throw new Error('Start date must be before or equal to end date');
       }
 
       const reports = await this.reportsService.findByTypeAndDateRange(

@@ -205,8 +205,8 @@ export class SuperAdminService implements OnModuleInit {
           email: defaultAdmin.email,
           password: 'admin123',
           username: defaultAdmin.username,
-          first_name: defaultAdmin.username,
-          last_name: '',
+          first_name: defaultAdmin.firstName,
+          last_name: defaultAdmin.lastName,
           role: defaultAdmin.role,
         });
         console.log('Default admin created:', result);

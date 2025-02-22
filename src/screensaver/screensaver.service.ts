@@ -57,21 +57,36 @@ export class ScreensaverService {
     const fileName = `screensaver-image.${fileExtension}`;
     const filePath = join(this.uploadDir, fileName);
 
-    // Remove old screensaver if exists
+    // First save the new screensaver with a temporary name
+    const tempFileName = `screensaver-image.new.${fileExtension}`;
+    const tempFilePath = join(this.uploadDir, tempFileName);
+
     try {
+      // Save new screensaver with temporary name
+      await fs.writeFile(tempFilePath, file.buffer);
+
+      // Remove old screensaver if exists
       const files = await fs.readdir(this.uploadDir);
       for (const file of files) {
-        if (file.startsWith('screensaver-image.')) {
+        if (file.startsWith('screensaver-image.') && !file.includes('.new.')) {
           await fs.unlink(join(this.uploadDir, file));
         }
       }
-    } catch (error) {
-      console.error('Error deleting old screensaver:', error);
-    }
 
-    // Save new screensaver
-    await fs.writeFile(filePath, file.buffer);
-    return { message: 'Screensaver uploaded successfully' };
+      // Rename temporary file to final name
+      await fs.rename(tempFilePath, filePath);
+
+      return { message: 'Screensaver uploaded successfully' };
+    } catch (error) {
+      // Clean up temporary file if it exists
+      try {
+        await fs.unlink(tempFilePath);
+      } catch {
+        // Ignore error if temp file doesn't exist
+      }
+      console.error('Error saving screensaver:', error);
+      throw new Error('Failed to save screensaver');
+    }
   }
 
   async getScreensaverPath(): Promise<string> {

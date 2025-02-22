@@ -104,6 +104,32 @@ export class EmployeeService implements OnModuleInit {
     }
   }
 
+  async generateUniqueEmployeeId(): Promise<string> {
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (attempts < maxAttempts) {
+      const generatedId = `EMP${Math.floor(Math.random() * 100000)
+        .toString()
+        .padStart(5, '0')}`;
+
+      // Check if this ID already exists
+      const existing = await this.employeeRepository.findOne({
+        where: { employee_id: generatedId },
+      });
+
+      if (!existing) {
+        return generatedId;
+      }
+
+      attempts++;
+    }
+
+    throw new Error(
+      'Failed to generate unique employee ID after multiple attempts',
+    );
+  }
+
   async create(createEmployeeDto: CreateEmployeeDto) {
     try {
       // Check if device_id array is empty
@@ -139,20 +165,8 @@ export class EmployeeService implements OnModuleInit {
         };
       }
 
-      const now = new Date();
-      const generatedemployee_id = `EMP${Math.floor(Math.random() * 10000)}`;
-
-      // Check for existing employee_id
-      const existingemployee_id = await this.employeeRepository.findOne({
-        where: { employee_id: generatedemployee_id },
-      });
-
-      if (existingemployee_id) {
-        return {
-          success: false,
-          message: 'Generated Employee ID already exists. Please try again.',
-        };
-      }
+      // Generate a unique employee_id
+      const generatedemployee_id = await this.generateUniqueEmployeeId();
 
       // Hash the password
       const saltRounds = 10;
@@ -167,8 +181,8 @@ export class EmployeeService implements OnModuleInit {
         password: hashedPassword,
         employee_id: generatedemployee_id,
         is_active: true,
-        date_created: now.toISOString(),
-        date_activated: now.toISOString(),
+        date_created: new Date().toISOString(),
+        date_activated: new Date().toISOString(),
         date_deactivated: null,
       });
 
@@ -229,13 +243,15 @@ export class EmployeeService implements OnModuleInit {
 
   async findByDeviceId(device_id: string) {
     try {
-      const employees = await this.employeeRepository.find();
-      const filteredEmployees = employees.filter(
-        (employee) =>
-          employee.device_id && employee.device_id.includes(device_id),
-      );
+      // Use TypeORM's built-in JSON containment operator for better performance
+      const employees = await this.employeeRepository
+        .createQueryBuilder('employee')
+        .where(`device_id @> :deviceId::jsonb`, {
+          deviceId: JSON.stringify([device_id]),
+        })
+        .getMany();
 
-      if (filteredEmployees.length === 0) {
+      if (employees.length === 0) {
         return {
           success: false,
           message: 'No employees found with the given device ID',
@@ -244,7 +260,7 @@ export class EmployeeService implements OnModuleInit {
 
       return {
         success: true,
-        data: filteredEmployees,
+        data: employees,
       };
     } catch (error) {
       return {
@@ -315,12 +331,18 @@ export class EmployeeService implements OnModuleInit {
         };
       }
 
-      const allowedUpdates: any = {
-        username: updateEmployeeDto.username,
-        first_name: updateEmployeeDto.first_name,
-        last_name: updateEmployeeDto.last_name,
-        device_id: updateEmployeeDto.device_id,
-      };
+      // Create a whitelist of allowed updates, explicitly excluding is_active
+      const allowedUpdates: Partial<Employee> = {};
+
+      // Only copy allowed fields
+      if (updateEmployeeDto.username)
+        allowedUpdates.username = updateEmployeeDto.username;
+      if (updateEmployeeDto.first_name)
+        allowedUpdates.first_name = updateEmployeeDto.first_name;
+      if (updateEmployeeDto.last_name)
+        allowedUpdates.last_name = updateEmployeeDto.last_name;
+      if (updateEmployeeDto.device_id)
+        allowedUpdates.device_id = updateEmployeeDto.device_id;
 
       // If password is provided, hash it before updating
       if (updateEmployeeDto.password) {
@@ -332,7 +354,7 @@ export class EmployeeService implements OnModuleInit {
       }
 
       // Update using employee_id in where clause
-      const result = await this.employeeRepository.update(
+      await this.employeeRepository.update(
         { employee_id: employee_id },
         allowedUpdates,
       );
@@ -398,10 +420,7 @@ export class EmployeeService implements OnModuleInit {
   }
 
   async deactivateEmployee(employee_id: string) {
-    return this.update(employee_id, {
-      is_active: false,
-      date_deactivated: new Date(),
-    });
+    return this.updateDisable(employee_id);
   }
 
   async bulkDeactivateEmployees(employee_ids: string[]) {

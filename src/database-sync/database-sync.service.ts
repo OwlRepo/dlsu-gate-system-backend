@@ -289,17 +289,43 @@ export class DatabaseSyncService {
   private async convertPhotoToBase64(photoData: any): Promise<string | null> {
     try {
       let imageBuffer: Buffer;
+      const defaultImagePath = path.join(process.cwd(), 'dlsu.png');
+
+      // Check if default image exists
+      if (!fs.existsSync(defaultImagePath)) {
+        this.logger.warn(
+          'Default image (dlsu.png) not found in root directory',
+        );
+        return null;
+      }
 
       if (typeof photoData === 'string' && photoData.length > 0) {
         try {
-          imageBuffer = fs.readFileSync(photoData);
-        } catch {
-          imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+          // Check if the photo file exists before trying to read it
+          if (fs.existsSync(photoData)) {
+            imageBuffer = fs.readFileSync(photoData);
+          } else {
+            this.logger.warn(
+              `Photo file not found at path: ${photoData}, using default image`,
+            );
+            imageBuffer = fs.readFileSync(defaultImagePath);
+          }
+        } catch (readError) {
+          this.logger.warn(
+            `Error reading photo file: ${readError.message}, using default image`,
+          );
+          imageBuffer = fs.readFileSync(defaultImagePath);
         }
       } else if (photoData instanceof Buffer) {
         imageBuffer = photoData;
       } else {
-        imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+        this.logger.debug('No valid photo data provided, using default image');
+        imageBuffer = fs.readFileSync(defaultImagePath);
+      }
+
+      if (!imageBuffer || imageBuffer.length === 0) {
+        this.logger.warn('Empty image buffer detected, returning null');
+        return null;
       }
 
       const base64String = imageBuffer.toString('base64');
@@ -429,9 +455,30 @@ export class DatabaseSyncService {
         offset += batchSize;
       }
 
+      // Early return if no records found
       if (allRecords.length === 0) {
-        this.logger.log('No records to sync');
-        return;
+        this.logger.log('No records found in SQL Server to sync');
+
+        // Update lastSyncTime even when no records found
+        const scheduleNumber = parseInt(jobName.replace('sync-', ''));
+        if (!isNaN(scheduleNumber)) {
+          const schedule = await this.syncScheduleRepository.findOne({
+            where: { scheduleNumber },
+          });
+          if (schedule) {
+            schedule.lastSyncTime = new Date();
+            await this.syncScheduleRepository.save(schedule);
+            this.logger.log(
+              `Updated last sync time for schedule ${scheduleNumber} (no records found)`,
+            );
+          }
+        }
+
+        return {
+          success: true,
+          message: 'Sync completed - no records found to process',
+          recordsProcessed: 0,
+        };
       }
 
       this.logger.log(`Found ${allRecords.length} records to sync`);
@@ -1013,6 +1060,12 @@ ${skippedTable.toString()}
           );
         }
       }
+
+      return {
+        success: true,
+        message: 'Sync completed successfully',
+        recordsProcessed: formattedRecords.length,
+      };
     } catch (error) {
       this.logger.error(`Sync failed for ${jobName}:`, error);
       throw error;
@@ -1177,11 +1230,13 @@ ${skippedTable.toString()}
       throw new BadRequestException('No user IDs provided for deletion');
     }
 
+    let updateResult;
+
     try {
       this.logger.log(`Starting bulk deletion for ${userIds.length} users`);
 
       // 1. Update PostgreSQL records
-      const updateResult = await this.studentRepository
+      updateResult = await this.studentRepository
         .createQueryBuilder()
         .update(Student)
         .set({ isArchived: true })
@@ -1193,90 +1248,103 @@ ${skippedTable.toString()}
       // 2. Delete from BIOSTAR API
       const { token, sessionId } = await this.getApiToken();
 
-      try {
-        // First API call - Delete card records
-        const deleteCardPayload = {
-          mobile: {
-            user_id: userIds,
-            card_id: [],
-            param: {
-              UserIDs: userIds,
-              query: {},
-            },
+      // First API call - Delete card records
+      const deleteCardPayload = {
+        mobile: {
+          user_id: userIds,
+          card_id: [],
+          param: {
+            UserIDs: userIds,
+            query: {},
           },
-        };
+        },
+      };
 
-        await axios.post(
-          `${this.apiBaseUrl}/api/v2/mobile/delete`,
-          deleteCardPayload,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'bs-session-id': sessionId,
-              'Content-Type': 'application/json',
-            },
-            httpsAgent: new https.Agent({
-              rejectUnauthorized: false,
-            }),
+      await axios.post(
+        `${this.apiBaseUrl}/api/v2/mobile/delete`,
+        deleteCardPayload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'bs-session-id': sessionId,
+            'Content-Type': 'application/json',
           },
-        );
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+        },
+      );
 
-        this.logger.log(
-          'Successfully deleted user card records from BIOSTAR API',
-        );
+      this.logger.log(
+        'Successfully deleted user card records from BIOSTAR API',
+      );
 
-        // Second API call - Delete user records
-        const formattedIds = userIds
-          .map((id) => encodeURIComponent(id))
-          .join('%2B');
-        const deleteUserResponse = await axios.delete(
-          `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'bs-session-id': sessionId,
-              accept: 'application/json',
-            },
-            httpsAgent: new https.Agent({
-              rejectUnauthorized: false,
-            }),
+      // Second API call - Delete user records
+      const formattedIds = userIds
+        .map((id) => encodeURIComponent(id))
+        .join('%2B');
+      const deleteUserResponse = await axios.delete(
+        `${this.apiBaseUrl}/api/users?id=${formattedIds}&group_id=1`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'bs-session-id': sessionId,
+            accept: 'application/json',
           },
-        );
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+        },
+      );
 
-        this.logger.log('Successfully deleted user records from BIOSTAR API');
-        return {
-          success: true,
-          message: 'Users and their card records successfully deleted',
-          deletedCount: updateResult.affected,
-          biostarResponse: deleteUserResponse.data,
-        };
-      } catch (error) {
-        // Revert PostgreSQL changes on BIOSTAR API failure
-        await this.studentRepository
-          .createQueryBuilder()
-          .update(Student)
-          .set({ isArchived: false })
-          .where('ID_Number IN (:...userIds)', { userIds })
-          .execute();
-
-        throw new BadRequestException({
-          message: 'Failed to delete users from BIOSTAR API',
-          details: axios.isAxiosError(error)
-            ? error.response?.data
-            : error.message,
-          biostarMessage: axios.isAxiosError(error)
-            ? error.response?.data?.Response?.message
-            : undefined,
-          step: 'biostar-deletion',
-        });
-      }
+      this.logger.log('Successfully deleted user records from BIOSTAR API');
+      return {
+        success: true,
+        message: 'Users and their card records successfully deleted',
+        deletedCount: updateResult.affected,
+        biostarResponse: deleteUserResponse.data,
+      };
     } catch (error) {
       this.logger.error('Bulk deletion failed:', error);
+
+      // Revert PostgreSQL changes if they were made
+      if (updateResult?.affected > 0) {
+        try {
+          await this.studentRepository
+            .createQueryBuilder()
+            .update(Student)
+            .set({ isArchived: false })
+            .where('ID_Number IN (:...userIds)', { userIds })
+            .execute();
+
+          this.logger.log(
+            'Successfully reverted PostgreSQL changes after BIOSTAR API failure',
+          );
+        } catch (revertError) {
+          this.logger.error(
+            'Failed to revert PostgreSQL changes:',
+            revertError,
+          );
+          throw new BadRequestException({
+            message:
+              'Critical error: Failed to revert PostgreSQL changes after BIOSTAR API failure',
+            details: revertError.message,
+            originalError: error.message,
+            step: 'postgres-reversion',
+          });
+        }
+      }
+
+      // Throw appropriate error
       throw new BadRequestException({
         message: 'Bulk deletion failed',
-        details: error.message,
-        biostarMessage: error.response?.biostarMessage,
-        step: error.step || 'unknown',
+        details: axios.isAxiosError(error)
+          ? error.response?.data
+          : error.message,
+        biostarMessage: axios.isAxiosError(error)
+          ? error.response?.data?.Response?.message
+          : undefined,
+        step: 'biostar-deletion',
       });
     }
   }

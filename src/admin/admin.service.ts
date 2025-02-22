@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UpdateAdminDto } from './dto/update-admin.dto';
@@ -18,16 +22,25 @@ export class AdminService {
 
   private async initializeExistingAdmins() {
     try {
-      const admins = await this.adminRepository.find({
-        where: { admin_id: null },
-      });
+      // Find admins where admin_id is null OR empty string
+      const admins = await this.adminRepository
+        .createQueryBuilder('admin')
+        .where('admin.admin_id IS NULL OR admin.admin_id = :emptyString', {
+          emptyString: '',
+        })
+        .getMany();
 
       for (const admin of admins) {
         admin.admin_id = this.generateSecureAdminId();
         await this.adminRepository.save(admin);
       }
+
+      if (admins.length > 0) {
+        console.log(`Initialized admin_id for ${admins.length} admin(s)`);
+      }
     } catch (error) {
       console.error('Error initializing existing admins:', error);
+      throw error; // Rethrow to ensure initialization failures are noticed
     }
   }
 
@@ -81,7 +94,7 @@ export class AdminService {
       });
 
       if (existingEmail && existingEmail.id !== admin.id) {
-        throw new NotFoundException(
+        throw new ConflictException(
           `Admin with email ${updateAdminDto.email} already exists`,
         );
       }
