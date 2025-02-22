@@ -1,17 +1,19 @@
+import { faker } from '@faker-js/faker';
+
 export const defaultSuperAdmin = {
-  email: 'superadmin@example.com',
+  email: faker.internet.email(),
   password: 'superadmin123',
   username: 'defaultsuperadmin',
-  name: 'Default Super Admin',
+  name: faker.person.fullName(),
   role: 'super-admin',
 };
 
 export const defaultAdmin = {
-  email: 'admin@example.com',
-  password: 'Admin123!',
-  username: 'admin123',
-  firstName: 'Default',
-  lastName: 'Admin',
-  name: 'Default Admin',
+  email: faker.internet.email(),
+  password: 'admin123',
+  username: faker.internet.userName(),
+  firstName: faker.person.firstName(),
+  lastName: faker.person.lastName(),
+  name: faker.person.fullName(),
   role: 'admin',
 };

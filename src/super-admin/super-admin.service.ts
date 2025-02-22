@@ -5,10 +5,7 @@ import { SuperAdmin } from './entities/super-admin.entity';
 import { Admin } from '../admin/entities/admin.entity';
 import { CreateSuperAdminDto } from './dto/super-admin.dto';
 import { CreateAdminDto } from '../admin/dto/create-admin.dto';
-import {
-  defaultSuperAdmin,
-  defaultAdmin,
-} from '../config/default-users.config';
+import { defaultSuperAdmin } from '../config/default-users.config';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { Table } from 'typeorm';
@@ -177,42 +174,40 @@ export class SuperAdminService implements OnModuleInit {
 
   private async initializeDefaultUsers() {
     try {
-      // Check and create default super admin
+      // Check only for super admin
       console.log('Checking for existing super admin...');
       const superAdminCount = await this.superAdminRepository.count();
       console.log('Super admin count:', superAdminCount);
 
+      // Only proceed with creation if no super admin exists
       if (superAdminCount === 0) {
         console.log('Creating default super admin...');
-        const result = await this.create({
+
+        // Create super admin
+        const superAdminResult = await this.superAdminRepository.save({
           email: defaultSuperAdmin.email,
-          password: 'superadmin123',
+          password: await bcrypt.hash(defaultSuperAdmin.password, 10),
           first_name: defaultSuperAdmin.name.split(' ')[0],
           last_name: defaultSuperAdmin.name.split(' ')[1] || '',
           username: defaultSuperAdmin.username,
+          role: 'super-admin',
+          super_admin_id: this.generateSecureSuperAdminId(),
         });
-        console.log('Default super admin created:', result);
-      }
 
-      // Check and create default admin
-      console.log('Checking for existing admin...');
-      const adminCount = await this.adminRepository.count();
-      console.log('Admin count:', adminCount);
-
-      if (adminCount === 0) {
-        console.log('Creating default admin...');
-        const result = await this.createAdmin({
-          email: defaultAdmin.email,
-          password: 'admin123',
-          username: defaultAdmin.username,
-          first_name: defaultAdmin.firstName,
-          last_name: defaultAdmin.lastName,
-          role: defaultAdmin.role,
+        console.log('Default super admin created:', {
+          ...superAdminResult,
+          password: undefined,
         });
-        console.log('Default admin created:', result);
+        console.log('Successfully created default super admin');
+      } else {
+        console.log('Super admin already exists, skipping initialization');
       }
     } catch (error) {
       console.error('Error in initializeDefaultUsers:', error);
+      // Rethrow the error to ensure the application knows initialization failed
+      throw new Error(
+        `Failed to initialize default super admin: ${error.message}`,
+      );
     }
   }
 

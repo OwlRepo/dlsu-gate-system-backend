@@ -122,23 +122,32 @@ export class DatabaseSyncService {
     ];
 
     for (const schedule of defaultSchedules) {
-      const existing = await this.syncScheduleRepository.findOne({
-        where: { scheduleNumber: schedule.scheduleNumber },
-      });
-
-      if (!existing) {
-        const cronExpression = this.convertMilitaryTimeToCron(schedule.time);
-        const newSchedule = this.syncScheduleRepository.create({
-          ...schedule,
-          cronExpression,
+      try {
+        const existing = await this.syncScheduleRepository.findOne({
+          where: { scheduleNumber: schedule.scheduleNumber },
         });
-        await this.syncScheduleRepository.save(newSchedule);
-        this.addCronJob(`sync-${schedule.scheduleNumber}`, cronExpression);
-      } else {
-        this.addCronJob(
-          `sync-${schedule.scheduleNumber}`,
-          existing.cronExpression,
+
+        if (!existing) {
+          const cronExpression = this.convertMilitaryTimeToCron(schedule.time);
+          const newSchedule = this.syncScheduleRepository.create({
+            ...schedule,
+            cronExpression,
+          });
+          await this.syncScheduleRepository.save(newSchedule);
+          this.addCronJob(`sync-${schedule.scheduleNumber}`, cronExpression);
+        } else {
+          this.addCronJob(
+            `sync-${schedule.scheduleNumber}`,
+            existing.cronExpression,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to initialize schedule ${schedule.scheduleNumber}:`,
+          error,
         );
+        // Continue with next schedule even if one fails
+        continue;
       }
     }
   }
