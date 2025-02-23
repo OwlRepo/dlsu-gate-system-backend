@@ -28,11 +28,12 @@ import { Role } from '../auth/enums/role.enum';
 @ApiTags('Employees')
 @ApiBearerAuth()
 @Controller('employee')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard)
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 
   @Post()
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Create a new employee',
@@ -71,10 +72,10 @@ export class EmployeeController {
   }
 
   @Get()
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get all employees',
-    description: 'Retrieves all employees. Requires Admin privileges.',
+    description:
+      'Retrieves all employees. Available to all authenticated users.',
   })
   @ApiResponse({
     status: 200,
@@ -90,7 +91,6 @@ export class EmployeeController {
   }
 
   @Get('created')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get employees created within a date range' })
   @ApiResponse({
     status: 200,
@@ -126,14 +126,12 @@ export class EmployeeController {
   }
 
   @Get('device/:device_id')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get employee by device ID' })
   findByDeviceId(@Param('device_id') device_id: string) {
     return this.employeeService.findByDeviceId(device_id);
   }
 
   @Get(':idOrUsername')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get employee by ID or username',
     description: 'Retrieves an employee using either their ID or username',
@@ -154,6 +152,7 @@ export class EmployeeController {
   }
 
   @Patch(':employee_id')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Update employee by ID',
@@ -237,6 +236,7 @@ export class EmployeeController {
   }
 
   @Delete(':employee_id')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Delete employee by ID' })
   remove(@Param('employee_id') employee_id: string) {
@@ -244,6 +244,7 @@ export class EmployeeController {
   }
 
   @Patch(':employee_id/deactivate')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Deactivate a single employee',
@@ -271,6 +272,7 @@ export class EmployeeController {
   }
 
   @Post('bulk-deactivate')
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Deactivate multiple employees',
