@@ -21,9 +21,10 @@ RUN bun run build
 # Add persistent uploads directory
 RUN mkdir -p /app/persistent_uploads && chmod 777 /app/persistent_uploads
 
-# Make the entrypoint script executable (works on both Windows and macOS)
+# Copy the entrypoint script and force Linux line endings
 COPY docker-entrypoint.sh .
-RUN chmod +x docker-entrypoint.sh
+RUN sed -i 's/\r$//' docker-entrypoint.sh && \
+    chmod +x docker-entrypoint.sh
 
 # Expose the port your app runs on
 EXPOSE 3000
