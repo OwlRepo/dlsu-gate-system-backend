@@ -47,6 +47,19 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         secret: process.env.JWT_SECRET,
       });
 
+      // Check if current time is exactly between 23:00:00 and 23:00:05
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentSeconds = now.getSeconds();
+
+      // Block access only during the first 5 seconds of 23:00
+      if (currentHour === 23 && currentMinutes === 0 && currentSeconds < 5) {
+        throw new UnauthorizedException(
+          'Daily token reset at 11 PM. Please wait 5 seconds and try again.',
+        );
+      }
+
       console.log('Token payload:', payload);
       request['user'] = payload;
       return true;
