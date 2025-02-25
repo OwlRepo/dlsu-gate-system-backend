@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, Like } from 'typeorm';
+import { Repository, Between, Like, FindManyOptions } from 'typeorm';
 import { Report } from './entities/report.entity';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -136,5 +136,9 @@ export class ReportsService {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
+  }
+
+  async find(options: FindManyOptions<Report>): Promise<Report[]> {
+    return await this.reportRepository.find(options);
   }
 }
