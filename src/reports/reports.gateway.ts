@@ -112,25 +112,35 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
     todayReports.forEach((report: Report) => {
       // Count entries and exits
       if (report.type === '0') {
-        // Entry
         stats.entry++;
       } else if (report.type === '1') {
-        // Exit
         stats.exit++;
-      }
-
-      // Calculate gate access stats
-      if (!report.remarks) {
-        stats.gateAccessStats.allowed++;
-      } else if (report.status === 'allowed') {
-        stats.gateAccessStats.allowedWithRemarks++;
-      } else {
-        stats.gateAccessStats.notAllowed++;
       }
     });
 
     // Calculate on-premise (entries minus exits)
     stats.onPremise = stats.entry - stats.exit;
+
+    // Count access types
+    const accessCounts = {
+      green: 0,
+      yellow: 0,
+      red: 0,
+    };
+
+    todayReports.forEach((report: Report) => {
+      if (report.remarks?.startsWith('GREEN')) accessCounts.green++;
+      else if (report.remarks?.startsWith('YELLOW')) accessCounts.yellow++;
+      else if (report.remarks?.startsWith('RED')) accessCounts.red++;
+    });
+
+    // Calculate percentages based on total on-premise
+    const total = Math.max(stats.onPremise, 1); // Prevent division by zero
+    stats.gateAccessStats = {
+      allowed: Math.round((accessCounts.green / total) * 100),
+      allowedWithRemarks: Math.round((accessCounts.yellow / total) * 100),
+      notAllowed: Math.round((accessCounts.red / total) * 100),
+    };
 
     return stats;
   }
