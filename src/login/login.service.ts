@@ -41,6 +41,7 @@ export class LoginService {
         throw new UnauthorizedException('Invalid credentials');
       }
 
+      const { password, ...userInfo } = superAdmin;
       const payload = {
         username: superAdmin.username,
         sub: superAdmin.id,
@@ -50,6 +51,7 @@ export class LoginService {
       return {
         message: 'Super Admin authentication successful',
         access_token: 'Bearer ' + this.jwtService.sign(payload),
+        user: userInfo,
       };
     }
 
@@ -71,6 +73,7 @@ export class LoginService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const { password, ...userInfo } = admin;
     const payload = {
       username: admin.username,
       sub: admin.id,
@@ -80,6 +83,7 @@ export class LoginService {
     return {
       message: 'Admin authentication successful',
       access_token: 'Bearer ' + this.jwtService.sign(payload),
+      user: userInfo,
     };
   }
 

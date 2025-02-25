@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Injectable,
   NotFoundException,
@@ -34,6 +35,7 @@ export class SuperAdminAuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const { password, ...userInfo } = superAdmin;
     const payload = {
       sub: superAdmin.super_admin_id,
       username: superAdmin.username,
@@ -43,6 +45,7 @@ export class SuperAdminAuthService {
     return {
       message: 'Admin authentication successful',
       access_token: 'Bearer ' + this.jwtService.sign(payload),
+      user: userInfo,
     };
   }
 

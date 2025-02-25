@@ -39,7 +39,7 @@ export class LoginController {
   @ApiOperation({
     summary: 'Unified login for admin and super-admin',
     description:
-      'Authenticates admin or super-admin users and returns a JWT token. User type is determined automatically from username.',
+      'Authenticates admin or super-admin users and returns a JWT token with user information.',
   })
   @ApiBody({
     schema: {
@@ -57,13 +57,17 @@ export class LoginController {
     schema: {
       type: 'object',
       properties: {
+        message: { type: 'string' },
         access_token: { type: 'string' },
         user: {
           type: 'object',
           properties: {
             id: { type: 'string' },
             username: { type: 'string' },
-            role: { type: 'string' },
+            email: { type: 'string' },
+            created_at: { type: 'string', format: 'date-time' },
+            updated_at: { type: 'string', format: 'date-time' },
+            // Add other relevant user fields here, excluding password
           },
         },
       },

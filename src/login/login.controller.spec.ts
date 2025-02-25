@@ -90,6 +90,18 @@ describe('LoginController', () => {
       const expectedResult = {
         message: 'Admin authenticated successfully',
         access_token: 'mock_token',
+        user: {
+          id: 1,
+          admin_id: '1',
+          username: 'admin',
+          email: 'admin@example.com',
+          first_name: 'Admin',
+          last_name: 'User',
+          role: 'ADMIN',
+          created_at: new Date(),
+          updated_at: new Date(),
+          is_active: true,
+        },
       };
 
       jest
