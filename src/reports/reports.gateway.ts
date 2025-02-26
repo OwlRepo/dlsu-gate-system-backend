@@ -27,6 +27,7 @@ interface GateStats {
   cors: {
     origin: '*',
   },
+  path: '/socket.io/',
 })
 export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
   @WebSocketServer()
