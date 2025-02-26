@@ -479,8 +479,13 @@ export class DatabaseSyncService {
         // Process batch
         const batchRecords = await Promise.all(
           result.recordset.map(async (record) => {
-            const userId = this.removeSpecialChars(
-              record.ID_Number?.toString()?.trim() || '',
+            const userId = this.hexToDecimal(
+              record.Unique_ID
+                ? record.Unique_ID?.toString()?.trim()
+                : record.ID_Number
+                  ? record.ID_Number?.toString()?.trim()
+                  : '',
+              record.ID_Number,
             );
             const name = this.removeSpecialChars(record.Name?.trim() || '');
             const livedName = record.Lived_Name?.trim() || '';
@@ -1009,6 +1014,28 @@ Skipped Records: ${skippedRecords.length}
         message: 'CSV import failed',
         details: importResponse.data,
       });
+    }
+  }
+
+  private hexToDecimal(
+    hexString: string,
+    originalId?: string | number,
+  ): string {
+    try {
+      // Remove any non-hex characters and convert to uppercase
+      const cleanHex = hexString.replace(/[^A-Fa-f0-9]/g, '').toUpperCase();
+
+      if (!cleanHex) return originalId?.toString() || '';
+
+      // Convert hex to decimal
+      const decimal = BigInt(`0x${cleanHex}`).toString(10);
+      return decimal;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to convert hex value: ${hexString}, using original ID`,
+        error,
+      );
+      return originalId?.toString() || '';
     }
   }
 }
