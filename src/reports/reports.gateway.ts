@@ -112,9 +112,9 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
 
     todayReports.forEach((report: Report) => {
       // Count entries and exits
-      if (report.type === '0') {
+      if (report.type === '1') {
         stats.entry++;
-      } else if (report.type === '1') {
+      } else if (report.type === '2') {
         stats.exit++;
       }
     });
@@ -130,9 +130,9 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
     };
 
     todayReports.forEach((report: Report) => {
-      if (report.remarks?.startsWith('GREEN')) accessCounts.green++;
-      else if (report.remarks?.startsWith('YELLOW')) accessCounts.yellow++;
-      else if (report.remarks?.startsWith('RED')) accessCounts.red++;
+      if (report.status?.startsWith('GREEN')) accessCounts.green++;
+      else if (report.status?.startsWith('YELLOW')) accessCounts.yellow++;
+      else if (report.status?.startsWith('RED')) accessCounts.red++;
     });
 
     // Calculate percentages based on total on-premise

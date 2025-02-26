@@ -7,7 +7,8 @@ export class CreateReportDto {
   @IsDateString()
   datetime: string;
 
-  @ApiProperty({ example: '0' })
+  @ApiProperty({ example: '1' })
+  @ApiProperty({ example: '2' })
   @IsNotEmpty()
   @IsString()
   type: string;
