@@ -135,8 +135,8 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
       else if (report.status?.startsWith('RED')) accessCounts.red++;
     });
 
-    // Calculate percentages based on total on-premise
-    const total = Math.max(stats.onPremise, 1); // Prevent division by zero
+    // Calculate percentages based on total entries
+    const total = Math.max(stats.entry, 1); // Prevent division by zero
     stats.gateAccessStats = {
       allowed: Math.round((accessCounts.green / total) * 100),
       allowedWithRemarks: Math.round((accessCounts.yellow / total) * 100),
