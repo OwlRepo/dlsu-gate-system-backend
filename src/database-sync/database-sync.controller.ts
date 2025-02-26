@@ -5,6 +5,8 @@ import {
   UseGuards,
   BadRequestException,
   Get,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import { DatabaseSyncService } from './database-sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,6 +23,8 @@ import { Role } from '../auth/enums/role.enum';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduledSyncDto } from './dto/scheduled-sync.dto';
 import { DeleteUsersDto } from './dto/delete-users.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import * as csv from 'csv-parse';
 
 @ApiTags('Database Sync')
 @ApiBearerAuth()
@@ -204,21 +208,113 @@ export class DatabaseSyncController {
     description: `
       Deletes multiple users from both PostgreSQL and BIOSTAR databases.
       
+      Accepts either:
+      1. JSON payload with userIds array
+      2. CSV file with 'user_ids' column
+      
       Process:
       1. Sets isArchived=true in PostgreSQL database
       2. Deletes users from BIOSTAR API
       
       Only admins can perform bulk deletion.
+
+      Sample JSON payload:
+      {
+        "userIds": ["12345", "67890", "11223"]
+      }
+
+      Sample CSV format:
+      user_ids
+      12345
+      67890
+      11223
     `,
   })
-  @ApiBody({ type: DeleteUsersDto })
+  @ApiBody({
+    schema: {
+      oneOf: [
+        {
+          $ref: '#/components/schemas/DeleteUsersDto',
+          example: {
+            userIds: ['12345', '67890', '11223'],
+          },
+        },
+        {
+          type: 'object',
+          properties: {
+            file: {
+              type: 'string',
+              format: 'binary',
+              description: 'CSV file with user_ids column',
+            },
+          },
+        },
+      ],
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
   @ApiResponse({ status: 200, description: 'Users successfully deleted' })
   @ApiResponse({
     status: 400,
     description: 'Invalid request or deletion failed',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async deleteUsers(@Body() payload: DeleteUsersDto) {
-    return this.databaseSyncService.deleteUsers(payload.userIds);
+  async deleteUsers(
+    @Body() payload?: DeleteUsersDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (file) {
+      // Handle CSV file
+      const userIds = await this.parseCsvFile(file);
+      return this.databaseSyncService.deleteUsers(userIds);
+    } else if (payload?.userIds) {
+      // Handle JSON payload
+      return this.databaseSyncService.deleteUsers(payload.userIds);
+    } else {
+      throw new BadRequestException(
+        'Either userIds array or CSV file must be provided',
+      );
+    }
+  }
+
+  private async parseCsvFile(file: Express.Multer.File): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const userIds: string[] = [];
+      let hasHeader = false;
+
+      csv
+        .parse(file.buffer.toString(), {
+          trim: true,
+          skip_empty_lines: true,
+        })
+        .on('data', (row) => {
+          if (!hasHeader) {
+            // Check if header is 'user_ids'
+            if (row[0].toLowerCase() !== 'user_ids') {
+              reject(
+                new BadRequestException(
+                  "CSV file must have 'user_ids' as the header",
+                ),
+              );
+            }
+            hasHeader = true;
+            return;
+          }
+          if (row[0]) userIds.push(row[0].toString().trim());
+        })
+        .on('end', () => {
+          if (userIds.length === 0) {
+            reject(
+              new BadRequestException('No valid user IDs found in CSV file'),
+            );
+          }
+          resolve(userIds);
+        })
+        .on('error', (error) => {
+          reject(
+            new BadRequestException(`Error parsing CSV file: ${error.message}`),
+          );
+        });
+    });
   }
 }
