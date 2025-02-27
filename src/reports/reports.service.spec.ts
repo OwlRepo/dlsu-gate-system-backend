@@ -3,6 +3,7 @@ import { ReportsService } from './reports.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Report } from './entities/report.entity';
 import { Repository } from 'typeorm';
+import { Student } from '../students/entities/student.entity';
 
 describe('ReportsService', () => {
   let service: ReportsService;
@@ -18,6 +19,16 @@ describe('ReportsService', () => {
             find: jest.fn(),
             create: jest.fn(),
             save: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(Student),
+          useValue: {
+            createQueryBuilder: jest.fn(() => ({
+              select: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              getRawMany: jest.fn().mockResolvedValue([]),
+            })),
           },
         },
       ],
