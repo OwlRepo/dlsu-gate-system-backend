@@ -7,8 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "docker-fresh-build": "docker compose down -v; docker compose up --build -d",
-    "docker-build": "docker compose up --build -d; docker compose up --build -d",
+    "docker-fresh-build": "docker compose down -v && docker compose up --build -d",
+    "docker-build": "docker compose up --build -d && docker compose up --build -d",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",
