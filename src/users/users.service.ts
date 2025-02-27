@@ -20,19 +20,33 @@ export class UsersService {
   ) {}
 
   async getAllUsers(query: UserPaginationDto): Promise<any> {
-    const { page = 1, limit = 10, search, type } = query;
+    const { page = 1, limit = 10, search, type, startDate, endDate } = query;
     const skip = (page - 1) * limit;
 
     const allUsers: UserDto[] = [];
+
+    // Helper function to build date conditions
+    const getDateCondition = () => {
+      if (startDate && endDate) {
+        return 'AND created_at BETWEEN :startDate AND :endDate';
+      }
+      return '';
+    };
+
+    const dateParams = startDate && endDate ? { startDate, endDate } : {};
 
     if (!type || type === 'admin') {
       const admins = await this.adminRepository
         .createQueryBuilder('admin')
         .where(
           search
-            ? 'admin.username LIKE :search OR admin.email LIKE :search OR admin.first_name LIKE :search OR admin.last_name LIKE :search'
-            : '1=1',
-          search ? { search: `%${search}%` } : {},
+            ? 'admin.username LIKE :search OR admin.email LIKE :search OR admin.first_name LIKE :search OR admin.last_name LIKE :search ' +
+                getDateCondition()
+            : '1=1 ' + getDateCondition(),
+          {
+            search: `%${search}%`,
+            ...dateParams,
+          },
         )
         .getMany();
       allUsers.push(
@@ -54,9 +68,13 @@ export class UsersService {
         .createQueryBuilder('employee')
         .where(
           search
-            ? 'employee.username LIKE :search OR employee.email LIKE :search OR employee.first_name LIKE :search OR employee.last_name LIKE :search'
-            : '1=1',
-          search ? { search: `%${search}%` } : {},
+            ? 'employee.username LIKE :search OR employee.email LIKE :search OR employee.first_name LIKE :search OR employee.last_name LIKE :search ' +
+                getDateCondition()
+            : '1=1 ' + getDateCondition(),
+          {
+            search: `%${search}%`,
+            ...dateParams,
+          },
         )
         .getMany();
       allUsers.push(
@@ -78,9 +96,13 @@ export class UsersService {
         .createQueryBuilder('superAdmin')
         .where(
           search
-            ? 'superAdmin.username LIKE :search OR superAdmin.email LIKE :search OR superAdmin.first_name LIKE :search OR superAdmin.last_name LIKE :search'
-            : '1=1',
-          search ? { search: `%${search}%` } : {},
+            ? 'superAdmin.username LIKE :search OR superAdmin.email LIKE :search OR superAdmin.first_name LIKE :search OR superAdmin.last_name LIKE :search ' +
+                getDateCondition()
+            : '1=1 ' + getDateCondition(),
+          {
+            search: `%${search}%`,
+            ...dateParams,
+          },
         )
         .getMany();
       allUsers.push(
