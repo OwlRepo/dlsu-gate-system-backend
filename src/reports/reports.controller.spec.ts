@@ -122,7 +122,10 @@ describe('ReportsController', () => {
         fileName: 'report.csv',
       });
 
-      await controller.generateCSV(mockResponse);
+      await controller.generateCSV(
+        { startDate: '2024-03-19', endDate: '2024-03-20' },
+        mockResponse,
+      );
       expect(mockResponse.download).toHaveBeenCalled();
     });
   });
