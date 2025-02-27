@@ -1,57 +1,27 @@
 # DLSU Gate System Backend
 
-A high-availability, load-balanced backend service for the DLSU Gate System, designed to handle campus access management efficiently and reliably.
-
-## Table of Contents
-
-- [DLSU Gate System Backend](#dlsu-gate-system-backend)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-    - [Key Features](#key-features)
-  - [Architecture](#architecture)
-    - [System Components](#system-components)
-    - [Component Roles](#component-roles)
-  - [Prerequisites](#prerequisites)
-  - [Getting Started](#getting-started)
-    - [Access Points](#access-points)
-  - [Development](#development)
-    - [Local Setup](#local-setup)
-    - [Development Best Practices](#development-best-practices)
-  - [Monitoring \& Logging](#monitoring--logging)
-    - [Log Management](#log-management)
-    - [Monitoring Tools](#monitoring-tools)
-  - [Technology Stack](#technology-stack)
-    - [NestJS (API Framework)](#nestjs-api-framework)
-    - [PostgreSQL (Database)](#postgresql-database)
-    - [Redis (Caching)](#redis-caching)
-    - [Nginx (Load Balancer)](#nginx-load-balancer)
-  - [Deployment](#deployment)
-    - [Production Deployment](#production-deployment)
-    - [Maintenance](#maintenance)
-  - [Contributing](#contributing)
-  - [License](#license)
+A high-availability, load-balanced backend service for DLSU's campus access management system.
 
 ## Overview
 
-The DLSU Gate System Backend is a robust service that manages campus access control through:
+Enterprise-grade backend service featuring:
 
-- Real-time gate access validation
-- User authentication and authorization
-- Distributed session management
-- High-availability architecture
-- Automated synchronization with university systems
+- 5-node distributed API architecture
+- Sub-second gate access validation
+- Automated university system synchronization
+- Multi-layer security with DDoS protection
+- Horizontal scalability with zero-downtime deployment
 
-### Key Features
+## Branch Management
 
-- **Load Balanced Architecture**: 5 distributed API instances for high availability
-- **Real-time Processing**: Sub-second response times for gate access validation
-- **Fault Tolerance**: Automatic failover and recovery mechanisms
-- **Scalable Design**: Horizontally scalable architecture
-- **Secure Access**: Multi-layer security with rate limiting and DDoS protection
+> **Important**: This repository follows strict branch management practices:
+>
+> - `main` - Production environment only. Protected branch for stable releases
+> - `dev` - Development and testing environment
+>
+> Always create feature branches from `dev` and submit PRs to `dev` first. Changes are promoted to `main` only after thorough testing.
 
 ## Architecture
-
-### System Components
 
 ```
 ┌─────────────────┐     ┌──────────────┐
@@ -76,278 +46,126 @@ The DLSU Gate System Backend is a robust service that manages campus access cont
 └───────────────┘
 ```
 
-### Component Roles
+### Core Components
 
-1. **Nginx Load Balancer**
+- **Nginx**: Load balancing, SSL termination, DDoS protection
+- **API Nodes**: NestJS-powered business logic and request handling
+- **Redis**: Session management, caching, rate limiting
+- **PostgreSQL**: Transactional data storage, audit logs
 
-   - SSL/TLS termination
-   - Request distribution across API nodes
-   - Rate limiting and DDoS protection
-   - Static file serving
-   - Compression and caching
+## Quick Start
 
-2. **API Nodes (NestJS)**
+1. **Prerequisites**
 
-   - Business logic processing
-   - Authentication/Authorization
-   - Request validation
-   - Data processing
-   - Service orchestration
+   - Docker Desktop/Engine
+   - Git
+   - Bun
 
-3. **Redis Cache**
-
-   - Session management
-   - Real-time data caching
-   - Rate limit tracking
-   - Distributed locking
-   - Pub/sub messaging
-
-4. **PostgreSQL Database**
-   - User data storage
-   - Access logs
-   - System configurations
-   - Audit trails
-   - Transactional data
-
-## Prerequisites
-
-- Docker Desktop (Windows/Mac) or Docker Engine (Linux)
-- Git
-- Bun (for local development)
-
-## Getting Started
-
-1. **Clone the Repository**
+2. **Setup**
 
 ```bash
 git clone git@github.com:OwlRepo/dlsu-gate-system-backend.git
 cd dlsu-gate-system-backend
-```
 
-2. **Configure Environment**
-   Create a `.env` file:
+# Configure environment
+cp .env.example .env
+# Edit .env with your credentials
 
-```env
-# JWT Configuration
-JWT_SECRET=your-jwt-secret-key                    # Secret key for JWT tokens
-
-# Environment Configuration
-NODE_ENV=development                              # Application environment
-PORT=51742                                        # Application port
-
-# Database Configuration
-DB_HOST=localhost                                 # Database host
-DB_PORT=5432                                      # Database port
-DB_USERNAME=postgres                              # Database username
-DB_PASSWORD=your_secure_password                  # Database password
-DB_NAME=dlsu_gate_system                         # Database name
-
-# Source Database Configuration
-SOURCE_DB_HOST=your_source_host                   # Source database host
-SOURCE_DB_PORT=your_source_port                   # Source database port
-SOURCE_DB_USERNAME=your_source_username           # Source database username
-SOURCE_DB_PASSWORD=your_source_password           # Source database password
-SOURCE_DB_NAME=your_source_db                     # Source database name
-
-# BIOSTAR API Configuration
-BIOSTAR_API_BASE_URL=your_biostar_url            # BIOSTAR API URL
-BIOSTAR_API_LOGIN_ID=your_biostar_username       # BIOSTAR username
-BIOSTAR_API_PASSWORD=your_biostar_password       # BIOSTAR password
-
-# Application URLs
-BASE_URL=http://localhost                         # Base application URL
-RAILWAY_STATIC_URL=your_railway_url              # Railway deployment URL
-
-# Docker Configuration
-DOCKER_ENVIRONMENT=true                          # Docker environment flag
-```
-
-> **Important**: For the official production environment variables and credentials, please contact the repository maintainers. The above example is for development purposes only.
-
-3. **Launch the System**
-
-```bash
-# Start all services
+# Launch system
 docker-compose up -d
-
-# Verify deployment
-docker-compose ps
 ```
 
-### Access Points
+3. **Access Points**
 
-- **Main API**: `http://localhost:9580`
-- **API Documentation**: `http://localhost:9580/api/docs`
-- **Health Check**: `http://localhost:9580/health`
-- **PgAdmin**: `http://localhost:9580/pgadmin`
-- **Database Port**: `5438`
-- **Redis Port**: `6389`
+- API: `http://localhost:9580`
+- Docs: `http://localhost:9580/api/docs`
+- Health: `http://localhost:9580/health`
+- PgAdmin: `http://localhost:9580/pgadmin`
 
 ## Development
-
-### Local Setup
 
 ```bash
 # Install dependencies
 bun install
 
-# Start development server
+# Development server
 bun run dev
 
-# Run tests
+# Testing
 bun test
 
-# Lint code
+# Linting
 bun run lint
 ```
 
-### Development Best Practices
+### Best Practices
 
-1. **Code Style**
+- Follow TypeScript standards
+- Maintain 80%+ test coverage
+- Use feature branches
+- Write conventional commits
 
-   - Follow TypeScript best practices
-   - Use ESLint and Prettier
-   - Maintain consistent naming conventions
-   - Document code with JSDoc comments
+## Monitoring
 
-2. **Testing**
-
-   - Write unit tests for business logic
-   - Include integration tests
-   - Maintain 80%+ code coverage
-   - Test error scenarios
-
-3. **Git Workflow**
-   - Use feature branches
-   - Follow conventional commits
-   - Include PR descriptions
-   - Keep changes atomic
-
-## Monitoring & Logging
-
-### Log Management
-
-Logs are stored in structured format:
+### Logs
 
 ```
 logs/
-├── application/          # Application logs
-├── access/              # Access logs
-├── error/              # Error logs
-└── sync/               # Sync operation logs
+├── application/  # App logs
+├── access/       # Access logs
+├── error/        # Error logs
+└── sync/         # Sync logs
 ```
 
-### Monitoring Tools
-
-1. **Health Checks**
+### Health Checks
 
 ```bash
-# API health
 curl http://localhost:9580/health
-
-# Service status
 docker-compose ps
-
-# Container logs
 docker-compose logs -f
 ```
 
-2. **Performance Monitoring**
-   - CPU/Memory usage
-   - Response times
-   - Error rates
-   - Cache hit ratios
-
 ## Technology Stack
 
-### NestJS (API Framework)
-
-- TypeScript-based backend
-- Modular architecture
-- Dependency injection
-- Built-in validation
-- OpenAPI documentation
-
-### PostgreSQL (Database)
-
-- ACID compliance
-- Complex queries
-- Data integrity
-- Backup/Recovery
-- Connection pooling
-
-### Redis (Caching)
-
-- Session storage
-- Data caching
-- Rate limiting
-- Real-time updates
-- Pub/sub messaging
-
-### Nginx (Load Balancer)
-
-- Load distribution
-- SSL termination
-- Static file serving
-- Request compression
-- Security features
+- **NestJS**: TypeScript-based API framework
+- **PostgreSQL**: ACID-compliant database
+- **Redis**: Distributed caching
+- **Nginx**: Load balancing and security
 
 ## Deployment
 
-### Production Deployment
+### Production Requirements
 
-1. **System Requirements**
+- 4+ CPU cores
+- 8GB+ RAM
+- 50GB+ storage
+- SSL certificate
 
-   - 4+ CPU cores
-   - 8GB+ RAM
-   - 50GB+ storage
-   - Production SSL certificate
-
-2. **Deployment Steps**
+### Deploy
 
 ```bash
 # Pull latest changes
 git pull origin main
 
-# Build containers
-docker-compose build
+# Build and deploy with zero downtime
+docker-compose up -d
 
-# Deploy with zero downtime
-docker-compose up -d --scale api=5
+# Note: The system automatically deploys 5 API instances as defined in docker-compose.yml
 ```
 
 ### Maintenance
 
-1. **Backup Procedures**
-
 ```bash
-# Database backup
+# Backup
 docker exec postgres pg_dump -U postgres dlsu_gate_system > backup.sql
 
-# Volume backup
-docker run --rm -v dlsu_gate_system_data:/data -v /backup:/backup \
-  alpine tar czf /backup/volumes_backup.tar.gz /data
-```
-
-2. **Updates and Patches**
-
-```bash
-# Update containers
+# Updates
 docker-compose pull
 docker-compose up -d
-
-# Apply database migrations
 bun run migration:run
 ```
 
-## Contributing
-
-This is a closed source project for DLSU internal use only. For any changes or improvements, please contact the system administrators or authorized maintainers.
-
 ## License
 
-Copyright © 2024 De La Salle University
-All rights reserved.
-
-This software and its documentation are proprietary and confidential.
-Unauthorized copying, distribution, or use of this software is strictly prohibited.
+Copyright © 2024 De La Salle University. All rights reserved.
+Proprietary and confidential software.
