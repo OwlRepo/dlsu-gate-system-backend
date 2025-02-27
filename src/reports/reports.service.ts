@@ -7,12 +7,15 @@ import * as path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
 import { CreateReportDto } from './dto/create-report.dto';
 import { EnhancedReportQueryDto } from './dto/enhanced-report-query.dto';
+import { Student } from '../students/entities/student.entity';
 
 @Injectable()
 export class ReportsService {
   constructor(
     @InjectRepository(Report)
     private readonly reportRepository: Repository<Report>,
+    @InjectRepository(Student)
+    private readonly studentRepository: Repository<Student>,
   ) {}
 
   async create(createReportDto: CreateReportDto) {
@@ -116,6 +119,7 @@ export class ReportsService {
   async generateCSVReport(
     startDate: Date,
     endDate: Date,
+    includePhoto: boolean = false,
   ): Promise<{ filePath: string; fileName: string }> {
     const reports = await this.reportRepository.find({
       where: {
@@ -123,38 +127,85 @@ export class ReportsService {
       },
     });
 
+    const userIds = [...new Set(reports.map((report) => report.user_id))];
+    const studentMap = new Map();
+
+    if (userIds.length > 0) {
+      // Only select photo if needed
+      const columns = [
+        'student.ID_Number as id',
+        'student."Unique_ID" as card',
+        'student."Lived_Name" as lived',
+      ];
+      if (includePhoto) {
+        columns.push('student.Photo as photo');
+      }
+
+      const students = await this.studentRepository
+        .createQueryBuilder('student')
+        .select(columns)
+        .where('student.ID_Number IN (:...userIds)', { userIds })
+        .getRawMany();
+
+      students.forEach((student) => {
+        studentMap.set(student.id, {
+          card: student.card,
+          lived: student.lived,
+          ...(includePhoto && { photo: student.photo }),
+        });
+      });
+    }
+
+    // Define base headers
+    const headers = [
+      { id: 'timestamp', title: 'Time stamp' },
+      { id: 'id_number', title: 'ID Number' },
+      { id: 'card_number', title: 'Card Number' },
+      { id: 'name', title: 'Name' },
+      { id: 'lived_name', title: 'Lived Name' },
+      { id: 'remarks', title: 'Remarks' },
+      { id: 'status', title: 'Status' },
+    ];
+
+    // Add photo header if needed
+    if (includePhoto) {
+      headers.push({ id: 'photo', title: 'Photo' });
+    }
+
     const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `reports-${dateStr}.csv`;
     const uploadDir = path.join(process.cwd(), 'persistent_uploads', 'reports');
     const filePath = path.join(uploadDir, fileName);
 
-    // Ensure directory exists
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
     const csvWriter = createObjectCsvWriter({
       path: filePath,
-      header: [
-        { id: 'id', title: 'ID' },
-        { id: 'datetime', title: 'Date Time' },
-        { id: 'type', title: 'Type' },
-        { id: 'user_id', title: 'User ID' },
-        { id: 'name', title: 'Name' },
-        { id: 'remarks', title: 'Remarks' },
-        { id: 'status', title: 'Status' },
-        { id: 'created_at', title: 'Created At' },
-      ],
+      header: headers,
     });
 
-    await csvWriter.writeRecords(
-      reports.map((report) => ({
-        ...report,
-        datetime: report.datetime.toISOString(),
-        created_at: report.created_at.toISOString(),
-      })),
-    );
+    const formattedRecords = reports.map((report) => {
+      const student = studentMap.get(report.user_id);
+      const record = {
+        timestamp: report.datetime.toISOString(),
+        id_number: report.user_id,
+        card_number: student?.card || 'null',
+        name: report.name,
+        lived_name: student?.lived || 'null',
+        remarks: report.remarks || 'null',
+        status: report.status || 'null',
+      };
 
+      if (includePhoto) {
+        record['photo'] = student?.photo || 'null';
+      }
+
+      return record;
+    });
+
+    await csvWriter.writeRecords(formattedRecords);
     return { filePath, fileName };
   }
 

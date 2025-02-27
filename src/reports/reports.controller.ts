@@ -163,6 +163,12 @@ export class ReportsController {
     type: String,
     description: 'End date (YYYY-MM-DD)',
   })
+  @ApiQuery({
+    name: 'includePhoto',
+    required: false,
+    type: Boolean,
+    description: 'Include photo column in CSV (default: false)',
+  })
   @ApiResponse({
     status: 200,
     description: 'CSV file download',
@@ -186,7 +192,11 @@ export class ReportsController {
       },
     },
   })
-  async generateCSV(@Query() query: GenerateCSVDto, @Res() res: Response) {
+  async generateCSV(
+    @Query() query: GenerateCSVDto,
+    @Res() res: Response,
+    @Query('includePhoto') includePhoto: string = 'false',
+  ) {
     let filePath: string | undefined;
 
     try {
@@ -214,6 +224,7 @@ export class ReportsController {
       const result = await this.reportsService.generateCSVReport(
         startDate,
         endDate,
+        includePhoto === 'true',
       );
       filePath = result.filePath;
 
