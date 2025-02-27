@@ -1,28 +1,40 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity()
 export class Employee {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ unique: true })
+  username: string;
 
   @Column()
-  employeeId: string;
+  password: string;
 
   @Column()
-  firstName: string;
+  employee_id: string;
 
   @Column()
-  lastName: string;
-
-  @Column({ default: true })
-  isActive: boolean;
+  first_name: string;
 
   @Column()
-  dateCreated: string;
+  last_name: string;
 
   @Column()
-  dateActivated: string;
+  is_active: boolean;
 
   @Column()
-  dateDeactivated: string;
+  date_created: string;
+
+  @Column()
+  date_activated: string;
+
+  @Column({ nullable: true })
+  date_deactivated: string;
+
+  @Column('json', { default: [] })
+  device_id: string[];
+
+  @Column({ unique: true })
+  email: string;
 }

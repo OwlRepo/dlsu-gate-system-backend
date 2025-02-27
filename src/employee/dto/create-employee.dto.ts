@@ -1,24 +1,40 @@
-import { IsBoolean, IsString } from '@nestjs/class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsString,
+  IsEmail,
+  IsBoolean,
+  IsArray,
+  IsOptional,
+} from 'class-validator';
 
 export class CreateEmployeeDto {
+  @ApiProperty()
   @IsString()
-  employeeId: string;
+  username: string;
 
+  @ApiProperty()
   @IsString()
-  firstName: string;
+  password: string;
 
+  @ApiProperty()
   @IsString()
-  lastName: string;
+  first_name: string;
 
+  @ApiProperty()
+  @IsString()
+  last_name: string;
+
+  @ApiProperty()
+  @IsEmail()
+  email: string;
+
+  @ApiProperty()
   @IsBoolean()
-  isActive: boolean;
+  @IsOptional()
+  is_active?: boolean;
 
-  @IsString()
-  dateCreated: string;
-
-  @IsString()
-  dateActivated: string;
-
-  @IsString()
-  dateDeactivated: string;
+  @ApiProperty()
+  @IsArray()
+  @IsOptional()
+  device_id?: string[];
 }
