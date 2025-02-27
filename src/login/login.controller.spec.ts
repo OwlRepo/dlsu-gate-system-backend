@@ -8,6 +8,7 @@ import { SuperAdminAuthService } from './services/super-admin-auth.service';
 import { TokenBlacklistService } from '../auth/token-blacklist.service';
 import { EmployeeAuthService } from './services/employee-auth.service';
 import { ScreensaverService } from '../screensaver/screensaver.service';
+import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
 
 describe('LoginController', () => {
   let controller: LoginController;
@@ -51,6 +52,10 @@ describe('LoginController', () => {
         },
         {
           provide: getRepositoryToken(Admin),
+          useValue: mockAdminRepository,
+        },
+        {
+          provide: getRepositoryToken(SuperAdmin),
           useValue: mockAdminRepository,
         },
         {

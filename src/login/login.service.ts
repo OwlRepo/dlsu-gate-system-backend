@@ -12,7 +12,7 @@ import { Admin } from '../admin/entities/admin.entity';
 import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
 import * as bcrypt from 'bcryptjs';
 import { TokenBlacklistService } from '../auth/token-blacklist.service';
-import { Role } from 'src/auth/enums/role.enum';
+import { Role } from '../auth/enums/role.enum';
 
 @Injectable()
 export class LoginService {
@@ -24,6 +24,19 @@ export class LoginService {
     private readonly superAdminRepository: Repository<SuperAdmin>,
     private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
+
+  private async invalidatePreviousTokens(userId: number, role: string) {
+    // Get all active tokens for this user from the blacklist service
+    const activeTokens = await this.tokenBlacklistService.getActiveTokensByUser(
+      userId,
+      role,
+    );
+
+    // Blacklist all previous tokens
+    for (const token of activeTokens) {
+      await this.tokenBlacklistService.blacklistToken(token);
+    }
+  }
 
   async validateAdminAuthentication(adminLoginDto: AdminLoginDto) {
     // First try super admin
@@ -48,9 +61,19 @@ export class LoginService {
         role: Role.SUPER_ADMIN,
       };
 
+      // Invalidate previous tokens before issuing new one
+      await this.invalidatePreviousTokens(superAdmin.id, Role.SUPER_ADMIN);
+
+      const newToken = this.jwtService.sign(payload);
+      await this.tokenBlacklistService.trackUserToken(
+        superAdmin.id,
+        Role.SUPER_ADMIN,
+        newToken,
+      );
+
       return {
         message: 'Super Admin authentication successful',
-        access_token: 'Bearer ' + this.jwtService.sign(payload),
+        access_token: 'Bearer ' + newToken,
         user: userInfo,
       };
     }
@@ -80,9 +103,19 @@ export class LoginService {
       role: 'ADMIN',
     };
 
+    // Invalidate previous tokens before issuing new one
+    await this.invalidatePreviousTokens(admin.id, 'ADMIN');
+
+    const newToken = this.jwtService.sign(payload);
+    await this.tokenBlacklistService.trackUserToken(
+      admin.id,
+      'ADMIN',
+      newToken,
+    );
+
     return {
       message: 'Admin authentication successful',
-      access_token: 'Bearer ' + this.jwtService.sign(payload),
+      access_token: 'Bearer ' + newToken,
       user: userInfo,
     };
   }

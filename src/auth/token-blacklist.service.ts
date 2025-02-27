@@ -1,37 +1,46 @@
 import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { TokenBlacklist } from './entities/token-blacklist.entity';
 
 @Injectable()
 export class TokenBlacklistService {
-  private blacklistedTokens: Set<string> = new Set();
+  private userTokens: Map<string, string> = new Map(); // userId_role -> token
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    @InjectRepository(TokenBlacklist)
+    private tokenBlacklistRepository: Repository<TokenBlacklist>,
+  ) {}
 
   async blacklistToken(token: string) {
-    if (!token) return;
-
-    try {
-      // Verify the token is valid before blacklisting
-      await this.jwtService.verifyAsync(token, {
-        secret: process.env.JWT_SECRET,
-      });
-      this.blacklistedTokens.add(token);
-
-      // Get token expiration and remove from blacklist after it expires
-      const decoded = this.jwtService.decode(token);
-      const exp = decoded['exp'] * 1000; // Convert to milliseconds
-
-      setTimeout(() => {
-        this.blacklistedTokens.delete(token);
-      }, exp - Date.now());
-    } catch (error) {
-      // Token is invalid, no need to blacklist
-      console.error('Error blacklisting token:', error.message);
-      return;
-    }
+    const blacklistedToken = this.tokenBlacklistRepository.create({
+      token,
+      blacklistedAt: new Date(),
+    });
+    await this.tokenBlacklistRepository.save(blacklistedToken);
   }
 
-  isBlacklisted(token: string): boolean {
-    return this.blacklistedTokens.has(token);
+  async isTokenBlacklisted(token: string): Promise<boolean> {
+    const blacklistedToken = await this.tokenBlacklistRepository.findOne({
+      where: { token },
+    });
+    return !!blacklistedToken;
+  }
+
+  async trackUserToken(userId: number, role: string, token: string) {
+    const key = `${userId}_${role}`;
+    const previousToken = this.userTokens.get(key);
+
+    if (previousToken) {
+      await this.blacklistToken(previousToken);
+    }
+
+    this.userTokens.set(key, token);
+  }
+
+  async getActiveTokensByUser(userId: number, role: string): Promise<string[]> {
+    const key = `${userId}_${role}`;
+    const token = this.userTokens.get(key);
+    return token ? [token] : [];
   }
 }

@@ -5,6 +5,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { TokenBlacklist } from './entities/token-blacklist.entity';
 
 @Global()
 @Module({
@@ -20,6 +22,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       }),
       inject: [ConfigService],
     }),
+    TypeOrmModule.forFeature([TokenBlacklist]),
   ],
   providers: [TokenBlacklistService, JwtAuthGuard, JwtStrategy],
   exports: [TokenBlacklistService, JwtModule, PassportModule, JwtAuthGuard],

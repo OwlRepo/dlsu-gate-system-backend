@@ -38,7 +38,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     }
 
     // Check if token is blacklisted
-    if (this.tokenBlacklistService.isBlacklisted(token)) {
+    if (await this.tokenBlacklistService.isTokenBlacklisted(token)) {
       throw new UnauthorizedException('Session expired. Please login again.');
     }
 
