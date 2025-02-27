@@ -33,39 +33,40 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
-      console.log('No token found in request');
       throw new UnauthorizedException('No token provided');
     }
 
-    // Check if token is blacklisted
-    if (await this.tokenBlacklistService.isTokenBlacklisted(token)) {
-      throw new UnauthorizedException('Session expired. Please login again.');
-    }
-
     try {
+      // First verify if token is valid
       const payload = await this.jwtService.verifyAsync(token, {
         secret: process.env.JWT_SECRET,
       });
 
-      // Check if current time is exactly between 23:00:00 and 23:00:05
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinutes = now.getMinutes();
-      const currentSeconds = now.getSeconds();
+      // Then check if token is blacklisted
+      const isBlacklisted =
+        await this.tokenBlacklistService.isTokenBlacklisted(token);
+      if (isBlacklisted) {
+        throw new UnauthorizedException('Session expired. Please login again.');
+      }
 
-      // Block access only during the first 5 seconds of 23:00
-      if (currentHour === 23 && currentMinutes === 0 && currentSeconds < 5) {
+      // Check if this is still the active token for this user
+      const activeTokens =
+        await this.tokenBlacklistService.getActiveTokensByUser(
+          payload.sub,
+          payload.role,
+        );
+
+      if (!activeTokens.includes(token)) {
         throw new UnauthorizedException(
-          'Daily token reset at 11 PM. Please wait 5 seconds and try again.',
+          'Session invalidated. Please login again.',
         );
       }
 
-      console.log('Token payload:', payload);
       request['user'] = payload;
       return true;
     } catch (error) {
-      console.error('JWT verification failed:', error.message);
-      throw new UnauthorizedException('Invalid token');
+      console.error('Token validation failed:', error.message);
+      throw new UnauthorizedException(error.message || 'Invalid token');
     }
   }
 

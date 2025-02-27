@@ -26,15 +26,18 @@ export class LoginService {
   ) {}
 
   private async invalidatePreviousTokens(userId: number, role: string) {
-    // Get all active tokens for this user from the blacklist service
-    const activeTokens = await this.tokenBlacklistService.getActiveTokensByUser(
-      userId,
-      role,
-    );
+    try {
+      // Get all active tokens for this user from the blacklist service
+      const activeTokens =
+        await this.tokenBlacklistService.getActiveTokensByUser(userId, role);
 
-    // Blacklist all previous tokens
-    for (const token of activeTokens) {
-      await this.tokenBlacklistService.blacklistToken(token);
+      // Blacklist all previous tokens
+      for (const token of activeTokens) {
+        await this.tokenBlacklistService.blacklistToken(token);
+      }
+    } catch (error) {
+      console.error('Error invalidating previous tokens:', error);
+      // Continue with login process even if token invalidation fails
     }
   }
 
@@ -54,6 +57,9 @@ export class LoginService {
         throw new UnauthorizedException('Invalid credentials');
       }
 
+      // Invalidate previous tokens before issuing new one
+      await this.invalidatePreviousTokens(superAdmin.id, Role.SUPER_ADMIN);
+
       const { password, ...userInfo } = superAdmin;
       const payload = {
         username: superAdmin.username,
@@ -61,10 +67,9 @@ export class LoginService {
         role: Role.SUPER_ADMIN,
       };
 
-      // Invalidate previous tokens before issuing new one
-      await this.invalidatePreviousTokens(superAdmin.id, Role.SUPER_ADMIN);
-
       const newToken = this.jwtService.sign(payload);
+
+      // Track the new token
       await this.tokenBlacklistService.trackUserToken(
         superAdmin.id,
         Role.SUPER_ADMIN,
