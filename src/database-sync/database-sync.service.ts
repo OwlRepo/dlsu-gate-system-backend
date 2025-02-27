@@ -636,9 +636,9 @@ export class DatabaseSyncService {
       throw error;
     } finally {
       // Cleanup
-      // if (csvFilePath && fs.existsSync(csvFilePath)) {
-      //   fs.unlinkSync(csvFilePath);
-      // }
+      if (csvFilePath && fs.existsSync(csvFilePath)) {
+        fs.unlinkSync(csvFilePath);
+      }
       if (pool) {
         await pool.close();
       }
