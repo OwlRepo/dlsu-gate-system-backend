@@ -412,6 +412,19 @@ export class DatabaseSyncService {
       this.jobStartTimes.set(jobName, new Date());
       this.logger.log(`Starting database sync for ${jobName}`);
 
+      // Create log directory for SQL data if it doesn't exist
+      const sqlLogDir = path.join(process.cwd(), 'logs', 'sql-data');
+      if (!fs.existsSync(sqlLogDir)) {
+        fs.mkdirSync(sqlLogDir, { recursive: true });
+      }
+
+      // Create log filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const sqlLogPath = path.join(
+        sqlLogDir,
+        `sql_fetch_${jobName}_${timestamp}.json`,
+      );
+
       // 1. Connect to SQL Server and check isArchived column
       pool = await sql.connect(this.sqlConfig);
       const hasIsArchivedColumn = await this.checkColumnExists(
@@ -425,6 +438,7 @@ export class DatabaseSyncService {
       let totalProcessed = 0;
       const skippedRecords: any[] = [];
       let formattedRecords: any[] = [];
+      const sqlFetchLog: any[] = [];
 
       // Prepare CSV writer once
       const tempDir = path.join(process.cwd(), 'temp');
@@ -475,6 +489,23 @@ export class DatabaseSyncService {
 
         const result = await pool.request().query(query);
         if (result.recordset.length === 0) break;
+
+        // Log the raw data from SQL Server
+        sqlFetchLog.push({
+          batch: Math.floor(offset / batchSize) + 1,
+          timestamp: new Date().toISOString(),
+          recordCount: result.recordset.length,
+          records: result.recordset.map((record) => ({
+            ID_Number: record.ID_Number,
+            Unique_ID: record.Unique_ID,
+            Name: record.Name,
+            Lived_Name: record.Lived_Name,
+            Remarks: record.Remarks,
+            Campus_Entry: record.Campus_Entry,
+            // Don't log photo data to save space
+            hasPhoto: !!record.Photo,
+          })),
+        });
 
         // Process batch
         const batchRecords = await Promise.all(
@@ -543,8 +574,37 @@ export class DatabaseSyncService {
         totalProcessed += result.recordset.length;
         offset += batchSize;
 
+        // Write logs every 5000 records or on the last batch
+        if (
+          sqlFetchLog.length * batchSize >= 5000 ||
+          result.recordset.length < batchSize
+        ) {
+          this.logger.log(`Writing SQL fetch log to ${sqlLogPath}`);
+          fs.writeFileSync(
+            sqlLogPath,
+            JSON.stringify(
+              {
+                jobName,
+                startTime: this.jobStartTimes.get(jobName),
+                totalProcessed,
+                batches: sqlFetchLog,
+              },
+              null,
+              2,
+            ),
+          );
+        }
+
         this.logger.log(`Processed ${totalProcessed} records...`);
       }
+
+      // Log final summary
+      this.logger.log(`SQL Server data fetch completed:
+        Total records processed: ${totalProcessed}
+        Valid records: ${formattedRecords.length}
+        Skipped records: ${skippedRecords.length}
+        Log file: ${sqlLogPath}
+      `);
 
       if (formattedRecords.length === 0) {
         this.logger.log('No records found to sync');
@@ -576,9 +636,9 @@ export class DatabaseSyncService {
       throw error;
     } finally {
       // Cleanup
-      if (csvFilePath && fs.existsSync(csvFilePath)) {
-        fs.unlinkSync(csvFilePath);
-      }
+      // if (csvFilePath && fs.existsSync(csvFilePath)) {
+      //   fs.unlinkSync(csvFilePath);
+      // }
       if (pool) {
         await pool.close();
       }
