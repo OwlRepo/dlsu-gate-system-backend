@@ -162,7 +162,7 @@ docker exec postgres pg_dump -U postgres dlsu_gate_system > backup.sql
 # Updates
 docker-compose pull
 docker-compose up -d
-bun run migration:run
+npm run migration:run  run migration:run
 ```
 
 ## License
