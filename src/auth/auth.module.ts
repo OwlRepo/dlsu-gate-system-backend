@@ -11,6 +11,7 @@ import { TokenBlacklist } from './entities/token-blacklist.entity';
 @Global()
 @Module({
   imports: [
+    ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
