@@ -20,6 +20,26 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Response } from 'express';
 import { CreateReportDto } from './dto/create-report.dto';
 import { BasePaginationDto } from '../common/dto/base-pagination.dto';
+import { IsOptional, IsEnum, IsDateString, MinLength } from 'class-validator';
+
+// Add new DTO by extending BasePaginationDto
+export class EnhancedReportQueryDto extends BasePaginationDto {
+  @IsOptional()
+  @IsEnum(['1', '2'], { message: 'Type must be either "1" or "2"' })
+  type?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
+  @MinLength(3, { message: 'Search term must be at least 3 characters long' })
+  searchTerm?: string;
+}
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -30,9 +50,9 @@ export class ReportsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Get all reports with pagination',
+    summary: 'Get all reports with pagination and filtering',
     description:
-      'Retrieves a paginated list of reports with optional filtering',
+      'Retrieves a paginated list of reports with optional filtering by type, date range, and search term',
   })
   @ApiQuery({
     name: 'page',
@@ -47,173 +67,57 @@ export class ReportsController {
     description: 'Items per page (default: 10)',
   })
   @ApiQuery({
-    name: 'search',
+    name: 'type',
     required: false,
-    type: String,
-    description: 'Search term for name or remarks',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns paginated list of reports',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              datetime: { type: 'string', format: 'date-time' },
-              type: { type: 'string' },
-              user_id: { type: 'string' },
-              name: { type: 'string' },
-              remarks: { type: 'string' },
-              status: { type: 'string' },
-              created_at: { type: 'string', format: 'date-time' },
-            },
-          },
-        },
-        total: { type: 'number', description: 'Total number of records' },
-        page: { type: 'number', description: 'Current page' },
-        limit: { type: 'number', description: 'Items per page' },
-        totalPages: { type: 'number', description: 'Total number of pages' },
-      },
-    },
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Insufficient permissions',
-  })
-  findAll(@Query() query: BasePaginationDto) {
-    return this.reportsService.findAll(query);
-  }
-
-  @Get('search-contains')
-  @ApiOperation({
-    summary: 'Search reports',
-    description:
-      'Search for reports containing the specified search string in name, remarks, or type',
-  })
-  @ApiQuery({
-    name: 'searchString',
-    required: true,
-    type: String,
-    description: 'String to search for in reports',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Reports matching search criteria',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' },
-          datetime: { type: 'string', format: 'date-time' },
-          type: { type: 'string' },
-          user_id: { type: 'string' },
-          name: { type: 'string' },
-          remarks: { type: 'string' },
-          status: { type: 'string' },
-          created_at: { type: 'string', format: 'date-time' },
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 422,
-    description: 'Invalid search string',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 422 },
-        message: {
-          type: 'string',
-          example: 'Search string must be at least 3 characters long',
-        },
-        error: { type: 'string', example: 'Unprocessable Entity' },
-      },
-    },
-  })
-  searchContains(@Query('searchString') searchString: string) {
-    try {
-      if (!searchString || searchString.length < 3) {
-        throw new Error('Search string must be at least 3 characters long');
-      }
-      return this.reportsService.searchContains(searchString);
-    } catch (error) {
-      throw new UnprocessableEntityException(error.message);
-    }
-  }
-
-  @Get('date-range')
-  @ApiOperation({
-    summary: 'Get reports by date range',
-    description:
-      'Retrieves reports within the specified date range with complete data',
+    enum: ['1', '2'],
+    description: 'Filter by report type (1=entry, 2=out)',
   })
   @ApiQuery({
     name: 'startDate',
-    required: true,
+    required: false,
     type: String,
-    description: 'Start date in YYYY-MM-DD format',
+    description: 'Start date (YYYY-MM-DD)',
   })
   @ApiQuery({
     name: 'endDate',
-    required: true,
+    required: false,
     type: String,
-    description: 'End date in YYYY-MM-DD format',
+    description: 'End date (YYYY-MM-DD)',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Reports within date range',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' },
-          datetime: { type: 'string', format: 'date-time' },
-          type: { type: 'string' },
-          user_id: { type: 'string' },
-          name: { type: 'string' },
-          remarks: { type: 'string' },
-          status: { type: 'string' },
-          created_at: { type: 'string', format: 'date-time' },
-        },
-      },
-    },
+  @ApiQuery({
+    name: 'searchTerm',
+    required: false,
+    type: String,
+    description: 'Search in name, remarks (min 3 chars)',
   })
-  @ApiResponse({
-    status: 422,
-    description: 'Invalid date format',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 422 },
-        message: {
-          type: 'string',
-          example: 'Invalid date format. Use YYYY-MM-DD format.',
-        },
-        error: { type: 'string', example: 'Unprocessable Entity' },
-      },
-    },
-  })
-  findByDateRange(
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-  ) {
+  async findAll(@Query() query: EnhancedReportQueryDto) {
     try {
-      // Validate date format
+      // Validate dates if provided
       if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
+        (query.startDate && !query.endDate) ||
+        (!query.startDate && query.endDate)
       ) {
-        throw new Error('Invalid date format. Use YYYY-MM-DD format.');
+        throw new UnprocessableEntityException(
+          'Both startDate and endDate must be provided together',
+        );
       }
-      return this.reportsService.findByDateRange(startDate, endDate);
+
+      if (query.startDate && query.endDate) {
+        const start = new Date(query.startDate);
+        const end = new Date(query.endDate);
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          throw new UnprocessableEntityException(
+            'Invalid date format. Use YYYY-MM-DD',
+          );
+        }
+        if (start > end) {
+          throw new UnprocessableEntityException(
+            'Start date must be before or equal to end date',
+          );
+        }
+      }
+
+      return this.reportsService.findAll(query);
     } catch (error) {
       throw new UnprocessableEntityException(error.message);
     }
@@ -328,221 +232,6 @@ export class ReportsController {
             : 'Failed to generate CSV report',
         error: 'Unprocessable Entity',
       });
-    }
-  }
-
-  @Get('by-type')
-  @ApiOperation({
-    summary: 'Get reports by type',
-    description: 'Retrieves reports filtered by type (0 or 1)',
-  })
-  @ApiQuery({
-    name: 'type',
-    required: true,
-    type: String,
-    enum: ['0', '1'],
-    description: 'Report type to filter by',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Reports retrieved successfully',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          datetime: { type: 'string', format: 'date-time' },
-          type: { type: 'string', enum: ['0', '1'] },
-          user_id: { type: 'string' },
-          name: { type: 'string' },
-          remarks: { type: 'string' },
-          status: { type: 'string' },
-          created_at: { type: 'string', format: 'date-time' },
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 422,
-    description: 'Invalid type provided',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 422 },
-        message: {
-          type: 'string',
-          example: 'Invalid type. Only types "0" and "1" are allowed.',
-        },
-        error: { type: 'string', example: 'Unprocessable Entity' },
-      },
-    },
-  })
-  findByType(@Query('type') type: string) {
-    try {
-      return this.reportsService.findByType(type);
-    } catch (error) {
-      throw new UnprocessableEntityException(error.message);
-    }
-  }
-
-  @Get('type-date-range')
-  @ApiOperation({
-    summary: 'Get reports by type and date range',
-    description:
-      'Retrieves reports filtered by type and date range. Optionally returns data as CSV file.',
-  })
-  @ApiQuery({
-    name: 'type',
-    required: true,
-    type: String,
-    enum: ['0', '1'],
-    description: 'Report type to filter by (0 or 1)',
-  })
-  @ApiQuery({
-    name: 'startDate',
-    required: true,
-    type: String,
-    description: 'Start date in YYYY-MM-DD format',
-    example: '2024-03-01',
-  })
-  @ApiQuery({
-    name: 'endDate',
-    required: true,
-    type: String,
-    description: 'End date in YYYY-MM-DD format',
-    example: '2024-03-31',
-  })
-  @ApiQuery({
-    name: 'format',
-    required: false,
-    type: String,
-    enum: ['json', 'csv'],
-    description:
-      'Optional response format - use "json" for table data or "csv" for downloadable file (default: json)',
-    example: 'json',
-  })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Reports retrieved successfully. Returns JSON data for tables or downloadable CSV file.',
-    schema: {
-      oneOf: [
-        {
-          type: 'object',
-          description: 'JSON response for table rendering (when format=json)',
-          properties: {
-            data: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string', format: 'uuid' },
-                  datetime: { type: 'string', format: 'date-time' },
-                  type: { type: 'string', enum: ['0', '1'] },
-                  user_id: { type: 'string' },
-                  name: { type: 'string' },
-                  remarks: { type: 'string' },
-                  status: { type: 'string' },
-                  created_at: { type: 'string', format: 'date-time' },
-                },
-              },
-            },
-            total: { type: 'number', description: 'Total number of records' },
-            message: { type: 'string' },
-          },
-        },
-        {
-          type: 'string',
-          format: 'binary',
-          description: 'Downloadable CSV file (when format=csv)',
-        },
-      ],
-    },
-  })
-  @ApiResponse({
-    status: 422,
-    description: 'Validation error',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 422 },
-        message: {
-          type: 'string',
-          example: 'Invalid type. Only types "0" and "1" are allowed.',
-        },
-        error: { type: 'string', example: 'Unprocessable Entity' },
-      },
-    },
-  })
-  async findByTypeAndDateRange(
-    @Query('type') type: string,
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-    @Query('format') format = 'json',
-    @Res() res: Response,
-  ) {
-    try {
-      // Validate type parameter
-      if (!type) {
-        throw new Error('Type parameter is required');
-      }
-
-      // Ensure type is a string and matches allowed values
-      const validTypes = ['0', '1'];
-      if (!validTypes.includes(type)) {
-        throw new Error(
-          `Invalid type "${type}". Only types "0" and "1" are allowed.`,
-        );
-      }
-
-      // Validate date parameters
-      if (!startDate || !endDate) {
-        throw new Error('Both startDate and endDate are required');
-      }
-
-      // Validate date format
-      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-      if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-        throw new Error('Invalid date format. Use YYYY-MM-DD format.');
-      }
-
-      // Validate date values
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        throw new Error('Invalid date values provided');
-      }
-
-      if (start > end) {
-        throw new Error('Start date must be before or equal to end date');
-      }
-
-      const reports = await this.reportsService.findByTypeAndDateRange(
-        type,
-        startDate,
-        endDate,
-      );
-
-      if (format === 'csv') {
-        const { filePath, fileName } =
-          await this.reportsService.generateCSVReport(reports);
-        return res.download(filePath, fileName, (err) => {
-          if (err) {
-            console.error('Error downloading file:', err);
-          }
-          this.reportsService.cleanupFile(filePath);
-        });
-      }
-
-      return res.json({
-        data: reports,
-        total: reports.length,
-        message: 'Reports retrieved successfully',
-      });
-    } catch (error) {
-      throw new UnprocessableEntityException(error.message);
     }
   }
 }

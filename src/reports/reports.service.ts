@@ -6,13 +6,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
 import { CreateReportDto } from './dto/create-report.dto';
-import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import { EnhancedReportQueryDto } from './dto/enhanced-report-query.dto';
 
 @Injectable()
 export class ReportsService {
   constructor(
     @InjectRepository(Report)
-    private reportRepository: Repository<Report>,
+    private readonly reportRepository: Repository<Report>,
   ) {}
 
   async create(createReportDto: CreateReportDto) {
@@ -23,29 +23,50 @@ export class ReportsService {
     return await this.reportRepository.save(report);
   }
 
-  async findAll(query: PaginationQueryDto) {
-    const { page = 1, limit = 10, search } = query;
-    const skip = (page - 1) * limit;
+  async findAll(query: EnhancedReportQueryDto) {
+    const {
+      page = 1,
+      limit = 10,
+      type,
+      startDate,
+      endDate,
+      searchTerm,
+    } = query;
 
     const queryBuilder = this.reportRepository.createQueryBuilder('report');
 
-    if (search) {
-      queryBuilder.where(
-        '(report.name LIKE :search OR report.remarks LIKE :search OR report.type LIKE :search OR report.user_id LIKE :search)',
-        { search: `%${search}%` },
+    // Apply type filter
+    if (type) {
+      queryBuilder.andWhere('report.type = :type', { type });
+    }
+
+    // Apply date range filter
+    if (startDate && endDate) {
+      queryBuilder.andWhere('report.datetime BETWEEN :startDate AND :endDate', {
+        startDate: `${startDate} 00:00:00`,
+        endDate: `${endDate} 23:59:59`,
+      });
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      queryBuilder.andWhere(
+        '(LOWER(report.name) LIKE LOWER(:search) OR LOWER(report.remarks) LIKE LOWER(:search))',
+        { search: `%${searchTerm}%` },
       );
     }
 
-    const [items, total] = await queryBuilder
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+    // Add pagination
+    const skip = (page - 1) * limit;
+    queryBuilder.skip(skip).take(limit);
+
+    const [items, total] = await queryBuilder.getManyAndCount();
 
     return {
       items,
       total,
-      page,
-      limit,
+      page: Number(page),
+      limit: Number(limit),
       totalPages: Math.ceil(total / limit),
     };
   }
@@ -69,8 +90,10 @@ export class ReportsService {
   }
 
   async findByType(type: string) {
-    if (type !== '0' && type !== '1') {
-      throw new Error('Invalid type. Only types "0" and "1" are allowed.');
+    if (type !== '1' && type !== '2') {
+      throw new Error(
+        'Invalid type. Only types "1" (entry) and "2" (out) are allowed.',
+      );
     }
     return await this.reportRepository.find({
       where: { type },
