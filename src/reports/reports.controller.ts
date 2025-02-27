@@ -41,6 +41,15 @@ export class EnhancedReportQueryDto extends BasePaginationDto {
   searchTerm?: string;
 }
 
+// Add new DTO for CSV generation
+export class GenerateCSVDto {
+  @IsDateString()
+  startDate: string;
+
+  @IsDateString()
+  endDate: string;
+}
+
 @ApiTags('Reports')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -140,7 +149,19 @@ export class ReportsController {
   @ApiOperation({
     summary: 'Generate CSV report',
     description:
-      'Generates and downloads a CSV report containing all reports data',
+      'Generates and downloads a CSV report containing reports data within specified date range (max 6 months)',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: true,
+    type: String,
+    description: 'Start date (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: true,
+    type: String,
+    description: 'End date (YYYY-MM-DD)',
   })
   @ApiResponse({
     status: 200,
@@ -151,22 +172,49 @@ export class ReportsController {
     },
   })
   @ApiResponse({
-    status: 500,
-    description: 'Error generating CSV',
+    status: 422,
+    description: 'Validation error',
     schema: {
       type: 'object',
       properties: {
-        statusCode: { type: 'number', example: 500 },
-        message: { type: 'string', example: 'Failed to generate CSV report' },
-        error: { type: 'string', example: 'Internal Server Error' },
+        statusCode: { type: 'number', example: 422 },
+        message: {
+          type: 'string',
+          example: 'Date range cannot exceed 6 months',
+        },
+        error: { type: 'string', example: 'Unprocessable Entity' },
       },
     },
   })
-  async generateCSV(@Res() res: Response) {
+  async generateCSV(@Query() query: GenerateCSVDto, @Res() res: Response) {
     let filePath: string | undefined;
 
     try {
-      const result = await this.reportsService.generateCSVReport();
+      const startDate = new Date(query.startDate);
+      const endDate = new Date(query.endDate);
+
+      // Validate dates
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        throw new Error('Invalid date format. Use YYYY-MM-DD');
+      }
+
+      if (startDate > endDate) {
+        throw new Error('Start date must be before or equal to end date');
+      }
+
+      // Calculate date difference in months
+      const monthsDiff =
+        (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+        (endDate.getMonth() - startDate.getMonth());
+
+      if (monthsDiff > 6) {
+        throw new Error('Date range cannot exceed 6 months');
+      }
+
+      const result = await this.reportsService.generateCSVReport(
+        startDate,
+        endDate,
+      );
       filePath = result.filePath;
 
       if (!filePath || !result.fileName) {

@@ -114,11 +114,14 @@ export class ReportsService {
   }
 
   async generateCSVReport(
-    reports?: Report[],
+    startDate: Date,
+    endDate: Date,
   ): Promise<{ filePath: string; fileName: string }> {
-    if (!reports) {
-      reports = await this.reportRepository.find();
-    }
+    const reports = await this.reportRepository.find({
+      where: {
+        datetime: Between(startDate, endDate),
+      },
+    });
 
     const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `reports-${dateStr}.csv`;
