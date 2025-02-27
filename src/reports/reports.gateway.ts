@@ -100,7 +100,7 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
 
     const stats: GateStats = {
       onPremise: 0,
-      entry: 13,
+      entry: 0,
       exit: 0,
       gateAccessStats: {
         allowed: 0,
@@ -124,9 +124,9 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
 
     // Count access types
     const accessCounts = {
-      green: 6,
-      yellow: 4,
-      red: 3,
+      green: 0,
+      yellow: 0,
+      red: 0,
     };
 
     todayReports.forEach((report: Report) => {
