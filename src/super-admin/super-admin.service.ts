@@ -192,6 +192,7 @@ export class SuperAdminService implements OnModuleInit {
           username: defaultSuperAdmin.username,
           role: 'super-admin',
           super_admin_id: this.generateSecureSuperAdminId(),
+          created_at: new Date(),
         });
 
         console.log('Default super admin created:', {
@@ -333,6 +334,8 @@ export class SuperAdminService implements OnModuleInit {
         10,
       );
     }
+
+    updateSuperAdminDto.updated_at = new Date();
 
     await this.superAdminRepository.update(
       { super_admin_id: id },

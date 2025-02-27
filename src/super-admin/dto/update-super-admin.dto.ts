@@ -1,5 +1,11 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsEmail, IsOptional, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  MinLength,
+  IsDateString,
+} from 'class-validator';
 
 export class UpdateSuperAdminDto {
   @ApiPropertyOptional({
@@ -42,4 +48,20 @@ export class UpdateSuperAdminDto {
   @IsString()
   @MinLength(6)
   password?: string;
+
+  @ApiPropertyOptional({
+    description: 'Date of creation of the super admin',
+    example: '2024-01-01T00:00:00Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  created_at?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Date of update of the super admin',
+    example: '2024-01-01T00:00:00Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  updated_at?: Date;
 }

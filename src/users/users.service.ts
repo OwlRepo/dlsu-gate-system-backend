@@ -26,9 +26,13 @@ export class UsersService {
     const allUsers: UserDto[] = [];
 
     // Helper function to build date conditions
-    const getDateCondition = () => {
+    const getDateCondition = (type: string) => {
+      const dateCondition =
+        type === 'admin' || type === 'super-admin'
+          ? 'created_at'
+          : 'date_created';
       if (startDate && endDate) {
-        return 'AND created_at BETWEEN :startDate AND :endDate';
+        return `AND ${dateCondition} BETWEEN :startDate AND :endDate`;
       }
       return '';
     };
@@ -41,8 +45,8 @@ export class UsersService {
         .where(
           search
             ? 'admin.username LIKE :search OR admin.email LIKE :search OR admin.first_name LIKE :search OR admin.last_name LIKE :search ' +
-                getDateCondition()
-            : '1=1 ' + getDateCondition(),
+                getDateCondition('admin')
+            : '1=1 ' + getDateCondition('admin'),
           {
             search: `%${search}%`,
             ...dateParams,
@@ -58,7 +62,6 @@ export class UsersService {
           last_name: admin.last_name,
           userType: 'admin' as const,
           created_at: new Date(admin.created_at),
-          updated_at: new Date(admin.created_at),
         })),
       );
     }
@@ -69,8 +72,8 @@ export class UsersService {
         .where(
           search
             ? 'employee.username LIKE :search OR employee.email LIKE :search OR employee.first_name LIKE :search OR employee.last_name LIKE :search ' +
-                getDateCondition()
-            : '1=1 ' + getDateCondition(),
+                getDateCondition('employee')
+            : '1=1 ' + getDateCondition('employee'),
           {
             search: `%${search}%`,
             ...dateParams,
@@ -86,7 +89,6 @@ export class UsersService {
           last_name: employee.last_name,
           userType: 'employee' as const,
           created_at: new Date(employee.date_created),
-          updated_at: new Date(employee.date_created),
         })),
       );
     }
@@ -97,8 +99,8 @@ export class UsersService {
         .where(
           search
             ? 'superAdmin.username LIKE :search OR superAdmin.email LIKE :search OR superAdmin.first_name LIKE :search OR superAdmin.last_name LIKE :search ' +
-                getDateCondition()
-            : '1=1 ' + getDateCondition(),
+                getDateCondition('super-admin')
+            : '1=1 ' + getDateCondition('super-admin'),
           {
             search: `%${search}%`,
             ...dateParams,
@@ -114,7 +116,6 @@ export class UsersService {
           last_name: superAdmin.last_name,
           userType: 'super-admin' as const,
           created_at: new Date(),
-          updated_at: new Date(),
         })),
       );
     }
@@ -157,7 +158,6 @@ export class UsersService {
       last_name: admin.last_name,
       userType: 'admin' as const,
       created_at: new Date(admin.created_at),
-      updated_at: new Date(admin.created_at),
     }));
 
     return {
@@ -195,7 +195,6 @@ export class UsersService {
       last_name: employee.last_name,
       userType: 'employee' as const,
       created_at: new Date(employee.date_created),
-      updated_at: new Date(employee.date_created),
     }));
 
     return {
@@ -219,7 +218,6 @@ export class UsersService {
       last_name: superAdmin.last_name,
       userType: 'super-admin' as const,
       created_at: new Date(),
-      updated_at: new Date(),
     }));
   }
 }

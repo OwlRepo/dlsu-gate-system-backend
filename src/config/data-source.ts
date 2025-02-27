@@ -4,9 +4,9 @@ import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
 import { Employee } from '../employee/entities/employee.entity';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { Student } from 'src/students/entities/student.entity';
-import { Report } from 'src/reports/entities/report.entity';
-import { UserDto } from 'src/users/dto/user.dto';
+import { Student } from '../students/entities/student.entity';
+import { Report } from '../reports/entities/report.entity';
+import { UserDto } from '../users/dto/user.dto';
 
 dotenv.config();
 

@@ -25,4 +25,10 @@ export class SuperAdmin {
 
   @Column()
   role: string;
+
+  @Column()
+  created_at: Date;
+
+  @Column()
+  updated_at: Date;
 }

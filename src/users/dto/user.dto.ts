@@ -27,10 +27,4 @@ export class UserDto {
     description: 'User creation date',
   })
   created_at: Date;
-
-  @ApiProperty({
-    example: '2024-04-01T12:00:00',
-    description: 'User update date',
-  })
-  updated_at: Date;
 }
