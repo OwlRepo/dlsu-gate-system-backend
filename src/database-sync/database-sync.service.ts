@@ -115,6 +115,17 @@ export class DatabaseSyncService {
     return str.replace(/[^a-zA-Z0-9\s]/g, '');
   }
 
+  private sanitizeUserId(userId: string): string {
+    // Convert hex to decimal if userId is a valid hex number
+    if (/^[0-9A-Fa-f]+$/.test(userId)) {
+      const decimal = parseInt(userId, 16);
+      if (!isNaN(decimal)) {
+        userId = decimal.toString();
+      }
+    }
+    return userId;
+  }
+
   private async initializeSchedules() {
     const defaultSchedules = [
       { scheduleNumber: 1, time: '09:00' },
@@ -617,8 +628,10 @@ export class DatabaseSyncService {
       const formattedRecords = (
         await Promise.all(
           allRecords.map(async (record) => {
-            const userId = this.removeSpecialChars(
-              record.ID_Number?.toString()?.trim() || '',
+            const userId = this.sanitizeUserId(
+              record.Unique_ID !== null && record.Unique_ID !== undefined
+                ? record.Unique_ID?.toString()?.trim()
+                : record.ID_Number?.toString()?.trim() || '',
             );
             const name = this.removeSpecialChars(record.Name?.trim() || '');
             const livedName = record.Lived_Name?.trim() || '';
@@ -665,7 +678,7 @@ export class DatabaseSyncService {
             }
 
             return {
-              user_id: userId,
+              user_id: record.ID_Number,
               name: name,
               department: 'DLSU',
               user_title: 'Student',
