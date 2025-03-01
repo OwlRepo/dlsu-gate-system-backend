@@ -106,6 +106,8 @@ describe('LoginController', () => {
           created_at: new Date(),
           updated_at: new Date(),
           is_active: true,
+          date_activated: new Date(),
+          date_deactivated: null,
         },
       };
 

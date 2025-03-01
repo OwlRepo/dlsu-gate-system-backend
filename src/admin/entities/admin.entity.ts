@@ -31,4 +31,10 @@ export class Admin {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  date_activated: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  date_deactivated: Date;
 }

@@ -1,22 +1,37 @@
 import {
   Controller,
   Get,
+  Post,
   Query,
+  Body,
   UnprocessableEntityException,
   Res,
   Header,
   ValidationPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+  ApiBody,
+} from '@nestjs/swagger';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { UserPaginationDto } from './dto/user-pagination.dto';
 import { Response } from 'express';
 import { Role } from 'src/auth/enums/role.enum';
 import { GenerateCsvDto } from './dto/generate-csv.dto';
+import { BulkDeactivateDto } from './dto/bulk-deactivate.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { BulkDeactivateResponseDto } from './dto/bulk-deactivate-response.dto';
 
 @ApiTags('Users')
 @Controller('users')
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -181,5 +196,39 @@ export class UsersController {
       query.endDate,
       res,
     );
+  }
+
+  @Post('bulk-deactivate')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiOperation({
+    summary: 'Bulk deactivate users',
+    description:
+      'Deactivates multiple users of a specific type in bulk. Returns detailed information about the operation.',
+  })
+  @ApiBody({
+    type: BulkDeactivateDto,
+    description: 'User IDs and type to deactivate',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Users deactivation operation completed',
+    type: BulkDeactivateResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid input or operation failed',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires Super Admin privileges',
+  })
+  async bulkDeactivateUsers(
+    @Body() bulkDeactivateDto: BulkDeactivateDto,
+  ): Promise<BulkDeactivateResponseDto> {
+    return this.usersService.bulkDeactivateUsers(bulkDeactivateDto);
   }
 }

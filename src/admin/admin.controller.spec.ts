@@ -63,19 +63,6 @@ describe('AdminController', () => {
     });
   });
 
-  describe('remove', () => {
-    it('should remove an admin', async () => {
-      const expected = { id: 1, username: 'admin1', password: 'pass1' };
-
-      mockAdminService.remove.mockResolvedValue(expected);
-
-      const result = await controller.remove('ADM-123456789012');
-
-      expect(result).toEqual(expected);
-      expect(mockAdminService.remove).toHaveBeenCalledWith('ADM-123456789012');
-    });
-  });
-
   describe('updateByUsername', () => {
     it('should update an admin by username', async () => {
       const updateAdminDto = {

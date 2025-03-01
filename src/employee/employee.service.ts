@@ -397,44 +397,4 @@ export class EmployeeService implements OnModuleInit {
       };
     }
   }
-
-  async remove(employee_id: string) {
-    try {
-      const result = await this.employeeRepository.delete(employee_id);
-      if (result.affected === 0) {
-        return {
-          success: false,
-          message: 'Employee not found',
-        };
-      }
-      return {
-        success: true,
-        message: 'Employee deleted successfully',
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
-  }
-
-  async deactivateEmployee(employee_id: string) {
-    return this.updateDisable(employee_id);
-  }
-
-  async bulkDeactivateEmployees(employee_ids: string[]) {
-    const deactivatedEmployees = await Promise.all(
-      employee_ids.map((id) => this.deactivateEmployee(id)),
-    );
-
-    return {
-      success: true,
-      message: 'Employees deactivated successfully',
-      data: {
-        deactivated_count: deactivatedEmployees.length,
-        deactivated_employees: deactivatedEmployees,
-      },
-    };
-  }
 }

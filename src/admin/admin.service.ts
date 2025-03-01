@@ -112,15 +112,6 @@ export class AdminService {
     return this.adminRepository.save(admin);
   }
 
-  async remove(admin_id: string) {
-    const admin = await this.findByAdminId(admin_id);
-    await this.adminRepository.remove(admin);
-    return {
-      success: true,
-      message: 'Admin deleted successfully',
-    };
-  }
-
   async updateByUsername(username: string, updateAdminDto: UpdateAdminDto) {
     const admin = await this.adminRepository.findOne({ where: { username } });
     if (!admin) {

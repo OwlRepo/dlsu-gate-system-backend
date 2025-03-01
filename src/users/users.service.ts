@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Employee } from '../employee/entities/employee.entity';
@@ -9,6 +9,9 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { UserPaginationDto } from './dto/user-pagination.dto';
 import { Role } from 'src/auth/enums/role.enum';
 import { Response } from 'express';
+import { BulkDeactivateDto } from './dto/bulk-deactivate.dto';
+import { BulkDeactivateResponseDto } from './dto/bulk-deactivate-response.dto';
+import { In } from 'typeorm';
 
 @Injectable()
 export class UsersService {
@@ -446,5 +449,285 @@ export class UsersService {
     }
 
     res.end();
+  }
+
+  async bulkDeactivateUsers(
+    bulkDeactivateDto: BulkDeactivateDto,
+  ): Promise<BulkDeactivateResponseDto> {
+    const { userIds, userType } = bulkDeactivateDto;
+    const now = new Date();
+    const response: BulkDeactivateResponseDto = {
+      status: 'success',
+      userType,
+      totalProcessed: userIds.length,
+      timestamp: now.toISOString(),
+      successful: {
+        count: 0,
+        userIds: [],
+        details: [],
+      },
+      alreadyInactive: {
+        count: 0,
+        userIds: [],
+        details: [],
+      },
+      notFound: {
+        count: 0,
+        userIds: [],
+        details: [],
+      },
+      message: '',
+      display: {
+        title: 'Bulk Deactivation Complete',
+        success: '',
+        warnings: [],
+        actionRequired: false,
+      },
+    };
+
+    try {
+      switch (userType) {
+        case Role.EMPLOYEE:
+          // First, get current status of all users with their details
+          const employees = await this.employeeRepository.find({
+            where: { employee_id: In(userIds) },
+            select: [
+              'employee_id',
+              'is_active',
+              'username',
+              'email',
+              'first_name',
+              'last_name',
+            ],
+          });
+
+          // Track not found users
+          response.notFound.userIds = userIds.filter(
+            (id) => !employees.some((emp) => emp.employee_id === id),
+          );
+          response.notFound.count = response.notFound.userIds.length;
+
+          // Track already inactive users
+          const inactiveEmployees = employees.filter((emp) => !emp.is_active);
+          response.alreadyInactive.userIds = inactiveEmployees.map(
+            (emp) => emp.employee_id,
+          );
+          response.alreadyInactive.count = inactiveEmployees.length;
+          response.alreadyInactive.details = inactiveEmployees.map((emp) => ({
+            id: emp.employee_id,
+            username: emp.username,
+            email: emp.email,
+            name: `${emp.first_name} ${emp.last_name}`,
+          }));
+
+          // Get active users to deactivate
+          const activeEmployees = employees.filter((emp) => emp.is_active);
+          const activeEmployeeIds = activeEmployees.map(
+            (emp) => emp.employee_id,
+          );
+
+          if (activeEmployeeIds.length > 0) {
+            const result = await this.employeeRepository
+              .createQueryBuilder()
+              .update(Employee)
+              .set({
+                is_active: false,
+                date_deactivated: now.toISOString(),
+              })
+              .where('employee_id IN (:...ids)', { ids: activeEmployeeIds })
+              .execute();
+
+            response.successful.count = result.affected || 0;
+            response.successful.userIds = activeEmployeeIds;
+            response.successful.details = activeEmployees.map((emp) => ({
+              id: emp.employee_id,
+              username: emp.username,
+              email: emp.email,
+              name: `${emp.first_name} ${emp.last_name}`,
+            }));
+          }
+          break;
+
+        case Role.ADMIN:
+          // First, get current status of all users with their details
+          const admins = await this.adminRepository.find({
+            where: { admin_id: In(userIds) },
+            select: [
+              'admin_id',
+              'is_active',
+              'username',
+              'email',
+              'first_name',
+              'last_name',
+            ],
+          });
+
+          // Track not found users
+          response.notFound.userIds = userIds.filter(
+            (id) => !admins.some((admin) => admin.admin_id === id),
+          );
+          response.notFound.count = response.notFound.userIds.length;
+
+          // Track already inactive users
+          const inactiveAdmins = admins.filter((admin) => !admin.is_active);
+          response.alreadyInactive.userIds = inactiveAdmins.map(
+            (admin) => admin.admin_id,
+          );
+          response.alreadyInactive.count = inactiveAdmins.length;
+          response.alreadyInactive.details = inactiveAdmins.map((admin) => ({
+            id: admin.admin_id,
+            username: admin.username,
+            email: admin.email,
+            name: `${admin.first_name} ${admin.last_name}`,
+          }));
+
+          // Get active users to deactivate
+          const activeAdmins = admins.filter((admin) => admin.is_active);
+          const activeAdminIds = activeAdmins.map((admin) => admin.admin_id);
+
+          if (activeAdminIds.length > 0) {
+            const result = await this.adminRepository
+              .createQueryBuilder()
+              .update(Admin)
+              .set({
+                is_active: false,
+                date_deactivated: now.toISOString(),
+              })
+              .where('admin_id IN (:...ids)', { ids: activeAdminIds })
+              .execute();
+
+            response.successful.count = result.affected || 0;
+            response.successful.userIds = activeAdminIds;
+            response.successful.details = activeAdmins.map((admin) => ({
+              id: admin.admin_id,
+              username: admin.username,
+              email: admin.email,
+              name: `${admin.first_name} ${admin.last_name}`,
+            }));
+          }
+          break;
+
+        case Role.SUPER_ADMIN:
+          // First, get current status of all users with their details
+          const superAdmins = await this.superAdminRepository.find({
+            where: { super_admin_id: In(userIds) },
+            select: [
+              'super_admin_id',
+              'is_active',
+              'username',
+              'email',
+              'first_name',
+              'last_name',
+            ],
+          });
+
+          // Track not found users
+          response.notFound.userIds = userIds.filter(
+            (id) => !superAdmins.some((admin) => admin.super_admin_id === id),
+          );
+          response.notFound.count = response.notFound.userIds.length;
+
+          // Track already inactive users
+          const inactiveSuperAdmins = superAdmins.filter(
+            (admin) => !admin.is_active,
+          );
+          response.alreadyInactive.userIds = inactiveSuperAdmins.map(
+            (admin) => admin.super_admin_id,
+          );
+          response.alreadyInactive.count = inactiveSuperAdmins.length;
+          response.alreadyInactive.details = inactiveSuperAdmins.map(
+            (admin) => ({
+              id: admin.super_admin_id,
+              username: admin.username,
+              email: admin.email,
+              name: `${admin.first_name} ${admin.last_name}`,
+            }),
+          );
+
+          // Get active users to deactivate
+          const activeSuperAdmins = superAdmins.filter(
+            (admin) => admin.is_active,
+          );
+          const activeSuperAdminIds = activeSuperAdmins.map(
+            (admin) => admin.super_admin_id,
+          );
+
+          if (activeSuperAdminIds.length > 0) {
+            const result = await this.superAdminRepository
+              .createQueryBuilder()
+              .update(SuperAdmin)
+              .set({
+                is_active: false,
+                date_deactivated: now.toISOString(),
+              })
+              .where('super_admin_id IN (:...ids)', {
+                ids: activeSuperAdminIds,
+              })
+              .execute();
+
+            response.successful.count = result.affected || 0;
+            response.successful.userIds = activeSuperAdminIds;
+            response.successful.details = activeSuperAdmins.map((admin) => ({
+              id: admin.super_admin_id,
+              username: admin.username,
+              email: admin.email,
+              name: `${admin.first_name} ${admin.last_name}`,
+            }));
+          }
+          break;
+
+        default:
+          throw new BadRequestException('Invalid user type');
+      }
+
+      // Generate human-readable message and display information
+      const messages: string[] = [];
+      if (response.successful.count > 0) {
+        messages.push(
+          `Successfully deactivated ${response.successful.count} user${
+            response.successful.count !== 1 ? 's' : ''
+          }`,
+        );
+        response.display.success = messages[0];
+      }
+
+      if (response.alreadyInactive.count > 0) {
+        const msg = `${response.alreadyInactive.count} user${
+          response.alreadyInactive.count !== 1 ? 's were' : ' was'
+        } already inactive`;
+        messages.push(msg);
+        response.display.warnings.push(msg);
+      }
+
+      if (response.notFound.count > 0) {
+        const msg = `${response.notFound.count} user${
+          response.notFound.count !== 1 ? 's were' : ' was'
+        } not found`;
+        messages.push(msg);
+        response.display.warnings.push(msg);
+      }
+
+      response.message = messages.join('. ');
+
+      // Set overall status
+      if (response.successful.count === 0) {
+        response.status = 'failed';
+        response.display.title = 'Bulk Deactivation Failed';
+        response.display.actionRequired = true;
+      } else if (
+        response.alreadyInactive.count > 0 ||
+        response.notFound.count > 0
+      ) {
+        response.status = 'partial_success';
+        response.display.title = 'Bulk Deactivation Partially Complete';
+        response.display.actionRequired = response.notFound.count > 0; // Only require action if users were not found
+      }
+
+      return response;
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to deactivate users: ${error.message}`,
+      );
+    }
   }
 }

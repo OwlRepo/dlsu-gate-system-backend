@@ -126,29 +126,4 @@ describe('AdminService', () => {
       );
     });
   });
-
-  describe('remove', () => {
-    it('should remove an admin', async () => {
-      const admin = { id: 1, username: 'admin1', password: 'pass1' };
-
-      mockRepository.findOne.mockResolvedValue(admin);
-      mockRepository.remove.mockResolvedValue(admin);
-
-      const result = await service.remove('ADM-123456789012');
-
-      expect(result).toEqual({
-        success: true,
-        message: 'Admin deleted successfully',
-      });
-      expect(mockRepository.remove).toHaveBeenCalledWith(admin);
-    });
-
-    it('should throw NotFoundException when admin to remove is not found', async () => {
-      mockRepository.findOne.mockResolvedValue(null);
-
-      await expect(service.remove('ADM-123456789012')).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-  });
 });

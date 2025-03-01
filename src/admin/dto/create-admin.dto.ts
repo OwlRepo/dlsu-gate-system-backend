@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAdminDto {
@@ -51,4 +51,20 @@ export class CreateAdminDto {
     default: 'Admin',
   })
   last_name?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  is_active?: boolean;
+
+  @IsOptional()
+  @IsString()
+  date_activated?: string;
+
+  @IsOptional()
+  @IsString()
+  date_deactivated?: string;
+
+  @IsOptional()
+  @IsString()
+  created_at?: string;
 }

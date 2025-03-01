@@ -4,8 +4,8 @@ import {
   Body,
   Patch,
   Param,
-  Delete,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UpdateAdminDto } from './dto/update-admin.dto';
@@ -153,7 +153,13 @@ export class AdminController {
   @ApiOperation({
     summary: 'Update an admin',
     description:
-      'Update specific fields of an admin. All fields are optional and only provided fields will be updated.',
+      'Update specific fields of an admin. Only provided fields will be updated, others remain unchanged.\n\n' +
+      'Updatable fields:\n' +
+      '- first_name (string): First name of the admin\n' +
+      '- last_name (string): Last name of the admin\n' +
+      '- email (string): Email address of the admin\n' +
+      '- password (string): Password for the admin account\n\n' +
+      'Note: To change admin active status, please use the /users/bulk-deactivate endpoint instead.',
   })
   @ApiBody({
     type: UpdateAdminDto,
@@ -210,55 +216,26 @@ export class AdminController {
     @Param('id') id: string,
     @Body() updateAdminDto: UpdateAdminDto,
   ) {
+    if ('is_active' in updateAdminDto) {
+      delete updateAdminDto.is_active;
+      throw new ForbiddenException(
+        'To deactivate users, please use the /users/bulk-deactivate endpoint instead',
+      );
+    }
     return this.adminService.update(id, updateAdminDto);
-  }
-
-  @Delete(':admin_id')
-  @ApiOperation({
-    summary: 'Delete admin by admin_id',
-    description: 'Removes an admin user from the system using their admin_id',
-  })
-  @ApiParam({
-    name: 'admin_id',
-    required: true,
-    description: 'The unique identifier of the admin to delete',
-    example: '123e4567-e89b-12d3-a456-426614174000',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Admin deleted successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Admin deleted successfully' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Admin not found',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 404 },
-        message: { type: 'string', example: 'Admin not found' },
-        error: { type: 'string', example: 'Not Found' },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing authentication token',
-  })
-  remove(@Param('admin_id') admin_id: string) {
-    return this.adminService.remove(admin_id);
   }
 
   @Patch('username/:username')
   @ApiOperation({
     summary: 'Update admin by username',
-    description: "Updates an admin user's information using their username",
+    description:
+      'Update specific fields of an admin using their username. Only provided fields will be updated, others remain unchanged.\n\n' +
+      'Updatable fields:\n' +
+      '- first_name (string): First name of the admin\n' +
+      '- last_name (string): Last name of the admin\n' +
+      '- email (string): Email address of the admin\n' +
+      '- password (string): Password for the admin account\n\n' +
+      'Note: To change admin active status, please use the /users/bulk-deactivate endpoint instead.',
   })
   @ApiParam({
     name: 'username',

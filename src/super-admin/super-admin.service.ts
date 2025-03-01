@@ -193,6 +193,9 @@ export class SuperAdminService implements OnModuleInit {
           role: 'super-admin',
           super_admin_id: this.generateSecureSuperAdminId(),
           created_at: new Date(),
+          is_active: true,
+          date_activated: new Date(),
+          date_deactivated: null,
         });
 
         console.log('Default super admin created:', {
@@ -267,6 +270,9 @@ export class SuperAdminService implements OnModuleInit {
       password: hashedPassword,
       role: 'admin',
       is_active: true,
+      date_activated: new Date(),
+      date_deactivated: null,
+      created_at: new Date(),
     });
 
     const savedAdmin = await this.adminRepository.save(admin);
@@ -306,6 +312,9 @@ export class SuperAdminService implements OnModuleInit {
       last_name: createSuperAdminDto.last_name,
       role: 'super-admin',
       super_admin_id: this.generateSecureSuperAdminId(),
+      is_active: true,
+      date_activated: new Date(),
+      date_deactivated: null,
     });
     const savedSuperAdmin = await this.superAdminRepository.save(superAdmin);
     savedSuperAdmin.password = undefined;

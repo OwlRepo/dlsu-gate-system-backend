@@ -86,7 +86,13 @@ export class SuperAdminController {
   @ApiOperation({
     summary: 'Update a super admin',
     description:
-      'Update specific fields of a super admin. All fields are optional and only provided fields will be updated.',
+      'Update specific fields of a super admin. Only provided fields will be updated, others remain unchanged.\n\n' +
+      'Updatable fields:\n' +
+      '- first_name (string): First name of the super admin\n' +
+      '- last_name (string): Last name of the super admin\n' +
+      '- email (string): Email address of the super admin\n' +
+      '- password (string): Password for the super admin account\n\n' +
+      'Note: To change super admin active status, please use the /users/bulk-deactivate endpoint instead.',
   })
   @ApiBody({
     type: UpdateSuperAdminDto,
@@ -141,6 +147,12 @@ export class SuperAdminController {
     @Param('id') id: string,
     @Body() updateSuperAdminDto: UpdateSuperAdminDto,
   ) {
+    if ('is_active' in updateSuperAdminDto) {
+      delete updateSuperAdminDto.is_active;
+      throw new ForbiddenException(
+        'To deactivate users, please use the /users/bulk-deactivate endpoint instead',
+      );
+    }
     return this.superAdminService.update(id, updateSuperAdminDto);
   }
 
