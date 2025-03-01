@@ -3,11 +3,17 @@ import {
   Get,
   Query,
   UnprocessableEntityException,
+  Res,
+  Header,
+  ValidationPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { UserPaginationDto } from './dto/user-pagination.dto';
+import { Response } from 'express';
+import { Role } from 'src/auth/enums/role.enum';
+import { GenerateCsvDto } from './dto/generate-csv.dto';
 
 @ApiTags('Users')
 @Controller('users')
@@ -124,5 +130,56 @@ export class UsersController {
     }
 
     return this.usersService.getAllUsers(query);
+  }
+
+  @Get('generate-csv')
+  @Header('Content-Type', 'text/csv')
+  @ApiOperation({
+    summary: 'Generate CSV file of users',
+    description:
+      'Generates and downloads a CSV file containing user data based on types and date range',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns a CSV file containing user data',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid date range or types',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT token is missing or invalid',
+  })
+  async generateUsersCsv(
+    @Query(new ValidationPipe({ transform: true })) query: GenerateCsvDto,
+    @Res() res: Response,
+  ) {
+    // Validate date range (6 months maximum)
+    const start = new Date(query.startDate);
+    const end = new Date(query.endDate);
+    const sixMonthsInMs = 6 * 30 * 24 * 60 * 60 * 1000;
+
+    if (end.getTime() - start.getTime() > sixMonthsInMs) {
+      throw new UnprocessableEntityException(
+        'Date range cannot exceed 6 months',
+      );
+    }
+
+    if (start > end) {
+      throw new UnprocessableEntityException(
+        'Start date must be before or equal to end date',
+      );
+    }
+
+    const filename = `users-${query.types.join('-')}-${query.startDate}-${query.endDate}.csv`;
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+
+    return this.usersService.streamUsersCsv(
+      query.types as Role[],
+      query.startDate,
+      query.endDate,
+      res,
+    );
   }
 }
