@@ -4,34 +4,23 @@ export class AddTimestampsToSuperAdmin1709082000000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add columns with nullable constraint first
+    // Create table if it doesn't exist with all required columns
     await queryRunner.query(`
-      ALTER TABLE "super-admin"
-      ADD COLUMN "created_at" TIMESTAMP,
-      ADD COLUMN "updated_at" TIMESTAMP
-    `);
-
-    // Update existing records with current timestamp
-    await queryRunner.query(`
-      UPDATE "super-admin"
-      SET created_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE created_at IS NULL
-         OR updated_at IS NULL
-    `);
-
-    // Now make the columns non-nullable
-    await queryRunner.query(`
-      ALTER TABLE "super-admin"
-      ALTER COLUMN "created_at" SET NOT NULL,
-      ALTER COLUMN "updated_at" SET NOT NULL
-    `);
-
-    // Set default values for future records
-    await queryRunner.query(`
-      ALTER TABLE "super-admin"
-      ALTER COLUMN "created_at" SET DEFAULT CURRENT_TIMESTAMP,
-      ALTER COLUMN "updated_at" SET DEFAULT CURRENT_TIMESTAMP
+      CREATE TABLE IF NOT EXISTS "super-admin" (
+        "id" SERIAL PRIMARY KEY,
+        "super_admin_id" VARCHAR UNIQUE,
+        "username" VARCHAR UNIQUE,
+        "email" VARCHAR UNIQUE,
+        "password" VARCHAR,
+        "first_name" VARCHAR DEFAULT 'Unknown',
+        "last_name" VARCHAR DEFAULT 'User',
+        "role" VARCHAR,
+        "is_active" BOOLEAN DEFAULT true,
+        "date_activated" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "date_deactivated" TIMESTAMP,
+        "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
     // Create trigger to automatically update updated_at
@@ -63,11 +52,9 @@ export class AddTimestampsToSuperAdmin1709082000000
       DROP FUNCTION IF EXISTS update_super_admin_updated_at();
     `);
 
-    // Remove columns
+    // Drop the table
     await queryRunner.query(`
-      ALTER TABLE "super-admin"
-      DROP COLUMN "updated_at",
-      DROP COLUMN "created_at"
+      DROP TABLE IF EXISTS "super-admin"
     `);
   }
 }
