@@ -26,8 +26,8 @@ import { Role } from '../auth/enums/role.enum';
 
 @ApiTags('Employees')
 @ApiBearerAuth()
-@Controller('employee')
 @UseGuards(JwtAuthGuard)
+@Controller('employee')
 export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 

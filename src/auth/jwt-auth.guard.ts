@@ -49,20 +49,29 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         throw new UnauthorizedException('Session expired. Please login again.');
       }
 
-      // Check if this is still the active token for this user
+      // Ensure role is present
+      const userRole = payload.role || 'EMPLOYEE';
+
+      // Get active tokens for the user
       const activeTokens =
         await this.tokenBlacklistService.getActiveTokensByUser(
           payload.sub,
-          payload.role,
+          userRole,
         );
 
+      // Track the current token if it's not already tracked
       if (!activeTokens.includes(token)) {
-        throw new UnauthorizedException(
-          'Session invalidated. Please login again.',
+        await this.tokenBlacklistService.trackUserToken(
+          payload.sub,
+          userRole,
+          token,
         );
       }
 
-      request['user'] = payload;
+      request['user'] = {
+        ...payload,
+        role: userRole,
+      };
       return true;
     } catch (error) {
       console.error('Token validation failed:', error.message);
