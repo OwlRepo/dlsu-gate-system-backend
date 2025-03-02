@@ -243,10 +243,9 @@ export class EmployeeService implements OnModuleInit {
 
   async findByDeviceId(device_id: string) {
     try {
-      // Use TypeORM's built-in JSON containment operator for better performance
       const employees = await this.employeeRepository
         .createQueryBuilder('employee')
-        .where(`device_id @> :deviceId::jsonb`, {
+        .where(`device_id::jsonb @> :deviceId::jsonb`, {
           deviceId: JSON.stringify([device_id]),
         })
         .getMany();
