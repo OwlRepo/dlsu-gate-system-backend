@@ -14,7 +14,7 @@ import { StudentPaginationDto } from './dto/student-pagination.dto';
 import { GenerateStudentCsvDto } from './dto/generate-csv.dto';
 import { Response } from 'express';
 import { ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Students')
 @Controller('students')

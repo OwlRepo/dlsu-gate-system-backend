@@ -24,14 +24,14 @@ import { Response } from 'express';
 import { Role } from 'src/auth/enums/role.enum';
 import { GenerateCsvDto } from './dto/generate-csv.dto';
 import { BulkDeactivateDto } from './dto/bulk-deactivate.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { BulkDeactivateResponseDto } from './dto/bulk-deactivate-response.dto';
 
 @ApiTags('Users')
-@Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('users')
 @ApiBearerAuth()
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

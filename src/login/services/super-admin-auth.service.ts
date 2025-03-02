@@ -9,12 +9,14 @@ import { SuperAdminService } from '../../super-admin/super-admin.service';
 import { SuperAdminLoginDto } from '../../super-admin/dto/super-admin.dto';
 import * as bcrypt from 'bcryptjs';
 import { SuperAdmin } from '../../super-admin/entities/super-admin.entity';
+import { TokenBlacklistService } from '../../auth/token-blacklist.service';
 
 @Injectable()
 export class SuperAdminAuthService {
   constructor(
     private superAdminService: SuperAdminService,
     private jwtService: JwtService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   async login(loginDto: SuperAdminLoginDto) {
@@ -35,6 +37,9 @@ export class SuperAdminAuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Invalidate previous tokens before issuing new one
+    await this.invalidatePreviousTokens(parseInt(superAdmin.super_admin_id));
+
     const { password, ...userInfo } = superAdmin;
     const payload = {
       sub: superAdmin.super_admin_id,
@@ -42,11 +47,39 @@ export class SuperAdminAuthService {
       role: 'super-admin',
     };
 
+    const newToken = this.jwtService.sign(payload);
+
+    // Track the new token
+    await this.tokenBlacklistService.trackUserToken(
+      parseInt(superAdmin.super_admin_id),
+      'super-admin',
+      newToken,
+    );
+
     return {
       message: 'Admin authentication successful',
-      access_token: 'Bearer ' + this.jwtService.sign(payload),
+      access_token: 'Bearer ' + newToken,
       user: userInfo,
     };
+  }
+
+  private async invalidatePreviousTokens(userId: number) {
+    try {
+      // Get all active tokens for this user from the blacklist service
+      const activeTokens =
+        await this.tokenBlacklistService.getActiveTokensByUser(
+          userId,
+          'super-admin',
+        );
+
+      // Blacklist all previous tokens
+      for (const token of activeTokens) {
+        await this.tokenBlacklistService.blacklistToken(token);
+      }
+    } catch (error) {
+      console.error('Error invalidating previous tokens:', error);
+      // Continue with login process even if token invalidation fails
+    }
   }
 
   async getSuperAdminInfo(super_admin_id: string): Promise<SuperAdmin> {
