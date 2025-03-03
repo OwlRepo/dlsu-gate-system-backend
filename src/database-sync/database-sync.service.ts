@@ -18,9 +18,11 @@ import * as FormData from 'form-data';
 import { In } from 'typeorm';
 import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
 import * as Table from 'cli-table3';
 
 dayjs.extend(utc);
+dayjs.extend(timezone);
 
 @Injectable()
 export class DatabaseSyncService {
@@ -164,9 +166,15 @@ export class DatabaseSyncService {
   }
 
   private addCronJob(name: string, cronExpression: string) {
-    const job = new CronJob(cronExpression, () => {
-      this.executeDatabaseSync(name);
-    });
+    const job = new CronJob(
+      cronExpression,
+      () => {
+        this.executeDatabaseSync(name);
+      },
+      null,
+      true,
+      'Asia/Manila', // Set timezone to Philippine Time
+    );
 
     this.schedulerRegistry.addCronJob(name, job);
     job.start();
@@ -174,7 +182,9 @@ export class DatabaseSyncService {
 
   private convertMilitaryTimeToCron(time: string): string {
     const [hours, minutes] = time.split(':');
-    return `${minutes} ${hours} * * *`;
+    // Convert to UTC time (Philippine Time is UTC+8)
+    const utcHours = (parseInt(hours) - 8 + 24) % 24; // Add 24 before modulo to handle negative hours
+    return `${minutes} ${utcHours} * * *`;
   }
 
   async updateSchedule(scheduleNumber: number, time: string) {
@@ -212,6 +222,7 @@ export class DatabaseSyncService {
       message: 'Schedule updated successfully',
       scheduleNumber,
       time,
+      timezone: 'Asia/Manila',
     };
   }
 
@@ -225,8 +236,13 @@ export class DatabaseSyncService {
         scheduleNumber: schedule.scheduleNumber,
         time: schedule.time,
         isActive: job?.running ?? false,
-        lastSyncTime: schedule.lastSyncTime || null,
-        nextRun: job?.nextDate().toJSDate() || null,
+        lastSyncTime: schedule.lastSyncTime
+          ? dayjs(schedule.lastSyncTime).tz('Asia/Manila').toDate()
+          : null,
+        nextRun: job?.nextDate()?.toJSDate()
+          ? dayjs(job.nextDate().toJSDate()).tz('Asia/Manila').toDate()
+          : null,
+        timezone: 'Asia/Manila',
       };
     });
   }
