@@ -52,7 +52,7 @@ services:
           cpus: '1.00'
           memory: 1024M
     volumes:
-      - screensaver_uploads:/app/persistent_uploads
+      - persistent_uploads:/app/persistent_uploads
     restart: always
 
   dlsu-gate-system-api-2:

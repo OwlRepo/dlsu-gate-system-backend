@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { promises as fs } from 'fs';
+import { promises as fs, accessSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { JwtService } from '@nestjs/jwt';
 
@@ -17,6 +17,22 @@ export class ScreensaverService {
     private jwtService: JwtService,
   ) {
     this.initializeUploadDirectory();
+  }
+
+  private isRunningInDocker(): boolean {
+    try {
+      // Check if .dockerenv file exists
+      accessSync('/.dockerenv');
+      return true;
+    } catch {
+      // Check if cgroup contains docker
+      try {
+        const cgroupContent = readFileSync('/proc/1/cgroup', 'utf8');
+        return cgroupContent.includes('docker');
+      } catch {
+        return false;
+      }
+    }
   }
 
   private async initializeUploadDirectory() {
@@ -109,9 +125,10 @@ export class ScreensaverService {
 
   async getScreensaverInfo() {
     try {
-      // Add retries for file reading
+      // Add retries for file reading with exponential backoff
       let retryCount = 0;
       const maxRetries = 10;
+      const baseDelay = 1000; // 1 second
 
       while (retryCount < maxRetries) {
         try {
@@ -122,17 +139,17 @@ export class ScreensaverService {
 
           if (screensaverFile) {
             const stats = await fs.stat(join(this.uploadDir, screensaverFile));
-            const isDev = process.env.NODE_ENV === 'development';
-            const isRailway = process.env.RAILWAY_STATIC_URL || false;
 
-            let baseUrl;
-            if (isDev) {
-              baseUrl = 'http://localhost';
-            } else if (isRailway) {
-              baseUrl = 'https://dlsu-portal-be-production.up.railway.app';
-            } else {
-              baseUrl = this.configService.get<string>('BASE_URL');
+            // Verify file is readable and has content
+            if (stats.size === 0) {
+              throw new Error('File is empty');
             }
+
+            const baseUrl =
+              this.configService.get<string>('BASE_URL') +
+              (this.isRunningInDocker()
+                ? ':9580'
+                : `:${this.configService.get<number>('PORT')}`);
 
             return {
               status: 'success',
@@ -149,15 +166,25 @@ export class ScreensaverService {
 
           retryCount++;
           if (retryCount < maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1s between retries
+            // Exponential backoff with jitter
+            const delay =
+              baseDelay * Math.pow(2, retryCount - 1) + Math.random() * 1000;
+            await new Promise((resolve) => setTimeout(resolve, delay));
           }
         } catch (error) {
+          console.error(`Attempt ${retryCount + 1} failed:`, error);
           retryCount++;
           if (retryCount === maxRetries) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          // Exponential backoff with jitter for errors
+          const delay =
+            baseDelay * Math.pow(2, retryCount - 1) + Math.random() * 1000;
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
 
+      // If we get here, we've exhausted all retries
+      console.error('Failed to find screensaver after all retries');
       return {
         status: 'empty',
         message: 'No screensaver image has been uploaded yet',
