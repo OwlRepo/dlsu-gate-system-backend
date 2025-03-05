@@ -28,6 +28,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { BulkDeactivateResponseDto } from './dto/bulk-deactivate-response.dto';
+import { BulkReactivateDto } from './dto/bulk-reactivate.dto';
+import { BulkReactivateResponseDto } from './dto/bulk-reactivate-response.dto';
 
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -230,5 +232,39 @@ export class UsersController {
     @Body() bulkDeactivateDto: BulkDeactivateDto,
   ): Promise<BulkDeactivateResponseDto> {
     return this.usersService.bulkDeactivateUsers(bulkDeactivateDto);
+  }
+
+  @Post('bulk-reactivate')
+  @Roles(Role.SUPER_ADMIN, Role.ADMIN)
+  @ApiOperation({
+    summary: 'Bulk reactivate users',
+    description:
+      'Reactivates multiple users of a specific type in bulk. Returns detailed information about the operation.',
+  })
+  @ApiBody({
+    type: BulkReactivateDto,
+    description: 'User IDs and type to reactivate',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Users reactivation operation completed',
+    type: BulkReactivateResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid input or operation failed',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Requires Super Admin privileges',
+  })
+  async bulkReactivateUsers(
+    @Body() bulkReactivateDto: BulkReactivateDto,
+  ): Promise<BulkReactivateResponseDto> {
+    return this.usersService.bulkReactivateUsers(bulkReactivateDto);
   }
 }

@@ -90,6 +90,9 @@ export class LoginController {
         username: loginDto.username,
         password: loginDto.password,
       });
+      if (adminResult.user.is_active === false) {
+        throw new UnauthorizedException('Account is not active');
+      }
       return adminResult;
     } catch (error) {
       console.log(error);
@@ -99,6 +102,9 @@ export class LoginController {
           username: loginDto.username,
           password: loginDto.password,
         });
+        if (superAdminResult.user.is_active === false) {
+          throw new UnauthorizedException('Account is not active');
+        }
         return superAdminResult;
       } catch (superAdminError) {
         console.log(superAdminError);
@@ -141,6 +147,9 @@ export class LoginController {
       loginDto.username,
       loginDto.password,
     );
+    if (employee.is_active === false) {
+      throw new UnauthorizedException('Account is not active');
+    }
     return this.employeeAuthService.login(employee);
   }
 

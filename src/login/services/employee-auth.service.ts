@@ -41,9 +41,11 @@ export class EmployeeAuthService {
       sub: employee.id,
       role: 'employee',
     };
+    employee.password = undefined;
     return {
       message: 'Employee authentication successful',
       access_token: 'Bearer ' + this.jwtService.sign(payload),
+      user: employee,
     };
   }
 
