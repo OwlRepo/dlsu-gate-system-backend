@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '../../auth/enums/role.enum';
 
+type UserType = Role | 'multiple';
+
 class DeactivationStatus {
   @ApiProperty({
     description: 'Number of users in this status',
@@ -45,10 +47,10 @@ export class BulkDeactivateResponseDto {
 
   @ApiProperty({
     description: 'Type of users that were processed',
-    enum: Role,
+    enum: [...Object.values(Role), 'multiple'],
     example: Role.EMPLOYEE,
   })
-  userType: Role;
+  userType: UserType;
 
   @ApiProperty({
     description: 'Total number of user IDs that were processed',

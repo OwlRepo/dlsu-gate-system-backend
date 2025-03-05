@@ -9,6 +9,8 @@ import {
   Header,
   ValidationPipe,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import {
@@ -30,6 +32,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { BulkDeactivateResponseDto } from './dto/bulk-deactivate-response.dto';
 import { BulkReactivateDto } from './dto/bulk-reactivate.dto';
 import { BulkReactivateResponseDto } from './dto/bulk-reactivate-response.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -204,12 +207,50 @@ export class UsersController {
   @Roles(Role.SUPER_ADMIN, Role.ADMIN)
   @ApiOperation({
     summary: 'Bulk deactivate users',
-    description:
-      'Deactivates multiple users of a specific type in bulk. Returns detailed information about the operation.',
+    description: `
+      Deactivates multiple users in bulk. Accepts either:
+      1. JSON payload with userIds array and userType
+      2. CSV file with 'user_id' and 'user_type' columns
+      
+      CSV Format:
+      user_id,user_type
+      12345,admin
+      67890,employee
+      11223,super-admin
+      
+      Returns detailed information about the operation.
+    `,
   })
   @ApiBody({
-    type: BulkDeactivateDto,
-    description: 'User IDs and type to deactivate',
+    schema: {
+      oneOf: [
+        {
+          type: 'object',
+          properties: {
+            userIds: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Array of user IDs to deactivate',
+            },
+            userType: {
+              type: 'string',
+              enum: ['admin', 'employee', 'super-admin'],
+              description: 'Type of users to deactivate',
+            },
+          },
+        },
+        {
+          type: 'object',
+          properties: {
+            file: {
+              type: 'string',
+              format: 'binary',
+              description: 'CSV file with user_id and user_type columns',
+            },
+          },
+        },
+      ],
+    },
   })
   @ApiResponse({
     status: 200,
@@ -228,9 +269,14 @@ export class UsersController {
     status: 403,
     description: 'Forbidden - Requires Super Admin privileges',
   })
+  @UseInterceptors(FileInterceptor('file'))
   async bulkDeactivateUsers(
     @Body() bulkDeactivateDto: BulkDeactivateDto,
+    @UploadedFile() file?: Express.Multer.File,
   ): Promise<BulkDeactivateResponseDto> {
+    if (file) {
+      return this.usersService.bulkDeactivateUsersFromCsv(file);
+    }
     return this.usersService.bulkDeactivateUsers(bulkDeactivateDto);
   }
 

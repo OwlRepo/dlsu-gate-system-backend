@@ -14,6 +14,8 @@ import { BulkDeactivateResponseDto } from './dto/bulk-deactivate-response.dto';
 import { In } from 'typeorm';
 import { BulkReactivateDto } from './dto/bulk-reactivate.dto';
 import { BulkReactivateResponseDto } from './dto/bulk-reactivate-response.dto';
+import * as csvParser from 'csv-parser';
+import { Readable } from 'stream';
 
 @Injectable()
 export class UsersService {
@@ -454,6 +456,166 @@ export class UsersService {
     }
 
     res.end();
+  }
+
+  async bulkDeactivateUsersFromCsv(
+    file: Express.Multer.File,
+  ): Promise<BulkDeactivateResponseDto> {
+    return new Promise((resolve, reject) => {
+      const usersByType = new Map<Role, string[]>();
+      const fileStream = Readable.from(file.buffer.toString());
+
+      fileStream
+        .pipe(csvParser({ headers: true, skipLines: 0 }))
+        .on('headers', (headers) => {
+          // Check if headers are correct
+          if (!headers.includes('user_id') || !headers.includes('user_type')) {
+            reject(
+              new BadRequestException(
+                "CSV file must have 'user_id' and 'user_type' columns",
+              ),
+            );
+          }
+        })
+        .on('data', (row) => {
+          const userId = row.user_id;
+          const userType = row.user_type;
+
+          if (!userId || !userType) {
+            return; // Skip empty rows
+          }
+
+          // Validate user type
+          const normalizedUserType = userType.toLowerCase();
+          let role: Role;
+          switch (normalizedUserType) {
+            case 'admin':
+              role = Role.ADMIN;
+              break;
+            case 'employee':
+              role = Role.EMPLOYEE;
+              break;
+            case 'super-admin':
+              role = Role.SUPER_ADMIN;
+              break;
+            default:
+              return; // Skip invalid user types
+          }
+
+          // Group users by type
+          if (!usersByType.has(role)) {
+            usersByType.set(role, []);
+          }
+          usersByType.get(role)?.push(userId.trim());
+        })
+        .on('end', async () => {
+          try {
+            // Process each user type group
+            const results: BulkDeactivateResponseDto[] = [];
+            for (const [userType, userIds] of usersByType.entries()) {
+              const result = await this.bulkDeactivateUsers({
+                userType,
+                userIds,
+              });
+              results.push(result);
+            }
+
+            // Combine results
+            const combinedResponse: BulkDeactivateResponseDto = {
+              status: 'success',
+              userType: 'multiple',
+              totalProcessed: results.reduce(
+                (sum, r) => sum + r.totalProcessed,
+                0,
+              ),
+              timestamp: new Date().toISOString(),
+              successful: {
+                count: results.reduce((sum, r) => sum + r.successful.count, 0),
+                userIds: results.flatMap((r) => r.successful.userIds),
+                details: results.flatMap((r) => r.successful.details),
+              },
+              alreadyInactive: {
+                count: results.reduce(
+                  (sum, r) => sum + r.alreadyInactive.count,
+                  0,
+                ),
+                userIds: results.flatMap((r) => r.alreadyInactive.userIds),
+                details: results.flatMap((r) => r.alreadyInactive.details),
+              },
+              notFound: {
+                count: results.reduce((sum, r) => sum + r.notFound.count, 0),
+                userIds: results.flatMap((r) => r.notFound.userIds),
+                details: results.flatMap((r) => r.notFound.details),
+              },
+              message: '',
+              display: {
+                title: 'Bulk Deactivation Complete',
+                success: '',
+                warnings: [],
+                actionRequired: false,
+              },
+            };
+
+            // Generate human-readable message and display information
+            const messages: string[] = [];
+            if (combinedResponse.successful.count > 0) {
+              messages.push(
+                `Successfully deactivated ${
+                  combinedResponse.successful.count
+                } user${combinedResponse.successful.count !== 1 ? 's' : ''}`,
+              );
+              combinedResponse.display.success = messages[0];
+            }
+
+            if (combinedResponse.alreadyInactive.count > 0) {
+              const msg = `${combinedResponse.alreadyInactive.count} user${
+                combinedResponse.alreadyInactive.count !== 1 ? 's were' : ' was'
+              } already inactive`;
+              messages.push(msg);
+              combinedResponse.display.warnings.push(msg);
+            }
+
+            if (combinedResponse.notFound.count > 0) {
+              const msg = `${combinedResponse.notFound.count} user${
+                combinedResponse.notFound.count !== 1 ? 's were' : ' was'
+              } not found`;
+              messages.push(msg);
+              combinedResponse.display.warnings.push(msg);
+            }
+
+            combinedResponse.message = messages.join('. ');
+
+            // Set overall status
+            if (combinedResponse.successful.count === 0) {
+              combinedResponse.status = 'failed';
+              combinedResponse.display.title = 'Bulk Deactivation Failed';
+              combinedResponse.display.actionRequired = true;
+            } else if (
+              combinedResponse.alreadyInactive.count > 0 ||
+              combinedResponse.notFound.count > 0
+            ) {
+              combinedResponse.status = 'partial_success';
+              combinedResponse.display.title =
+                'Bulk Deactivation Partially Complete';
+              combinedResponse.display.actionRequired =
+                combinedResponse.notFound.count > 0;
+            }
+
+            resolve(combinedResponse);
+          } catch (error) {
+            reject(
+              new BadRequestException(
+                `Failed to process CSV file: ${error.message}`,
+              ),
+            );
+          }
+        })
+        .on('error', (error) => {
+          reject(
+            new BadRequestException(`Error parsing CSV file: ${error.message}`),
+          );
+        });
+    });
   }
 
   async bulkDeactivateUsers(
