@@ -335,9 +335,9 @@ export class DatabaseSyncService {
         return null;
       }
 
-      if (typeof photoData === 'string' && photoData.length > 0) {
-        try {
-          // Check if the photo file exists before trying to read it
+      try {
+        if (typeof photoData === 'string' && photoData.length > 0) {
+          // Handle string path input
           if (fs.existsSync(photoData)) {
             imageBuffer = fs.readFileSync(photoData);
           } else {
@@ -346,28 +346,87 @@ export class DatabaseSyncService {
             );
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
-        } catch (readError) {
-          this.logger.warn(
-            `Error reading photo file: ${readError.message}, using default image`,
+        } else if (photoData instanceof Buffer) {
+          // Handle Buffer input
+          imageBuffer = photoData;
+        } else if (
+          photoData instanceof Blob ||
+          (typeof Blob !== 'undefined' && photoData instanceof Blob)
+        ) {
+          // Handle Blob input
+          try {
+            const arrayBuffer = await photoData.arrayBuffer();
+            imageBuffer = Buffer.from(arrayBuffer);
+          } catch (blobError) {
+            this.logger.warn(
+              `Failed to convert Blob to Buffer: ${blobError.message}, using default image`,
+            );
+            imageBuffer = fs.readFileSync(defaultImagePath);
+          }
+        } else if (
+          photoData &&
+          typeof photoData === 'object' &&
+          'data' in photoData
+        ) {
+          // Handle potential database BLOB object
+          try {
+            if (Buffer.isBuffer(photoData.data)) {
+              imageBuffer = photoData.data;
+            } else if (Array.isArray(photoData.data)) {
+              imageBuffer = Buffer.from(photoData.data);
+            } else {
+              throw new Error('Invalid BLOB data format');
+            }
+          } catch (blobError) {
+            this.logger.warn(
+              `Failed to process BLOB data: ${blobError.message}, using default image`,
+            );
+            imageBuffer = fs.readFileSync(defaultImagePath);
+          }
+        } else {
+          this.logger.debug(
+            `No valid photo data provided (type: ${typeof photoData}), using default image`,
           );
           imageBuffer = fs.readFileSync(defaultImagePath);
         }
-      } else if (photoData instanceof Buffer) {
-        imageBuffer = photoData;
-      } else {
-        this.logger.debug('No valid photo data provided, using default image');
-        imageBuffer = fs.readFileSync(defaultImagePath);
-      }
 
-      if (!imageBuffer || imageBuffer.length === 0) {
-        this.logger.warn('Empty image buffer detected, returning null');
-        return null;
-      }
+        // Validate image buffer
+        if (!imageBuffer || imageBuffer.length === 0) {
+          this.logger.warn('Empty image buffer detected, using default image');
+          imageBuffer = fs.readFileSync(defaultImagePath);
+        }
 
-      const base64String = imageBuffer.toString('base64');
-      return base64String;
+        // Additional validation for corrupted images
+        if (imageBuffer.length < 100) {
+          // Basic size check for potentially corrupted images
+          this.logger.warn(
+            'Suspiciously small image detected, using default image',
+          );
+          imageBuffer = fs.readFileSync(defaultImagePath);
+        }
+
+        const base64String = imageBuffer.toString('base64');
+        return base64String;
+      } catch (conversionError) {
+        this.logger.error('Error during image conversion:', {
+          error: conversionError.message,
+          photoDataType: typeof photoData,
+          isBuffer: Buffer.isBuffer(photoData),
+          isBlob: photoData instanceof Blob,
+          hasData: photoData && 'data' in photoData,
+        });
+
+        // Fallback to default image
+        this.logger.warn('Using default image due to conversion error');
+        const defaultBuffer = fs.readFileSync(defaultImagePath);
+        return defaultBuffer.toString('base64');
+      }
     } catch (error) {
-      this.logger.error('Error converting photo to base64:', error);
+      this.logger.error('Critical error in convertPhotoToBase64:', {
+        error: error.message,
+        stack: error.stack,
+        photoDataType: typeof photoData,
+      });
       return null;
     }
   }
