@@ -65,11 +65,16 @@ async function bootstrap() {
 
   // Enable CORS
   app.enableCors({
-    origin: true, // Allow all origins
+    origin: '*', // Allow all origins
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
-    allowedHeaders: 'Content-Type, Accept, Authorization',
-    exposedHeaders: 'Authorization',
+    allowedHeaders: [
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'X-Requested-With',
+    ],
+    exposedHeaders: ['Authorization'],
     maxAge: 3600, // Cache preflight requests for 1 hour
   });
 
