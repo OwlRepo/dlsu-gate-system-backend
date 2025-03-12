@@ -1,5 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository, DataSource, Table, Raw } from 'typeorm';
 import { Employee } from './entities/employee.entity';
@@ -137,19 +143,13 @@ export class EmployeeService implements OnModuleInit {
         !createEmployeeDto.device_id ||
         createEmployeeDto.device_id.length === 0
       ) {
-        return {
-          success: false,
-          message: 'At least one device ID is required',
-        };
+        throw new BadRequestException('At least one device ID is required');
       }
 
       // Check for duplicate device IDs
       const uniqueDeviceIds = new Set(createEmployeeDto.device_id);
       if (uniqueDeviceIds.size !== createEmployeeDto.device_id.length) {
-        return {
-          success: false,
-          message: 'Duplicate device IDs are not allowed',
-        };
+        throw new BadRequestException('Duplicate device IDs are not allowed');
       }
 
       // Check for existing username
@@ -158,11 +158,9 @@ export class EmployeeService implements OnModuleInit {
       });
 
       if (existingUsername) {
-        return {
-          success: false,
-          message:
-            'Username already exists. Please choose a different username.',
-        };
+        throw new ConflictException(
+          'Username already exists. Please choose a different username.',
+        );
       }
 
       // Generate a unique employee_id
@@ -196,10 +194,13 @@ export class EmployeeService implements OnModuleInit {
         data: employeeWithoutPassword,
       };
     } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+      if (
+        error instanceof BadRequestException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -224,20 +225,17 @@ export class EmployeeService implements OnModuleInit {
         where: [{ employee_id: idOrUsername }, { username: idOrUsername }],
       });
       if (!employee) {
-        return {
-          success: false,
-          message: 'Employee not found',
-        };
+        throw new NotFoundException('Employee not found');
       }
       return {
         success: true,
         data: employee,
       };
     } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -251,10 +249,9 @@ export class EmployeeService implements OnModuleInit {
         .getMany();
 
       if (employees.length === 0) {
-        return {
-          success: false,
-          message: 'No employees found with the given device ID',
-        };
+        throw new NotFoundException(
+          'No employees found with the given device ID',
+        );
       }
 
       return {
@@ -262,10 +259,10 @@ export class EmployeeService implements OnModuleInit {
         data: employees,
       };
     } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -297,10 +294,9 @@ export class EmployeeService implements OnModuleInit {
       console.log('Query result:', employees);
 
       if (employees.length === 0) {
-        return {
-          success: false,
-          message: 'No employees found in the specified date range',
-        };
+        throw new NotFoundException(
+          'No employees found in the specified date range',
+        );
       }
 
       return {
@@ -308,11 +304,10 @@ export class EmployeeService implements OnModuleInit {
         data: employees,
       };
     } catch (error) {
-      console.error('Date range search error:', error);
-      return {
-        success: false,
-        message: error.message,
-      };
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(error.message);
     }
   }
 
@@ -324,10 +319,7 @@ export class EmployeeService implements OnModuleInit {
       });
 
       if (!employee) {
-        return {
-          success: false,
-          message: 'Employee not found',
-        };
+        throw new NotFoundException('Employee not found');
       }
 
       // Create a whitelist of allowed updates, explicitly excluding is_active
@@ -363,10 +355,10 @@ export class EmployeeService implements OnModuleInit {
         message: 'Employee updated successfully',
       };
     } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(error.message);
     }
   }
 
