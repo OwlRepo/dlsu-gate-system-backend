@@ -313,7 +313,6 @@ export class EmployeeService implements OnModuleInit {
 
   async update(employee_id: string, updateEmployeeDto: UpdateEmployeeDto) {
     try {
-      // First check if employee exists with the given employee_id
       const employee = await this.employeeRepository.findOne({
         where: { employee_id: employee_id },
       });
@@ -322,16 +321,15 @@ export class EmployeeService implements OnModuleInit {
         throw new NotFoundException('Employee not found');
       }
 
-      // Create a whitelist of allowed updates, explicitly excluding is_active
+      // Ensure string values are properly handled
       const allowedUpdates: Partial<Employee> = {};
 
-      // Only copy allowed fields
       if (updateEmployeeDto.username)
-        allowedUpdates.username = updateEmployeeDto.username;
+        allowedUpdates.username = String(updateEmployeeDto.username);
       if (updateEmployeeDto.first_name)
-        allowedUpdates.first_name = updateEmployeeDto.first_name;
+        allowedUpdates.first_name = String(updateEmployeeDto.first_name);
       if (updateEmployeeDto.last_name)
-        allowedUpdates.last_name = updateEmployeeDto.last_name;
+        allowedUpdates.last_name = String(updateEmployeeDto.last_name);
       if (updateEmployeeDto.device_id)
         allowedUpdates.device_id = updateEmployeeDto.device_id;
 
