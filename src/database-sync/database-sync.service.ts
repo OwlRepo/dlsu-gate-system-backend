@@ -118,9 +118,11 @@ export class DatabaseSyncService {
   }
 
   private sanitizeUserId(userId: string): string {
+    // Remove spaces from the userId first
+    const cleanUserId = userId.replace(/\s/g, '');
     // Convert hex to decimal if userId is a valid hex number
-    if (/^[0-9A-Fa-f]+$/.test(userId)) {
-      const decimal = parseInt(userId, 16);
+    if (/^[0-9A-Fa-f]+$/.test(cleanUserId)) {
+      const decimal = parseInt(cleanUserId, 16);
       if (!isNaN(decimal)) {
         userId = decimal.toString();
       }
@@ -336,7 +338,12 @@ export class DatabaseSyncService {
       }
 
       try {
-        if (typeof photoData === 'string' && photoData.length > 0) {
+        // Add handling for hex string format starting with "0x"
+        if (typeof photoData === 'string' && photoData.startsWith('0x')) {
+          // Remove '0x' prefix and convert hex string to buffer
+          const hexData = photoData.slice(2); // Remove '0x' prefix
+          imageBuffer = Buffer.from(hexData, 'hex');
+        } else if (typeof photoData === 'string' && photoData.length > 0) {
           // Handle string path input
           if (fs.existsSync(photoData)) {
             imageBuffer = fs.readFileSync(photoData);
@@ -398,7 +405,6 @@ export class DatabaseSyncService {
 
         // Additional validation for corrupted images
         if (imageBuffer.length < 100) {
-          // Basic size check for potentially corrupted images
           this.logger.warn(
             'Suspiciously small image detected, using default image',
           );
