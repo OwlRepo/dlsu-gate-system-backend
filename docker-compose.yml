@@ -56,7 +56,11 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
-    network_mode: 'host'
+    networks:
+      - app-network
+      - sql-server-network
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-2:
     build:
@@ -87,7 +91,11 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    network_mode: 'host'
+    networks:
+      - app-network
+      - sql-server-network
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-3:
     build:
@@ -118,7 +126,11 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    network_mode: 'host'
+    networks:
+      - app-network
+      - sql-server-network
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-4:
     build:
@@ -149,7 +161,11 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
-    network_mode: 'host'
+    networks:
+      - app-network
+      - sql-server-network
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-5:
     build:
@@ -180,7 +196,11 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
-    network_mode: 'host'
+    networks:
+      - app-network
+      - sql-server-network
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   postgres:
     image: postgres:latest
@@ -276,3 +296,8 @@ volumes:
 networks:
   app-network:
     driver: bridge
+  sql-server-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.9.0/24
