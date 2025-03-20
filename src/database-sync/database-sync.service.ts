@@ -72,6 +72,14 @@ export class DatabaseSyncService {
         trustServerCertificate: true,
         enableArithAbort: true,
         connectTimeout: 30000,
+        requestTimeout: 30000,
+        validateBulkLoadParameters: false,
+        rowCollectionOnRequestCompletion: true,
+      },
+      pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000,
       },
     };
 

@@ -28,6 +28,7 @@ interface GateStats {
     origin: '*',
   },
   path: '/socket.io/',
+  logger: false,
 })
 export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
   @WebSocketServer()
@@ -48,12 +49,10 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
   constructor(private readonly reportsService: ReportsService) {}
 
   onModuleInit() {
-    // Initialize stats when the server starts
     this.initializeStats();
   }
 
   handleConnection(client: Socket) {
-    // Send current stats to newly connected client
     client.emit('stats-update', this.currentStats);
   }
 
@@ -62,11 +61,9 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
     this.server?.emit('stats-update', this.currentStats);
   }
 
-  @Interval(1000) // Update every 1 second
+  @Interval(1000)
   async handleInterval() {
     const newStats = await this.calculateTodayStats();
-
-    // Only emit if there are changes
     if (this.hasStatsChanged(newStats)) {
       this.currentStats = newStats;
       this.server.emit('stats-update', this.currentStats);
@@ -111,7 +108,6 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
     };
 
     todayReports.forEach((report: Report) => {
-      // Count entries and exits
       if (report.type === '1') {
         stats.entry++;
       } else if (report.type === '2') {
@@ -119,10 +115,8 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
       }
     });
 
-    // Calculate on-premise (entries minus exits)
     stats.onPremise = stats.entry - stats.exit;
 
-    // Count access types
     const accessCounts = {
       green: 0,
       yellow: 0,
@@ -144,7 +138,6 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
     return stats;
   }
 
-  // Method to manually trigger stats recalculation
   async refreshStats() {
     await this.initializeStats();
   }
