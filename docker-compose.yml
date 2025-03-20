@@ -23,6 +23,8 @@ services:
     networks:
       - app-network
     restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-1:
     build:
@@ -38,6 +40,7 @@ services:
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - NODE_ENV=development
     env_file:
       - .env
     depends_on:
@@ -55,6 +58,8 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-2:
     build:
@@ -87,6 +92,8 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-3:
     build:
@@ -119,6 +126,8 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-4:
     build:
@@ -151,6 +160,9 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
   dlsu-gate-system-api-5:
     build:
       context: .
@@ -182,6 +194,8 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   postgres:
     image: postgres:latest

@@ -65,7 +65,10 @@ export class DatabaseSyncService {
       user: this.configService.get('SOURCE_DB_USERNAME'),
       password: this.configService.get('SOURCE_DB_PASSWORD'),
       database: this.configService.get('SOURCE_DB_NAME'),
-      server: this.configService.get('SOURCE_DB_HOST'),
+      server:
+        process.env.NODE_ENV === 'development'
+          ? 'host.docker.internal'
+          : this.configService.get('SOURCE_DB_HOST'),
       port: parseInt(this.configService.get('SOURCE_DB_PORT')),
       options: {
         encrypt: false,
@@ -82,6 +85,14 @@ export class DatabaseSyncService {
         idleTimeoutMillis: 30000,
       },
     };
+
+    // Add debug logging
+    this.logger.debug('SQL Server Configuration:', {
+      server: this.sqlConfig.server,
+      port: this.sqlConfig.port,
+      database: this.sqlConfig.database,
+      options: this.sqlConfig.options,
+    });
 
     this.apiBaseUrl = this.configService.get('BIOSTAR_API_BASE_URL');
     this.apiCredentials = {
@@ -1227,23 +1238,56 @@ ${skippedTable.toString()}
     let sqlServerConnected = false;
     let biostarConnected = false;
     let postgresConnected = false;
+    let sqlResult: any = null;
+    let hasIsArchivedColumn = false;
 
     try {
       this.logger.log('Testing all connections...');
 
       // Test 1: SQL Server Connection
       this.logger.log('1. Testing SQL Server connection...');
-      pool = await sql.connect(this.sqlConfig);
-      const hasIsArchivedColumn = await this.checkColumnExists(
-        pool,
-        'isArchived',
-      );
-      const query = hasIsArchivedColumn
-        ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0 ORDER BY ID_Number`
-        : `SELECT TOP 1 * FROM ISGATE_MASTER_VW ORDER BY ID_Number`;
-      const sqlResult = await pool.request().query(query);
-      sqlServerConnected = true;
-      this.logger.log('SQL Server connection successful');
+      this.logger.debug('SQL Config:', {
+        server: this.sqlConfig.server,
+        port: this.sqlConfig.port,
+        database: this.sqlConfig.database,
+        options: this.sqlConfig.options,
+      });
+
+      try {
+        pool = await sql.connect(this.sqlConfig);
+        this.logger.log('SQL Server connection pool created successfully');
+
+        hasIsArchivedColumn = await this.checkColumnExists(pool, 'isArchived');
+        this.logger.log('Column check completed successfully');
+
+        const query = hasIsArchivedColumn
+          ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0 ORDER BY ID_Number`
+          : `SELECT TOP 1 * FROM ISGATE_MASTER_VW ORDER BY ID_Number`;
+
+        sqlResult = await pool.request().query(query);
+        sqlServerConnected = true;
+        this.logger.log('SQL Server connection and query successful');
+      } catch (sqlError) {
+        this.logger.error('SQL Server connection failed:', {
+          error: sqlError.message,
+          code: sqlError.code,
+          state: sqlError.state,
+          stack: sqlError.stack,
+        });
+        throw new BadRequestException({
+          message: 'SQL Server connection failed',
+          details: {
+            error: sqlError.message,
+            code: sqlError.code,
+            state: sqlError.state,
+          },
+          config: {
+            server: this.sqlConfig.server,
+            port: this.sqlConfig.port,
+            database: this.sqlConfig.database,
+          },
+        });
+      }
 
       // Test 2: BIOSTAR API Connection
       this.logger.log('2. Testing BIOSTAR API connection...');
@@ -1270,10 +1314,10 @@ ${skippedTable.toString()}
         connections: {
           sqlServer: {
             status: 'connected',
-            sampleData: sqlResult.recordset[0],
+            sampleData: sqlResult?.recordset[0],
             tableInfo: {
               hasIsArchivedColumn,
-              recordCount: sqlResult.recordset.length,
+              recordCount: sqlResult?.recordset?.length || 0,
             },
           },
           biostarApi: {
