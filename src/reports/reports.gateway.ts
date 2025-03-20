@@ -61,7 +61,7 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
     this.server?.emit('stats-update', this.currentStats);
   }
 
-  @Interval(1000)
+  @Interval(parseInt(process.env.POLLING_INTERVAL))
   async handleInterval() {
     const newStats = await this.calculateTodayStats();
     if (this.hasStatsChanged(newStats)) {
