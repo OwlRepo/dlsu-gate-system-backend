@@ -45,8 +45,6 @@ services:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
     deploy:
       resources:
         limits:
@@ -58,8 +56,7 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+    network_mode: 'host'
 
   dlsu-gate-system-api-2:
     build:
@@ -79,8 +76,6 @@ services:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
     volumes:
       - persistent_uploads:/app/persistent_uploads
     deploy:
@@ -92,8 +87,7 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+    network_mode: 'host'
 
   dlsu-gate-system-api-3:
     build:
@@ -113,8 +107,6 @@ services:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
     volumes:
       - persistent_uploads:/app/persistent_uploads
     deploy:
@@ -126,8 +118,7 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+    network_mode: 'host'
 
   dlsu-gate-system-api-4:
     build:
@@ -147,8 +138,6 @@ services:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
     deploy:
       resources:
         limits:
@@ -160,8 +149,7 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+    network_mode: 'host'
 
   dlsu-gate-system-api-5:
     build:
@@ -181,8 +169,6 @@ services:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
     deploy:
       resources:
         limits:
@@ -194,8 +180,7 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+    network_mode: 'host'
 
   postgres:
     image: postgres:latest
