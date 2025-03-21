@@ -1166,10 +1166,6 @@ ${skippedTable.toString()}
       throw error;
     } finally {
       // Cleanup
-      if (csvFilePath && fs.existsSync(csvFilePath)) {
-        fs.unlinkSync(csvFilePath);
-        this.logger.log('Temporary CSV file cleaned up');
-      }
       if (pool) {
         await pool.close();
         this.logger.log('Database connection closed');
