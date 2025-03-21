@@ -402,7 +402,31 @@ export class DatabaseSyncService {
       let imageBuffer: Buffer;
 
       if (typeof photoData === 'string') {
-        if (photoData.startsWith('0x')) {
+        // Handles Windows paths (both C:\ style and UNC \\server style)
+        if (photoData.match(/^[a-zA-Z]:\\|^\\\\/)) {
+          try {
+            if (fs.existsSync(photoData)) {
+              imageBuffer = fs.readFileSync(photoData);
+              this.logger.debug('Successfully read image from file path', {
+                studentId,
+                path: photoData,
+              });
+            } else {
+              this.logger.warn('File path exists but file not found', {
+                studentId,
+                path: photoData,
+              });
+              return this.useDefaultImage('File not found');
+            }
+          } catch (error) {
+            this.logger.error('Failed to read file from path', {
+              studentId,
+              path: photoData,
+              error: error.message,
+            });
+            return this.useDefaultImage('Failed to read file');
+          }
+        } else if (photoData.startsWith('0x')) {
           try {
             const hexData = photoData.slice(2);
             if (!/^[0-9A-Fa-f]+$/.test(hexData)) {
