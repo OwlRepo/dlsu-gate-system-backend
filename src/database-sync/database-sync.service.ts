@@ -50,6 +50,11 @@ export class DatabaseSyncService {
     'synced-records',
     'csv',
   );
+  private readonly photoConversionLogDir = path.join(
+    process.cwd(),
+    'logs',
+    'photo-conversion',
+  );
 
   constructor(
     @InjectRepository(SyncSchedule)
@@ -90,6 +95,7 @@ export class DatabaseSyncService {
       this.syncedDir,
       this.syncedJsonDir,
       this.syncedCsvDir,
+      this.photoConversionLogDir,
     ];
 
     directories.forEach((dir) => {
@@ -328,7 +334,48 @@ export class DatabaseSyncService {
     }
   }
 
-  private async convertPhotoToBase64(photoData: any): Promise<string | null> {
+  private logPhotoConversionFailure(
+    photoData: any,
+    reason: string,
+    studentId?: string,
+  ) {
+    try {
+      const dateString = new Date().toISOString().split('T')[0];
+      const logFile = path.join(
+        this.photoConversionLogDir,
+        `photo_conversion_failures_${dateString}.json`,
+      );
+
+      let existingLogs = [];
+      if (fs.existsSync(logFile)) {
+        existingLogs = JSON.parse(fs.readFileSync(logFile, 'utf8'));
+      }
+
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        studentId: studentId || 'unknown',
+        reason,
+        photoDataType: typeof photoData,
+        photoDataSample:
+          typeof photoData === 'string'
+            ? photoData.slice(0, 100) + '...'
+            : null,
+        isBuffer: Buffer.isBuffer(photoData),
+        isBlob: photoData instanceof Blob,
+        hasData: photoData && 'data' in photoData,
+      };
+
+      existingLogs.push(logEntry);
+      fs.writeFileSync(logFile, JSON.stringify(existingLogs, null, 2));
+    } catch (error) {
+      this.logger.error('Failed to log photo conversion failure:', error);
+    }
+  }
+
+  private async convertPhotoToBase64(
+    photoData: any,
+    studentId?: string,
+  ): Promise<string | null> {
     try {
       let imageBuffer: Buffer;
       const defaultImagePath = path.join(process.cwd(), 'dlsu.png');
@@ -360,6 +407,11 @@ export class DatabaseSyncService {
                 hexLength: photoData.length,
                 sampleHex: photoData.slice(0, 50) + '...',
               });
+              this.logPhotoConversionFailure(
+                photoData,
+                'Failed to convert hex string to buffer',
+                studentId,
+              );
               imageBuffer = fs.readFileSync(defaultImagePath);
             }
           } else if (fs.existsSync(photoData)) {
@@ -374,11 +426,21 @@ export class DatabaseSyncService {
                 error: readError.message,
                 path: photoData,
               });
+              this.logPhotoConversionFailure(
+                photoData,
+                'Failed to read image file',
+                studentId,
+              );
               imageBuffer = fs.readFileSync(defaultImagePath);
             }
           } else {
             this.logger.warn(
               `Photo file not found at path: ${photoData}, using default image`,
+            );
+            this.logPhotoConversionFailure(
+              photoData,
+              'Photo file not found at path',
+              studentId,
             );
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
@@ -401,6 +463,11 @@ export class DatabaseSyncService {
               blobSize: photoData.size,
               blobType: photoData.type,
             });
+            this.logPhotoConversionFailure(
+              photoData,
+              'Failed to convert Blob to Buffer',
+              studentId,
+            );
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
         } else if (
@@ -425,11 +492,21 @@ export class DatabaseSyncService {
               dataType: typeof photoData.data,
               isArray: Array.isArray(photoData.data),
             });
+            this.logPhotoConversionFailure(
+              photoData,
+              'Failed to process BLOB data',
+              studentId,
+            );
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
         } else {
           this.logger.warn(
             `No valid photo data provided (type: ${typeof photoData}), using default image`,
+          );
+          this.logPhotoConversionFailure(
+            photoData,
+            'No valid photo data provided',
+            studentId,
           );
           imageBuffer = fs.readFileSync(defaultImagePath);
         }
@@ -437,6 +514,11 @@ export class DatabaseSyncService {
         // Validate image buffer
         if (!imageBuffer || imageBuffer.length === 0) {
           this.logger.warn('Empty image buffer detected, using default image');
+          this.logPhotoConversionFailure(
+            photoData,
+            'Empty image buffer detected',
+            studentId,
+          );
           imageBuffer = fs.readFileSync(defaultImagePath);
         }
 
@@ -449,6 +531,11 @@ export class DatabaseSyncService {
               originalDataType: typeof photoData,
             },
           );
+          this.logPhotoConversionFailure(
+            photoData,
+            'Suspiciously small image detected',
+            studentId,
+          );
           imageBuffer = fs.readFileSync(defaultImagePath);
         }
 
@@ -457,11 +544,11 @@ export class DatabaseSyncService {
           const signature = imageBuffer.slice(0, 4).toString('hex');
           if (
             ![
-              '89504e47',
-              'ffd8ffe0',
-              'ffd8ffe1',
-              'ffd8ffe2',
-              'ffd8ffe3',
+              '89504e47', // PNG
+              'ffd8ffe0', // JPEG
+              'ffd8ffe1', // JPEG with EXIF
+              'ffd8ffe2', // JPEG with SPIFF
+              'ffd8ffe3', // JPEG with JFIF
             ].includes(signature)
           ) {
             this.logger.warn(
@@ -471,6 +558,11 @@ export class DatabaseSyncService {
                 bufferLength: imageBuffer.length,
               },
             );
+            this.logPhotoConversionFailure(
+              photoData,
+              `Invalid image signature detected: ${signature}`,
+              studentId,
+            );
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
         } catch (signatureError) {
@@ -478,6 +570,12 @@ export class DatabaseSyncService {
             error: signatureError.message,
             bufferLength: imageBuffer?.length,
           });
+          this.logPhotoConversionFailure(
+            photoData,
+            'Error checking image signature',
+            studentId,
+          );
+          imageBuffer = fs.readFileSync(defaultImagePath);
         }
 
         const base64String = imageBuffer.toString('base64');
@@ -492,6 +590,11 @@ export class DatabaseSyncService {
           stack: conversionError.stack,
         });
 
+        this.logPhotoConversionFailure(
+          photoData,
+          'Error during image conversion',
+          studentId,
+        );
         // Fallback to default image
         this.logger.warn('Using default image due to conversion error');
         const defaultBuffer = fs.readFileSync(defaultImagePath);
@@ -507,6 +610,11 @@ export class DatabaseSyncService {
             ? photoData.slice(0, 100) + '...'
             : null,
       });
+      this.logPhotoConversionFailure(
+        photoData,
+        'Critical error in convertPhotoToBase64',
+        studentId,
+      );
       return null;
     }
   }
@@ -631,7 +739,10 @@ export class DatabaseSyncService {
         const recordsWithBase64Photos = await Promise.all(
           result.recordset.map(async (record) => ({
             ...record,
-            Photo: await this.convertPhotoToBase64(record.Photo),
+            Photo: await this.convertPhotoToBase64(
+              record.Photo,
+              record.ID_Number,
+            ),
           })),
         );
 
@@ -840,9 +951,18 @@ export class DatabaseSyncService {
               lived_name: livedName,
               remarks: remarks,
               csn: userId,
-              photo: await this.convertPhotoToBase64(record.Photo),
-              face_image_file1: await this.convertPhotoToBase64(record.Photo),
-              face_image_file2: await this.convertPhotoToBase64(record.Photo),
+              photo: await this.convertPhotoToBase64(
+                record.Photo,
+                record.ID_Number,
+              ),
+              face_image_file1: await this.convertPhotoToBase64(
+                record.Photo,
+                record.ID_Number,
+              ),
+              face_image_file2: await this.convertPhotoToBase64(
+                record.Photo,
+                record.ID_Number,
+              ),
               start_datetime: startDate,
               expiry_datetime:
                 record.Campus_Entry.toString().toUpperCase() === 'N'
