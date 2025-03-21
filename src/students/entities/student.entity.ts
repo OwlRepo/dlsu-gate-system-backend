@@ -30,9 +30,9 @@ export class Student {
   Campus_Entry: string;
 
   @Column({ nullable: true })
-  Unique_ID: number;
+  Unique_ID: string;
 
-  @Column({ default: false })
+  @Column({ type: 'boolean', default: false })
   isArchived: boolean;
 
   @CreateDateColumn()

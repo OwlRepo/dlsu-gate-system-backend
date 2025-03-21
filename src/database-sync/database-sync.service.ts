@@ -532,7 +532,7 @@ export class DatabaseSyncService {
         const query = hasIsArchivedColumn
           ? `
             SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} 
-            WHERE isArchived = 0 
+            WHERE isArchived = 'N' OR isArchived IS NULL
             ORDER BY ID_Number 
             OFFSET ${offset} ROWS 
             FETCH NEXT ${batchSize} ROWS ONLY
@@ -620,7 +620,7 @@ export class DatabaseSyncService {
           Photo: record.Photo,
           Campus_Entry: record.Campus_Entry,
           Unique_ID: record.Unique_ID,
-          isArchived: record.isArchived,
+          isArchived: record.isArchived === 'Y',
           updatedAt: new Date(),
         };
 
@@ -1334,7 +1334,7 @@ ${skippedTable.toString()}
       updateResult = await this.studentRepository
         .createQueryBuilder()
         .update(Student)
-        .set({ isArchived: true })
+        .set({ isArchived: () => "'true'" })
         .where('ID_Number IN (:...userIds)', { userIds })
         .execute();
 
@@ -1408,7 +1408,7 @@ ${skippedTable.toString()}
           await this.studentRepository
             .createQueryBuilder()
             .update(Student)
-            .set({ isArchived: false })
+            .set({ isArchived: () => "'false'" })
             .where('ID_Number IN (:...userIds)', { userIds })
             .execute();
 
