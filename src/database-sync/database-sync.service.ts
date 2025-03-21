@@ -127,6 +127,10 @@ export class DatabaseSyncService {
         userId = decimal.toString();
       }
     }
+    // Ensure the userId has a maximum of 11 characters
+    if (userId.length > 11) {
+      userId = userId.substring(0, 11);
+    }
     return userId;
   }
 
