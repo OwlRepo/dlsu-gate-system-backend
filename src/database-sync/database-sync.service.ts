@@ -315,7 +315,7 @@ export class DatabaseSyncService {
       const result = await pool.request().query(`
         SELECT COUNT(*) as count
         FROM sys.columns 
-        WHERE object_id = OBJECT_ID('ISGATE_MASTER_VW')
+        WHERE object_id = OBJECT_ID('${this.configService.get('SOURCE_DB_TABLE')}')
         AND name = '${columnName}'
       `);
       return result.recordset[0].count > 0;
@@ -531,14 +531,14 @@ export class DatabaseSyncService {
         // Modify query based on isArchived column existence
         const query = hasIsArchivedColumn
           ? `
-            SELECT * FROM ISGATE_MASTER_VW 
+            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} 
             WHERE isArchived = 0 
             ORDER BY ID_Number 
             OFFSET ${offset} ROWS 
             FETCH NEXT ${batchSize} ROWS ONLY
           `
           : `
-            SELECT * FROM ISGATE_MASTER_VW 
+            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} 
             ORDER BY ID_Number 
             OFFSET ${offset} ROWS 
             FETCH NEXT ${batchSize} ROWS ONLY
@@ -1223,8 +1223,8 @@ ${skippedTable.toString()}
         'isArchived',
       );
       const query = hasIsArchivedColumn
-        ? `SELECT TOP 1 * FROM ISGATE_MASTER_VW WHERE isArchived = 0 ORDER BY ID_Number`
-        : `SELECT TOP 1 * FROM ISGATE_MASTER_VW ORDER BY ID_Number`;
+        ? `SELECT TOP 1 * FROM ${this.configService.get('SOURCE_DB_TABLE')} WHERE isArchived = 0 ORDER BY ID_Number`
+        : `SELECT TOP 1 * FROM ${this.configService.get('SOURCE_DB_TABLE')} ORDER BY ID_Number`;
       const sqlResult = await pool.request().query(query);
       sqlServerConnected = true;
       this.logger.log('SQL Server connection successful');
