@@ -1,11 +1,11 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class FixColumnTypes1711003478157 implements MigrationInterface {
+export class FixColumnTypesV21711004478157 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // First, alter the isArchived column to varchar temporarily to handle 'Y'/'N' values
+    // First, alter the isArchived column to varchar with enough length
     await queryRunner.query(`
       ALTER TABLE students 
-      ALTER COLUMN "isArchived" TYPE varchar(1)
+      ALTER COLUMN "isArchived" TYPE varchar(50)
     `);
 
     // Then convert 'Y'/'N' values to proper boolean values
@@ -20,10 +20,7 @@ export class FixColumnTypes1711003478157 implements MigrationInterface {
     // Now alter isArchived to boolean
     await queryRunner.query(`
       ALTER TABLE students 
-      ALTER COLUMN "isArchived" TYPE boolean USING CASE 
-        WHEN "isArchived" = 'true' THEN true 
-        ELSE false 
-      END
+      ALTER COLUMN "isArchived" TYPE boolean USING "isArchived"::boolean
     `);
 
     // Finally, alter the Unique_ID column to varchar
@@ -34,10 +31,10 @@ export class FixColumnTypes1711003478157 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // First convert isArchived back to varchar
+    // First convert isArchived back to varchar with enough length
     await queryRunner.query(`
       ALTER TABLE students 
-      ALTER COLUMN "isArchived" TYPE varchar(1)
+      ALTER COLUMN "isArchived" TYPE varchar(50)
     `);
 
     // Convert boolean values back to 'Y'/'N'
@@ -47,6 +44,12 @@ export class FixColumnTypes1711003478157 implements MigrationInterface {
         WHEN "isArchived"::boolean = true THEN 'Y'
         ELSE 'N'
       END
+    `);
+
+    // Finally convert isArchived back to varchar(1)
+    await queryRunner.query(`
+      ALTER TABLE students 
+      ALTER COLUMN "isArchived" TYPE varchar(1)
     `);
 
     // Revert the Unique_ID column
