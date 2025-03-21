@@ -343,23 +343,49 @@ export class DatabaseSyncService {
 
       try {
         // Add handling for hex string format starting with "0x"
-        if (typeof photoData === 'string' && photoData.startsWith('0x')) {
-          // Remove '0x' prefix and convert hex string to buffer
-          const hexData = photoData.slice(2); // Remove '0x' prefix
-          imageBuffer = Buffer.from(hexData, 'hex');
-        } else if (typeof photoData === 'string' && photoData.length > 0) {
-          // Handle string path input
-          if (fs.existsSync(photoData)) {
-            imageBuffer = fs.readFileSync(photoData);
+        if (typeof photoData === 'string') {
+          if (photoData.startsWith('0x')) {
+            try {
+              // Remove '0x' prefix and convert hex string to buffer
+              const hexData = photoData.slice(2); // Remove '0x' prefix
+              // Validate hex string format
+              if (!/^[0-9A-Fa-f]+$/.test(hexData)) {
+                throw new Error('Invalid hex string format');
+              }
+              imageBuffer = Buffer.from(hexData, 'hex');
+              this.logger.debug('Successfully converted hex string to buffer');
+            } catch (hexError) {
+              this.logger.error('Failed to convert hex string to buffer:', {
+                error: hexError.message,
+                hexLength: photoData.length,
+                sampleHex: photoData.slice(0, 50) + '...',
+              });
+              imageBuffer = fs.readFileSync(defaultImagePath);
+            }
+          } else if (fs.existsSync(photoData)) {
+            // Handle string path input
+            try {
+              imageBuffer = fs.readFileSync(photoData);
+              this.logger.debug(
+                `Successfully read image from path: ${photoData}`,
+              );
+            } catch (readError) {
+              this.logger.error('Failed to read image file:', {
+                error: readError.message,
+                path: photoData,
+              });
+              imageBuffer = fs.readFileSync(defaultImagePath);
+            }
           } else {
             this.logger.warn(
               `Photo file not found at path: ${photoData}, using default image`,
             );
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
-        } else if (photoData instanceof Buffer) {
+        } else if (Buffer.isBuffer(photoData)) {
           // Handle Buffer input
           imageBuffer = photoData;
+          this.logger.debug('Using provided buffer directly');
         } else if (
           photoData instanceof Blob ||
           (typeof Blob !== 'undefined' && photoData instanceof Blob)
@@ -368,10 +394,13 @@ export class DatabaseSyncService {
           try {
             const arrayBuffer = await photoData.arrayBuffer();
             imageBuffer = Buffer.from(arrayBuffer);
+            this.logger.debug('Successfully converted Blob to Buffer');
           } catch (blobError) {
-            this.logger.warn(
-              `Failed to convert Blob to Buffer: ${blobError.message}, using default image`,
-            );
+            this.logger.error('Failed to convert Blob to Buffer:', {
+              error: blobError.message,
+              blobSize: photoData.size,
+              blobType: photoData.type,
+            });
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
         } else if (
@@ -383,19 +412,23 @@ export class DatabaseSyncService {
           try {
             if (Buffer.isBuffer(photoData.data)) {
               imageBuffer = photoData.data;
+              this.logger.debug('Using BLOB data buffer directly');
             } else if (Array.isArray(photoData.data)) {
               imageBuffer = Buffer.from(photoData.data);
+              this.logger.debug('Converted BLOB data array to buffer');
             } else {
               throw new Error('Invalid BLOB data format');
             }
           } catch (blobError) {
-            this.logger.warn(
-              `Failed to process BLOB data: ${blobError.message}, using default image`,
-            );
+            this.logger.error('Failed to process BLOB data:', {
+              error: blobError.message,
+              dataType: typeof photoData.data,
+              isArray: Array.isArray(photoData.data),
+            });
             imageBuffer = fs.readFileSync(defaultImagePath);
           }
         } else {
-          this.logger.debug(
+          this.logger.warn(
             `No valid photo data provided (type: ${typeof photoData}), using default image`,
           );
           imageBuffer = fs.readFileSync(defaultImagePath);
@@ -411,8 +444,40 @@ export class DatabaseSyncService {
         if (imageBuffer.length < 100) {
           this.logger.warn(
             'Suspiciously small image detected, using default image',
+            {
+              bufferLength: imageBuffer.length,
+              originalDataType: typeof photoData,
+            },
           );
           imageBuffer = fs.readFileSync(defaultImagePath);
+        }
+
+        // Try to validate image format
+        try {
+          const signature = imageBuffer.slice(0, 4).toString('hex');
+          if (
+            ![
+              '89504e47',
+              'ffd8ffe0',
+              'ffd8ffe1',
+              'ffd8ffe2',
+              'ffd8ffe3',
+            ].includes(signature)
+          ) {
+            this.logger.warn(
+              'Invalid image signature detected, using default image',
+              {
+                signature,
+                bufferLength: imageBuffer.length,
+              },
+            );
+            imageBuffer = fs.readFileSync(defaultImagePath);
+          }
+        } catch (signatureError) {
+          this.logger.error('Error checking image signature:', {
+            error: signatureError.message,
+            bufferLength: imageBuffer?.length,
+          });
         }
 
         const base64String = imageBuffer.toString('base64');
@@ -424,6 +489,7 @@ export class DatabaseSyncService {
           isBuffer: Buffer.isBuffer(photoData),
           isBlob: photoData instanceof Blob,
           hasData: photoData && 'data' in photoData,
+          stack: conversionError.stack,
         });
 
         // Fallback to default image
@@ -436,6 +502,10 @@ export class DatabaseSyncService {
         error: error.message,
         stack: error.stack,
         photoDataType: typeof photoData,
+        photoDataSample:
+          typeof photoData === 'string'
+            ? photoData.slice(0, 100) + '...'
+            : null,
       });
       return null;
     }
@@ -457,8 +527,8 @@ export class DatabaseSyncService {
     const syncedData = formattedRecords.map((record) => ({
       user_id: record.user_id,
       name: record.name,
-      lived_name: record['Lived_Name'],
-      remarks: record.Remarks,
+      lived_name: record.lived_name,
+      remarks: record.remarks,
       campus_entry: record.original_campus_entry,
       expiry_datetime: record.expiry_datetime,
       sync_timestamp: new Date().toISOString(),
@@ -479,13 +549,22 @@ export class DatabaseSyncService {
     const csvWriter = createObjectCsvWriter({
       path: csvFilePath,
       header: [
-        { id: 'user_id', title: 'User ID' },
-        { id: 'name', title: 'Name' },
-        { id: 'lived_name', title: 'Lived_Name' },
+        { id: 'user_id', title: 'user_id' },
+        { id: 'name', title: 'name' },
+        { id: 'department', title: 'department' },
+        { id: 'user_title', title: 'user_title' },
+        { id: 'phone', title: 'phone' },
+        { id: 'email', title: 'email' },
+        { id: 'user_group', title: 'user_group' },
+        { id: 'lived_name', title: 'Lived Name' },
         { id: 'remarks', title: 'Remarks' },
-        { id: 'campus_entry', title: 'Campus Entry' },
-        { id: 'expiry_datetime', title: 'Expiry DateTime' },
-        { id: 'sync_timestamp', title: 'Sync Timestamp' },
+        { id: 'csn', title: 'csn' },
+        { id: 'photo', title: 'photo' },
+        { id: 'face_image_file1', title: 'face_image_file1' },
+        { id: 'face_image_file2', title: 'face_image_file2' },
+        { id: 'start_datetime', title: 'start_datetime' },
+        { id: 'expiry_datetime', title: 'expiry_datetime' },
+        { id: 'original_campus_entry', title: 'original_campus_entry' },
       ],
     });
 
@@ -681,7 +760,7 @@ export class DatabaseSyncService {
           { id: 'phone', title: 'phone' },
           { id: 'email', title: 'email' },
           { id: 'user_group', title: 'user_group' },
-          { id: 'lived_name', title: 'Lived_Name' },
+          { id: 'lived_name', title: 'Lived Name' },
           { id: 'remarks', title: 'Remarks' },
           { id: 'csn', title: 'csn' },
           { id: 'photo', title: 'photo' },
