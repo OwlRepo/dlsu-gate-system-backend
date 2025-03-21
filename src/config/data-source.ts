@@ -18,7 +18,7 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_NAME || 'dlsu_portal',
   entities: [Admin, SuperAdmin, Employee, Student, Report, UserDto],
-  migrations: [path.join(__dirname, '../migrations/*{.ts,.js}')],
+  migrations: [path.join(__dirname, '..', 'migrations', '*{.ts,.js}')],
   synchronize: false,
   logging: ['error', 'warn', 'migration'],
   migrationsRun: true,

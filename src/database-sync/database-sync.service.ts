@@ -68,7 +68,7 @@ export class DatabaseSyncService {
       server: this.configService.get('SOURCE_DB_HOST'),
       port: parseInt(this.configService.get('SOURCE_DB_PORT')),
       options: {
-        encrypt: true,
+        encrypt: false,
         trustServerCertificate: true,
         enableArithAbort: true,
         connectTimeout: 30000,
@@ -731,18 +731,6 @@ export class DatabaseSyncService {
 
             if (!name) {
               validationErrors.push('Empty name');
-            }
-
-            if (name.length > 48) {
-              validationErrors.push('Name exceeds 48 characters');
-            }
-
-            if (livedName.length > 48) {
-              validationErrors.push('Lived name exceeds 48 characters');
-            }
-
-            if (remarks.length > 48) {
-              validationErrors.push('Remarks exceeds 48 characters');
             }
 
             if (validationErrors.length > 0) {

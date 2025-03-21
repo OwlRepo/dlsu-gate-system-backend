@@ -11,25 +11,25 @@ export class Student {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ length: 32, nullable: false })
-  ID_Number: string; // From SQL Server's ID_Number
+  @Column({ nullable: true })
+  ID_Number: string;
 
-  @Column({ length: 99, nullable: true })
+  @Column({ nullable: true })
   Name: string;
 
-  @Column({ type: 'int', nullable: true })
-  Lived_Name: number;
+  @Column({ nullable: true })
+  Lived_Name: string;
 
-  @Column({ length: 7, nullable: true })
+  @Column({ nullable: true })
   Remarks: string;
 
-  @Column({ length: 46, nullable: false })
+  @Column({ nullable: true })
   Photo: string;
 
-  @Column({ length: 1, nullable: false })
+  @Column({ nullable: true })
   Campus_Entry: string;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ nullable: true })
   Unique_ID: number;
 
   @Column({ default: false })
