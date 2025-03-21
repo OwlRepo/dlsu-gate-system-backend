@@ -127,9 +127,9 @@ export class DatabaseSyncService {
         userId = decimal.toString();
       }
     }
-    // Ensure the userId has a maximum of 11 characters
-    if (userId.length > 11) {
-      userId = userId.substring(0, 11);
+    // Ensure the userId has a maximum of 10 characters
+    if (userId.length > 10) {
+      userId = userId.substring(0, 10);
     }
     return userId;
   }
@@ -725,7 +725,7 @@ export class DatabaseSyncService {
             // Validate all required fields
             const validationErrors = [];
 
-            if (!userId || userId.length > 11) {
+            if (!userId || userId.length > 10) {
               validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
             }
 
