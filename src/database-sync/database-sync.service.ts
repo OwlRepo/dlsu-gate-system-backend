@@ -372,234 +372,248 @@ export class DatabaseSyncService {
     }
   }
 
+  private async useDefaultImage(reason: string): Promise<string> {
+    const defaultImagePath = path.join(process.cwd(), 'dlsu.png');
+
+    this.logger.debug('Attempting to use default image', {
+      reason,
+      defaultImagePath,
+      exists: fs.existsSync(defaultImagePath),
+    });
+
+    try {
+      const defaultImageBuffer = fs.readFileSync(defaultImagePath);
+      const base64Image = defaultImageBuffer.toString('base64');
+      return `data:image/png;base64,${base64Image}`;
+    } catch (error) {
+      this.logger.error('Failed to read default image', {
+        error: error.message,
+        path: defaultImagePath,
+      });
+      throw new Error('Failed to read default image');
+    }
+  }
+
   private async convertPhotoToBase64(
     photoData: any,
-    studentId?: string,
-  ): Promise<string | null> {
+    studentId: string,
+  ): Promise<string> {
     try {
       let imageBuffer: Buffer;
-      const defaultImagePath = path.join(process.cwd(), 'dlsu.png');
 
-      // Check if default image exists
-      if (!fs.existsSync(defaultImagePath)) {
-        this.logger.warn(
-          'Default image (dlsu.png) not found in root directory',
-        );
-        return null;
-      }
+      if (typeof photoData === 'string') {
+        if (photoData.startsWith('0x')) {
+          try {
+            const hexData = photoData.slice(2);
+            if (!/^[0-9A-Fa-f]+$/.test(hexData)) {
+              throw new Error('Invalid hex string format');
+            }
+            imageBuffer = Buffer.from(hexData, 'hex');
 
-      try {
-        // Add handling for hex string format starting with "0x"
-        if (typeof photoData === 'string') {
-          if (photoData.startsWith('0x')) {
-            try {
-              // Remove '0x' prefix and convert hex string to buffer
-              const hexData = photoData.slice(2); // Remove '0x' prefix
-              // Validate hex string format
-              if (!/^[0-9A-Fa-f]+$/.test(hexData)) {
-                throw new Error('Invalid hex string format');
+            // Check if we need to swap byte order
+            if (
+              imageBuffer.length >= 14 &&
+              imageBuffer.slice(0, 2).toString() === 'BM'
+            ) {
+              const originalSize = imageBuffer.readUInt32BE(2); // Read as big-endian
+              if (originalSize > imageBuffer.length) {
+                // Try swapping byte order for size field
+                const size =
+                  ((originalSize & 0xff) << 24) |
+                  ((originalSize & 0xff00) << 8) |
+                  ((originalSize & 0xff0000) >> 8) |
+                  ((originalSize & 0xff000000) >> 24);
+
+                this.logger.debug(
+                  'Photo conversion debug - attempting byte order correction',
+                  {
+                    studentId,
+                    originalSize,
+                    correctedSize: size,
+                    bufferLength: imageBuffer.length,
+                  },
+                );
+
+                // If the corrected size looks valid, swap the bytes
+                if (size <= imageBuffer.length) {
+                  const newBuffer = Buffer.alloc(imageBuffer.length);
+                  imageBuffer.copy(newBuffer); // Copy original data
+                  newBuffer.writeUInt32LE(size, 2); // Write corrected size
+                  imageBuffer = newBuffer;
+                }
               }
-              imageBuffer = Buffer.from(hexData, 'hex');
-              this.logger.debug('Successfully converted hex string to buffer');
-            } catch (hexError) {
-              this.logger.error('Failed to convert hex string to buffer:', {
-                error: hexError.message,
-                hexLength: photoData.length,
-                sampleHex: photoData.slice(0, 50) + '...',
-              });
-              this.logPhotoConversionFailure(
-                photoData,
-                'Failed to convert hex string to buffer',
-                studentId,
-              );
-              imageBuffer = fs.readFileSync(defaultImagePath);
             }
-          } else if (fs.existsSync(photoData)) {
-            // Handle string path input
-            try {
-              imageBuffer = fs.readFileSync(photoData);
-              this.logger.debug(
-                `Successfully read image from path: ${photoData}`,
-              );
-            } catch (readError) {
-              this.logger.error('Failed to read image file:', {
-                error: readError.message,
-                path: photoData,
-              });
-              this.logPhotoConversionFailure(
-                photoData,
-                'Failed to read image file',
-                studentId,
-              );
-              imageBuffer = fs.readFileSync(defaultImagePath);
-            }
-          } else {
-            this.logger.warn(
-              `Photo file not found at path: ${photoData}, using default image`,
-            );
-            this.logPhotoConversionFailure(
-              photoData,
-              'Photo file not found at path',
+          } catch (error) {
+            this.logger.error('Failed to convert hex string to buffer', {
               studentId,
-            );
-            imageBuffer = fs.readFileSync(defaultImagePath);
-          }
-        } else if (Buffer.isBuffer(photoData)) {
-          // Handle Buffer input
-          imageBuffer = photoData;
-          this.logger.debug('Using provided buffer directly');
-        } else if (
-          photoData instanceof Blob ||
-          (typeof Blob !== 'undefined' && photoData instanceof Blob)
-        ) {
-          // Handle Blob input
-          try {
-            const arrayBuffer = await photoData.arrayBuffer();
-            imageBuffer = Buffer.from(arrayBuffer);
-            this.logger.debug('Successfully converted Blob to Buffer');
-          } catch (blobError) {
-            this.logger.error('Failed to convert Blob to Buffer:', {
-              error: blobError.message,
-              blobSize: photoData.size,
-              blobType: photoData.type,
+              error: error.message,
             });
-            this.logPhotoConversionFailure(
-              photoData,
-              'Failed to convert Blob to Buffer',
-              studentId,
+            return this.useDefaultImage(
+              'Failed to convert hex string to buffer',
             );
-            imageBuffer = fs.readFileSync(defaultImagePath);
-          }
-        } else if (
-          photoData &&
-          typeof photoData === 'object' &&
-          'data' in photoData
-        ) {
-          // Handle potential database BLOB object
-          try {
-            if (Buffer.isBuffer(photoData.data)) {
-              imageBuffer = photoData.data;
-              this.logger.debug('Using BLOB data buffer directly');
-            } else if (Array.isArray(photoData.data)) {
-              imageBuffer = Buffer.from(photoData.data);
-              this.logger.debug('Converted BLOB data array to buffer');
-            } else {
-              throw new Error('Invalid BLOB data format');
-            }
-          } catch (blobError) {
-            this.logger.error('Failed to process BLOB data:', {
-              error: blobError.message,
-              dataType: typeof photoData.data,
-              isArray: Array.isArray(photoData.data),
-            });
-            this.logPhotoConversionFailure(
-              photoData,
-              'Failed to process BLOB data',
-              studentId,
-            );
-            imageBuffer = fs.readFileSync(defaultImagePath);
           }
         } else {
-          this.logger.warn(
-            `No valid photo data provided (type: ${typeof photoData}), using default image`,
-          );
-          this.logPhotoConversionFailure(
-            photoData,
-            'No valid photo data provided',
+          imageBuffer = Buffer.from(photoData, 'base64');
+        }
+      } else if (Buffer.isBuffer(photoData)) {
+        imageBuffer = photoData;
+      } else {
+        return this.useDefaultImage('Invalid photo data type');
+      }
+
+      // Get first 4 bytes as hex for signature checking
+      const signature = imageBuffer.slice(0, 4).toString('hex');
+      const extendedSignature = imageBuffer.slice(0, 8).toString('hex');
+
+      this.logger.debug('Photo conversion debug - signature check', {
+        studentId,
+        signature,
+        extendedSignature,
+        bufferLength: imageBuffer.length,
+        isBuffer: Buffer.isBuffer(imageBuffer),
+      });
+
+      // Validate image buffer
+      if (!imageBuffer || imageBuffer.length === 0) {
+        this.logger.warn('Empty image buffer detected, using default image');
+        this.logPhotoConversionFailure(
+          photoData,
+          'Empty image buffer detected',
+          studentId,
+        );
+        imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+      }
+
+      // Additional validation for corrupted images
+      if (imageBuffer.length < 100) {
+        this.logger.warn(
+          'Suspiciously small image detected, using default image',
+          {
+            bufferLength: imageBuffer.length,
+            originalDataType: typeof photoData,
+          },
+        );
+        this.logPhotoConversionFailure(
+          photoData,
+          'Suspiciously small image detected',
+          studentId,
+        );
+        imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+      }
+
+      // Try to validate image format
+      try {
+        // Detailed BMP structure analysis if it starts with 'BM'
+        if (signature.startsWith('424d')) {
+          // '424d' is 'BM'
+          const fileSize = imageBuffer.readUInt32LE(2); // Size should be at offset 2
+          const pixelOffset = imageBuffer.readUInt32LE(10); // Pixel array offset should be at 10
+          const headerSize = imageBuffer.readUInt32LE(14); // DIB header size at offset 14
+
+          this.logger.debug('BMP Header Analysis:', {
+            signature,
+            extendedSignature,
+            fileSize,
+            actualFileSize: imageBuffer.length,
+            pixelOffset,
+            headerSize,
             studentId,
-          );
-          imageBuffer = fs.readFileSync(defaultImagePath);
+            headerBytes: imageBuffer.slice(0, 54).toString('hex'), // First 54 bytes (standard BMP header)
+            isValidSize: fileSize === imageBuffer.length,
+            isValidPixelOffset: pixelOffset > 0 && pixelOffset < fileSize,
+            isValidHeaderSize: [12, 40, 52, 56, 108, 124].includes(headerSize), // Common DIB header sizes
+          });
+
+          // If it's not a valid BMP structure, log and use default
+          if (!this.isValidBmpStructure(imageBuffer)) {
+            this.logger.warn('Invalid BMP structure detected', {
+              reason: 'File structure does not match BMP format',
+              signature,
+              fileSize,
+              actualFileSize: imageBuffer.length,
+              pixelOffset,
+              headerSize,
+            });
+            this.logPhotoConversionFailure(
+              photoData,
+              'Invalid BMP structure: Incorrect header values',
+              studentId,
+            );
+            imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+            return imageBuffer.toString('base64');
+          }
         }
 
-        // Validate image buffer
-        if (!imageBuffer || imageBuffer.length === 0) {
-          this.logger.warn('Empty image buffer detected, using default image');
-          this.logPhotoConversionFailure(
-            photoData,
-            'Empty image buffer detected',
-            studentId,
-          );
-          imageBuffer = fs.readFileSync(defaultImagePath);
-        }
+        const supportedSignatures = {
+          png: ['89504e47'], // PNG
+          jpeg: [
+            'ffd8ffe0', // JPEG
+            'ffd8ffe1', // JPEG with EXIF
+            'ffd8ffe2', // JPEG with SPIFF
+            'ffd8ffe3', // JPEG with JFIF
+          ],
+          bmp: [
+            '424d', // Standard BMP
+            // Removing custom variants as they don't follow standard BMP structure
+          ],
+        };
 
-        // Additional validation for corrupted images
-        if (imageBuffer.length < 100) {
+        // Check if signature matches any supported format
+        const isSupported = Object.values(supportedSignatures)
+          .flat()
+          .some((supported) => {
+            const matches = signature.startsWith(supported);
+            if (matches) {
+              this.logger.debug(
+                `Matched signature: ${supported} for format ${Object.keys(
+                  supportedSignatures,
+                ).find((key) => supportedSignatures[key].includes(supported))}`,
+              );
+            }
+            return matches;
+          });
+
+        if (!isSupported) {
           this.logger.warn(
-            'Suspiciously small image detected, using default image',
+            'Invalid image signature detected, using default image',
             {
+              signature,
+              extendedSignature,
               bufferLength: imageBuffer.length,
-              originalDataType: typeof photoData,
+              studentId,
+              supportedFormats: Object.values(supportedSignatures).flat(),
             },
           );
           this.logPhotoConversionFailure(
             photoData,
-            'Suspiciously small image detected',
+            `Invalid image signature detected: ${signature}`,
             studentId,
           );
-          imageBuffer = fs.readFileSync(defaultImagePath);
-        }
-
-        // Try to validate image format
-        try {
-          const signature = imageBuffer.slice(0, 4).toString('hex');
-          if (
-            ![
-              '89504e47', // PNG
-              'ffd8ffe0', // JPEG
-              'ffd8ffe1', // JPEG with EXIF
-              'ffd8ffe2', // JPEG with SPIFF
-              'ffd8ffe3', // JPEG with JFIF
-            ].includes(signature)
-          ) {
-            this.logger.warn(
-              'Invalid image signature detected, using default image',
-              {
-                signature,
-                bufferLength: imageBuffer.length,
-              },
-            );
-            this.logPhotoConversionFailure(
-              photoData,
-              `Invalid image signature detected: ${signature}`,
-              studentId,
-            );
-            imageBuffer = fs.readFileSync(defaultImagePath);
-          }
-        } catch (signatureError) {
-          this.logger.error('Error checking image signature:', {
-            error: signatureError.message,
-            bufferLength: imageBuffer?.length,
+          imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+        } else {
+          this.logger.debug('Valid image signature detected', {
+            signature,
+            studentId,
+            format: Object.keys(supportedSignatures).find((key) =>
+              supportedSignatures[key].some((s) => signature.startsWith(s)),
+            ),
           });
-          this.logPhotoConversionFailure(
-            photoData,
-            'Error checking image signature',
-            studentId,
-          );
-          imageBuffer = fs.readFileSync(defaultImagePath);
         }
-
-        const base64String = imageBuffer.toString('base64');
-        return base64String;
-      } catch (conversionError) {
-        this.logger.error('Error during image conversion:', {
-          error: conversionError.message,
-          photoDataType: typeof photoData,
-          isBuffer: Buffer.isBuffer(photoData),
-          isBlob: photoData instanceof Blob,
-          hasData: photoData && 'data' in photoData,
-          stack: conversionError.stack,
+      } catch (signatureError) {
+        this.logger.error('Error checking image signature:', {
+          error: signatureError.message,
+          bufferLength: imageBuffer?.length,
         });
-
         this.logPhotoConversionFailure(
           photoData,
-          'Error during image conversion',
+          'Error checking image signature',
           studentId,
         );
-        // Fallback to default image
-        this.logger.warn('Using default image due to conversion error');
-        const defaultBuffer = fs.readFileSync(defaultImagePath);
-        return defaultBuffer.toString('base64');
+        imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
       }
+
+      const base64String = imageBuffer.toString('base64');
+      return base64String;
     } catch (error) {
       this.logger.error('Critical error in convertPhotoToBase64:', {
         error: error.message,
@@ -616,6 +630,33 @@ export class DatabaseSyncService {
         studentId,
       );
       return null;
+    }
+  }
+
+  private isValidBmpStructure(buffer: Buffer): boolean {
+    try {
+      if (buffer.length < 54) return false; // Minimum size for BMP header
+
+      const signature = buffer.slice(0, 2).toString('ascii');
+      if (signature !== 'BM') return false;
+
+      const fileSize = buffer.readUInt32LE(2);
+      const pixelOffset = buffer.readUInt32LE(10);
+      const headerSize = buffer.readUInt32LE(14);
+
+      // Basic structure validation
+      return (
+        fileSize === buffer.length && // File size matches
+        pixelOffset >= 54 &&
+        pixelOffset < fileSize && // Valid pixel data offset
+        [12, 40, 52, 56, 108, 124].includes(headerSize) && // Valid DIB header size
+        pixelOffset <= buffer.length // Pixel offset within buffer
+      );
+    } catch (e) {
+      this.logger.error('Error validating BMP structure:', {
+        error: e.message,
+      });
+      return false;
     }
   }
 
