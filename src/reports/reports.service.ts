@@ -135,7 +135,8 @@ export class ReportsService {
       const columns = [
         'student.ID_Number as id',
         'student."Unique_ID" as card',
-        'student."Lived_Name" as lived',
+        'student."Lived_Name" as lived_name',
+        'student.Remarks as remarks',
       ];
       if (includePhoto) {
         columns.push('student.Photo as photo');
@@ -150,7 +151,8 @@ export class ReportsService {
       students.forEach((student) => {
         studentMap.set(student.id, {
           card: student.card,
-          lived: student.lived,
+          lived_name: student.lived_name,
+          remarks: student.remarks,
           ...(includePhoto && { photo: student.photo }),
         });
       });
@@ -162,7 +164,7 @@ export class ReportsService {
       { id: 'id_number', title: 'ID Number' },
       { id: 'card_number', title: 'Card Number' },
       { id: 'name', title: 'Name' },
-      { id: 'lived_name', title: 'Lived Name' },
+      { id: 'lived_name', title: 'Lived_Name' },
       { id: 'remarks', title: 'Remarks' },
       { id: 'status', title: 'Status' },
     ];
@@ -193,8 +195,8 @@ export class ReportsService {
         id_number: report.user_id,
         card_number: student?.card || 'null',
         name: report.name,
-        lived_name: student?.lived || 'null',
-        remarks: report.remarks || 'null',
+        lived_name: student?.lived_name || 'null',
+        remarks: student?.remarks || 'null',
         status: report.status || 'null',
       };
 

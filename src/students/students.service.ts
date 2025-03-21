@@ -74,7 +74,7 @@ export class StudentsService {
       'ID',
       'ID Number',
       'Name',
-      'Lived Name',
+      'Lived_Name',
       'Remarks',
       'Campus Entry',
       'Unique ID',
