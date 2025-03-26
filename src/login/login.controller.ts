@@ -95,7 +95,14 @@ export class LoginController {
       }
       return adminResult;
     } catch (error) {
-      console.log(error);
+      // If error is about inactive account, propagate it
+      if (
+        error instanceof UnauthorizedException &&
+        error.message === 'Account is not active'
+      ) {
+        throw error;
+      }
+
       // If admin login fails, try super-admin login
       try {
         const superAdminResult = await this.superAdminAuthService.login({
@@ -107,7 +114,13 @@ export class LoginController {
         }
         return superAdminResult;
       } catch (superAdminError) {
-        console.log(superAdminError);
+        // If super admin error is about inactive account, propagate it
+        if (
+          superAdminError instanceof UnauthorizedException &&
+          superAdminError.message === 'Account is not active'
+        ) {
+          throw superAdminError;
+        }
         // If both fail, throw unauthorized exception
         throw new UnauthorizedException('Invalid credentials');
       }
