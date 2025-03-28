@@ -136,9 +136,18 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
     });
 
     stats.gateAccessStats = {
-      allowed: Math.round((accessCounts.green / stats.entry) * 100),
-      allowedWithRemarks: Math.round((accessCounts.yellow / stats.entry) * 100),
-      notAllowed: Math.round((accessCounts.red / stats.entry) * 100),
+      allowed:
+        stats.entry === 0
+          ? 0
+          : Math.round((accessCounts.green / todayReports.length) * 100),
+      allowedWithRemarks:
+        stats.entry === 0
+          ? 0
+          : Math.round((accessCounts.yellow / todayReports.length) * 100),
+      notAllowed:
+        stats.entry === 0
+          ? 0
+          : Math.round((accessCounts.red / todayReports.length) * 100),
     };
 
     return stats;
