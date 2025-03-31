@@ -1017,30 +1017,18 @@ export class DatabaseSyncService {
               lived_name: livedName,
               remarks: remarks,
               csn: userId,
-              photo: record.Photo
-                ? `data:image/jpeg;base64,${await this.convertPhotoToBase64(
-                    record.Photo,
-                    record.ID_Number,
-                  )}`
-                : '',
-              face_image_file1: record.Photo
-                ? `${await this.convertToBase64PNG(
-                    await this.convertPhotoToBase64(
-                      record.Photo,
-                      record.ID_Number,
-                    ),
-                    record.ID_Number,
-                  )}`
-                : '',
-              face_image_file2: record.Photo
-                ? `${await this.convertToBase64PNG(
-                    await this.convertPhotoToBase64(
-                      record.Photo,
-                      record.ID_Number,
-                    ),
-                    record.ID_Number,
-                  )}`
-                : '',
+              photo: await this.convertPhotoToBase64(
+                record.Photo,
+                record.ID_Number,
+              ),
+              face_image_file1: await this.convertToBase64PNG(
+                await this.convertPhotoToBase64(record.Photo, record.ID_Number),
+                record.ID_Number,
+              ),
+              face_image_file2: await this.convertToBase64PNG(
+                await this.convertPhotoToBase64(record.Photo, record.ID_Number),
+                record.ID_Number,
+              ),
               start_datetime: startDate,
               expiry_datetime:
                 record.Campus_Entry.toString().toUpperCase() === 'N'
