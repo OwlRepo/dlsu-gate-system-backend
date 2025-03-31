@@ -20,6 +20,7 @@ import * as dayjs from 'dayjs';
 import * as utc from 'dayjs/plugin/utc';
 import * as timezone from 'dayjs/plugin/timezone';
 import * as Table from 'cli-table3';
+import * as sharp from 'sharp';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -1016,18 +1017,30 @@ export class DatabaseSyncService {
               lived_name: livedName,
               remarks: remarks,
               csn: userId,
-              photo: await this.convertPhotoToBase64(
-                record.Photo,
-                record.ID_Number,
-              ),
-              face_image_file1: await this.convertPhotoToBase64(
-                record.Photo,
-                record.ID_Number,
-              ),
-              face_image_file2: await this.convertPhotoToBase64(
-                record.Photo,
-                record.ID_Number,
-              ),
+              photo: record.Photo
+                ? `data:image/jpeg;base64,${await this.convertPhotoToBase64(
+                    record.Photo,
+                    record.ID_Number,
+                  )}`
+                : '',
+              face_image_file1: record.Photo
+                ? `${await this.convertToBase64PNG(
+                    await this.convertPhotoToBase64(
+                      record.Photo,
+                      record.ID_Number,
+                    ),
+                    record.ID_Number,
+                  )}`
+                : '',
+              face_image_file2: record.Photo
+                ? `${await this.convertToBase64PNG(
+                    await this.convertPhotoToBase64(
+                      record.Photo,
+                      record.ID_Number,
+                    ),
+                    record.ID_Number,
+                  )}`
+                : '',
               start_datetime: startDate,
               expiry_datetime:
                 record.Campus_Entry.toString().toUpperCase() === 'N'
@@ -1701,6 +1714,50 @@ ${skippedTable.toString()}
           : undefined,
         step: 'biostar-deletion',
       });
+    }
+  }
+
+  private async convertToBase64PNG(
+    base64Data: string,
+    studentId: string,
+  ): Promise<string> {
+    try {
+      if (!base64Data) {
+        return '';
+      }
+
+      // Create a temporary directory if it doesn't exist
+      const tempDir = path.join(process.cwd(), 'temp', 'png-conversion');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      // Create temporary file paths
+      const tempInputPath = path.join(tempDir, `${studentId}_temp_input.png`);
+      const tempOutputPath = path.join(tempDir, `${studentId}_temp_output.png`);
+
+      // Convert base64 to buffer and save as PNG
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      fs.writeFileSync(tempInputPath, imageBuffer);
+
+      // Use Sharp to convert to PNG
+      await sharp(tempInputPath).png().toFile(tempOutputPath);
+
+      // Read the PNG file and convert back to base64
+      const pngBuffer = fs.readFileSync(tempOutputPath);
+      const pngBase64 = pngBuffer.toString('base64');
+
+      // Clean up temporary files
+      fs.unlinkSync(tempInputPath);
+      fs.unlinkSync(tempOutputPath);
+
+      return pngBase64;
+    } catch (error) {
+      this.logger.error('Error converting to PNG base64:', {
+        error: error.message,
+        studentId,
+      });
+      return base64Data; // Return original data if conversion fails
     }
   }
 }
