@@ -1,19 +1,19 @@
 services:
   nginx:
     image: nginx:latest
+    container_name: dlsu-portal-nginx
     ports:
       - '9580:9580'
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - persistent_uploads:/app/persistent_uploads:ro
+      - /dev/null:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - dlsu-gate-system-api-1
       - dlsu-gate-system-api-2
       - dlsu-gate-system-api-3
       - dlsu-gate-system-api-4
       - dlsu-gate-system-api-5
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
     deploy:
       resources:
         limits:
@@ -22,32 +22,36 @@ services:
         reservations:
           cpus: '1.00'
           memory: 1024M
+    restart: always
     networks:
       - app-network
-    restart: always
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-1:
     build:
       context: .
       dockerfile: Dockerfile
       no_cache: true
+    container_name: dlsu-portal-api-1
+    ports:
+      - '4001:4001'
     environment:
-      - PORT=3000
-      - DB_HOST=postgres
+      - PORT=4001
+      - DB_HOST=dlsu-portal-postgres
       - DB_PORT=5432
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=redis
+      - REDIS_HOST=dlsu-portal-redis
       - REDIS_PORT=6379
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - SOURCE_DB_HOST=192.168.9.158
+      - SOURCE_DB_PORT=1433
     env_file:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
+      - redis
     deploy:
       resources:
         limits:
@@ -59,29 +63,33 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
+    networks:
+      - app-network
 
   dlsu-gate-system-api-2:
     build:
       context: .
       dockerfile: Dockerfile
       no_cache: true
+    container_name: dlsu-portal-api-2
+    ports:
+      - '4002:4002'
     environment:
-      - PORT=3000
-      - DB_HOST=postgres
+      - PORT=4002
+      - DB_HOST=dlsu-portal-postgres
       - DB_PORT=5432
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=redis
+      - REDIS_HOST=dlsu-portal-redis
       - REDIS_PORT=6379
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - SOURCE_DB_HOST=192.168.9.158
+      - SOURCE_DB_PORT=1433
     env_file:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
+      - redis
     volumes:
       - persistent_uploads:/app/persistent_uploads
     deploy:
@@ -93,29 +101,33 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
+    networks:
+      - app-network
 
   dlsu-gate-system-api-3:
     build:
       context: .
       dockerfile: Dockerfile
       no_cache: true
+    container_name: dlsu-portal-api-3
+    ports:
+      - '4003:4003'
     environment:
-      - PORT=3000
-      - DB_HOST=postgres
+      - PORT=4003
+      - DB_HOST=dlsu-portal-postgres
       - DB_PORT=5432
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=redis
+      - REDIS_HOST=dlsu-portal-redis
       - REDIS_PORT=6379
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - SOURCE_DB_HOST=192.168.9.158
+      - SOURCE_DB_PORT=1433
     env_file:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
+      - redis
     volumes:
       - persistent_uploads:/app/persistent_uploads
     deploy:
@@ -127,29 +139,35 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
+    networks:
+      - app-network
 
   dlsu-gate-system-api-4:
     build:
       context: .
       dockerfile: Dockerfile
       no_cache: true
+    container_name: dlsu-portal-api-4
+    ports:
+      - '4004:4004'
     environment:
-      - PORT=3000
-      - DB_HOST=postgres
+      - PORT=4004
+      - DB_HOST=dlsu-portal-postgres
       - DB_PORT=5432
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=redis
+      - REDIS_HOST=dlsu-portal-redis
       - REDIS_PORT=6379
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - SOURCE_DB_HOST=192.168.9.158
+      - SOURCE_DB_PORT=1433
     env_file:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
+      - redis
+    volumes:
+      - persistent_uploads:/app/persistent_uploads
     deploy:
       resources:
         limits:
@@ -158,32 +176,36 @@ services:
         reservations:
           cpus: '1.00'
           memory: 1024M
-    volumes:
-      - persistent_uploads:/app/persistent_uploads
     restart: always
+    networks:
+      - app-network
 
   dlsu-gate-system-api-5:
     build:
       context: .
       dockerfile: Dockerfile
       no_cache: true
+    container_name: dlsu-portal-api-5
+    ports:
+      - '4005:4005'
     environment:
-      - PORT=3000
-      - DB_HOST=postgres
+      - PORT=4005
+      - DB_HOST=dlsu-portal-postgres
       - DB_PORT=5432
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=redis
+      - REDIS_HOST=dlsu-portal-redis
       - REDIS_PORT=6379
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - SOURCE_DB_HOST=192.168.9.158
+      - SOURCE_DB_PORT=1433
     env_file:
       - .env
     depends_on:
       - postgres
-    networks:
-      - app-network
+      - redis
+    volumes:
+      - persistent_uploads:/app/persistent_uploads
     deploy:
       resources:
         limits:
@@ -192,22 +214,21 @@ services:
         reservations:
           cpus: '1.00'
           memory: 1024M
-    volumes:
-      - persistent_uploads:/app/persistent_uploads
     restart: always
+    networks:
+      - app-network
 
   postgres:
     image: postgres:latest
+    container_name: dlsu-portal-postgres
+    ports:
+      - '5438:5432'
     environment:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-dlsu_gate_system}
-    ports:
-      - '5438:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app-network
     deploy:
       resources:
         limits:
@@ -236,13 +257,14 @@ services:
       timeout: 5s
       retries: 5
     restart: always
+    networks:
+      - app-network
 
   redis:
     image: redis:alpine
+    container_name: dlsu-portal-redis
     ports:
       - '6389:6379'
-    networks:
-      - app-network
     deploy:
       resources:
         limits:
@@ -253,21 +275,22 @@ services:
           memory: 512M
     command: redis-server --maxmemory 768mb --maxmemory-policy allkeys-lru
     restart: always
+    networks:
+      - app-network
 
   pgadmin:
     image: dpage/pgadmin4
+    container_name: dlsu-portal-pgadmin
+    ports:
+      - '8080:8080'
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
       SCRIPT_NAME: /pgadmin
-      PGADMIN_LISTEN_PORT: 80
-    expose:
-      - '80'
+      PGADMIN_LISTEN_PORT: 8080
     volumes:
       - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - app-network
     depends_on:
       - postgres
     deploy:
@@ -279,6 +302,12 @@ services:
           cpus: '0.25'
           memory: 512M
     restart: always
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   postgres_data:
@@ -286,7 +315,3 @@ volumes:
   screensaver_uploads:
     driver: local
   pgadmin_data:
-
-networks:
-  app-network:
-    driver: bridge
