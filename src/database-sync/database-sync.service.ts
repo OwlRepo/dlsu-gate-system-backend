@@ -56,6 +56,11 @@ export class DatabaseSyncService {
     'logs',
     'photo-conversion',
   );
+  private readonly faceImagesDir = path.join(
+    process.cwd(),
+    'temp',
+    'face-images',
+  );
 
   constructor(
     @InjectRepository(SyncSchedule)
@@ -88,6 +93,7 @@ export class DatabaseSyncService {
     };
 
     this.ensureLogDirectory();
+    this.ensureFaceImagesDirectory();
   }
 
   private ensureLogDirectory() {
@@ -118,6 +124,12 @@ export class DatabaseSyncService {
         }
       });
     });
+  }
+
+  private ensureFaceImagesDirectory() {
+    if (!fs.existsSync(this.faceImagesDir)) {
+      fs.mkdirSync(this.faceImagesDir, { recursive: true });
+    }
   }
 
   private removeSpecialChars(str: string): string {
@@ -1021,13 +1033,17 @@ export class DatabaseSyncService {
                 record.Photo,
                 record.ID_Number,
               ),
-              face_image_file1: await this.convertToBase64PNG(
+              face_image_file1: await this.processFaceImage(
                 await this.convertPhotoToBase64(record.Photo, record.ID_Number),
                 record.ID_Number,
+                1,
+                tempDir,
               ),
-              face_image_file2: await this.convertToBase64PNG(
+              face_image_file2: await this.processFaceImage(
                 await this.convertPhotoToBase64(record.Photo, record.ID_Number),
                 record.ID_Number,
+                2,
+                tempDir,
               ),
               start_datetime: startDate,
               expiry_datetime:
@@ -1705,47 +1721,77 @@ ${skippedTable.toString()}
     }
   }
 
-  private async convertToBase64PNG(
+  private async processFaceImage(
     base64Data: string,
     studentId: string,
+    imageNumber: number,
+    csvDir: string,
   ): Promise<string> {
     try {
       if (!base64Data) {
+        this.logger.warn(
+          `No image data provided for student ${studentId}, face image ${imageNumber}`,
+        );
         return '';
       }
 
-      // Create a temporary directory if it doesn't exist
-      const tempDir = path.join(process.cwd(), 'temp', 'png-conversion');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
+      // Create file path in the same directory as the CSV
+      const fileName = `${studentId}_face_${imageNumber}.jpg`;
+      const filePath = path.join(csvDir, fileName);
+
+      // Convert base64 to buffer
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+
+      // Process image with Sharp
+      const processedImage = await sharp(imageBuffer)
+        .resize(250, 250, {
+          fit: 'cover', // Ensure minimum size of 250x250
+          position: 'center', // Center the image when resizing
+        })
+        .jpeg({
+          quality: 90, // High quality JPG
+          mozjpeg: true, // Use mozjpeg for better compression
+        });
+
+      // Get image metadata to check size and dimensions
+      const metadata = await processedImage.metadata();
+      const fileSize = metadata.size || 0;
+      const width = metadata.width || 0;
+      const height = metadata.height || 0;
+
+      // Validate image requirements
+      if (width < 250 || height < 250) {
+        this.logger.error(
+          `Face image for student ${studentId} is too small: ${width}x${height}px`,
+        );
+        return '';
       }
 
-      // Create temporary file paths
-      const tempInputPath = path.join(tempDir, `${studentId}_temp_input.png`);
-      const tempOutputPath = path.join(tempDir, `${studentId}_temp_output.png`);
+      if (fileSize > 10 * 1024 * 1024) {
+        this.logger.warn(
+          `Face image for student ${studentId} exceeds 10MB (${(fileSize / 1024 / 1024).toFixed(2)}MB), reducing quality`,
+        );
+        await processedImage
+          .jpeg({ quality: 70 }) // Reduce quality if too large
+          .toFile(filePath);
+      } else {
+        await processedImage.toFile(filePath);
+      }
 
-      // Convert base64 to buffer and save as PNG
-      const imageBuffer = Buffer.from(base64Data, 'base64');
-      fs.writeFileSync(tempInputPath, imageBuffer);
+      // Log successful image processing
+      this.logger.log(
+        `Successfully processed face image for student ${studentId}: ${width}x${height}px, ${(fileSize / 1024 / 1024).toFixed(2)}MB`,
+      );
 
-      // Use Sharp to convert to PNG
-      await sharp(tempInputPath).png().toFile(tempOutputPath);
-
-      // Read the PNG file and convert back to base64
-      const pngBuffer = fs.readFileSync(tempOutputPath);
-      const pngBase64 = pngBuffer.toString('base64');
-
-      // Clean up temporary files
-      fs.unlinkSync(tempInputPath);
-      fs.unlinkSync(tempOutputPath);
-
-      return pngBase64;
+      // Return just the filename since it's in the same directory as the CSV
+      return fileName;
     } catch (error) {
-      this.logger.error('Error converting to PNG base64:', {
+      this.logger.error('Error processing face image:', {
         error: error.message,
         studentId,
+        imageNumber,
       });
-      return base64Data; // Return original data if conversion fails
+      return '';
     }
   }
 }
