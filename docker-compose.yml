@@ -12,6 +12,8 @@ services:
       - dlsu-gate-system-api-3
       - dlsu-gate-system-api-4
       - dlsu-gate-system-api-5
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     deploy:
       resources:
         limits:
@@ -38,6 +40,8 @@ services:
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     env_file:
       - .env
     depends_on:
@@ -70,6 +74,8 @@ services:
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     env_file:
       - .env
     depends_on:
@@ -102,6 +108,8 @@ services:
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     env_file:
       - .env
     depends_on:
@@ -134,6 +142,8 @@ services:
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     env_file:
       - .env
     depends_on:
@@ -151,6 +161,7 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
+
   dlsu-gate-system-api-5:
     build:
       context: .
@@ -165,6 +176,8 @@ services:
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     env_file:
       - .env
     depends_on:

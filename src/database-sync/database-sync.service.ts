@@ -79,10 +79,21 @@ export class DatabaseSyncService {
       server: this.configService.get('SOURCE_DB_HOST'),
       port: parseInt(this.configService.get('SOURCE_DB_PORT')),
       options: {
-        encrypt: true,
+        encrypt: false,
         trustServerCertificate: true,
         enableArithAbort: true,
-        connectTimeout: 30000,
+        connectTimeout: 60000,
+        requestTimeout: 60000,
+        retry: {
+          maxRetries: 3,
+          retryInterval: 5000,
+        },
+        networkProtocol: 'tcp',
+      },
+      pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000,
       },
     };
 
