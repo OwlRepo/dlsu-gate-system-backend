@@ -82,13 +82,8 @@ export class DatabaseSyncService {
         encrypt: false,
         trustServerCertificate: true,
         enableArithAbort: true,
-        connectTimeout: 60000,
-        requestTimeout: 60000,
-        retry: {
-          maxRetries: 3,
-          retryInterval: 5000,
-        },
-        networkProtocol: 'tcp',
+        connectTimeout: 30000,
+        requestTimeout: 30000,
       },
       pool: {
         max: 10,
@@ -786,8 +781,30 @@ export class DatabaseSyncService {
       this.jobStartTimes.set(jobName, new Date());
       this.logger.log(`Starting database sync for ${jobName}`);
 
-      // 1. Connect to SQL Server
-      pool = await sql.connect(this.sqlConfig);
+      // Add detailed connection logging
+      this.logger.log('Attempting SQL Server connection...');
+      try {
+        pool = await sql.connect(this.sqlConfig);
+        this.logger.log('Successfully connected to SQL Server');
+      } catch (sqlError) {
+        this.logger.error('SQL Connection Error:', {
+          message: sqlError.message,
+          code: sqlError.code,
+          state: sqlError.state,
+          serverName: sqlError.serverName,
+          procName: sqlError.procName,
+          number: sqlError.number,
+          class: sqlError.class,
+          lineNumber: sqlError.lineNumber,
+          stack: sqlError.stack,
+        });
+        throw new BadRequestException({
+          message: 'Failed to connect to SQL Server',
+          details: sqlError.message,
+          code: sqlError.code,
+          state: sqlError.state,
+        });
+      }
 
       // 2. Check if isArchived column exists
       const hasIsArchivedColumn = await this.checkColumnExists(

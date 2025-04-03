@@ -2,15 +2,32 @@ FROM oven/bun:1
 
 WORKDIR /app
 
-# Install netcat for database connection checking
-RUN apt-get update && apt-get install -y netcat-openbsd && rm -rf /var/lib/apt/lists/*
+# Install prerequisites first
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    netcat-openbsd \
+    unixodbc \
+    unixodbc-dev \
+    python3 \
+    python3-pip \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install SQL Server ODBC driver
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
+    && ACCEPT_EULA=Y apt-get install -y mssql-tools18
 
 # Copy package files
 COPY package.json .
 COPY bun.lockb .
 
-# Install dependencies
+# Install dependencies - using only mssql package
 RUN bun install
+RUN bun add mssql
 
 # Copy the rest of the application
 COPY . .
