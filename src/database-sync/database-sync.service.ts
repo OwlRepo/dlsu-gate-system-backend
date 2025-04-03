@@ -79,7 +79,7 @@ export class DatabaseSyncService {
       server: this.configService.get('SOURCE_DB_HOST'),
       port: parseInt(this.configService.get('SOURCE_DB_PORT')),
       options: {
-        encrypt: false,
+        encrypt: true,
         trustServerCertificate: true,
         enableArithAbort: true,
         connectTimeout: 30000,
