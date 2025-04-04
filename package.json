@@ -28,7 +28,16 @@
     "migration:run": "npm run typeorm migration:run -- -d src/config/data-source.ts",
     "migration:revert": "npm run typeorm migration:revert -- -d src/config/data-source.ts",
     "schema:sync": "typeorm-ts-node-commonjs schema:sync -d src/config/data-source.ts",
-    "start:with-sync": "bun run schema:sync && bun run start:prod"
+    "start:with-sync": "bun run schema:sync && bun run start:prod",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:start:prod": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:reload": "pm2 reload ecosystem.config.js",
+    "pm2:delete": "pm2 delete ecosystem.config.js",
+    "pm2:logs": "pm2 logs",
+    "pm2:monit": "pm2 monit",
+    "pm2:status": "pm2 status"
   },
   "dependencies": {
     "@faker-js/faker": "^9.5.0",
