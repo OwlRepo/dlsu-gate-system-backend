@@ -2,8 +2,7 @@ services:
   nginx:
     image: nginx:latest
     container_name: dlsu-portal-nginx
-    ports:
-      - '9580:9580'
+    network_mode: host
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - persistent_uploads:/app/persistent_uploads:ro
@@ -23,10 +22,6 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    networks:
-      - app-network
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
 
   dlsu-gate-system-api-1:
     build:
@@ -34,17 +29,16 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     container_name: dlsu-portal-api-1
-    ports:
-      - '4001:4001'
+    network_mode: host
     environment:
       - PORT=4001
-      - DB_HOST=dlsu-portal-postgres
-      - DB_PORT=5432
+      - DB_HOST=localhost
+      - DB_PORT=5438
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=dlsu-portal-redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6389
       - SOURCE_DB_HOST=192.168.9.158
       - SOURCE_DB_PORT=1433
     env_file:
@@ -63,8 +57,6 @@ services:
     volumes:
       - persistent_uploads:/app/persistent_uploads
     restart: always
-    networks:
-      - app-network
 
   dlsu-gate-system-api-2:
     build:
@@ -72,17 +64,16 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     container_name: dlsu-portal-api-2
-    ports:
-      - '4002:4002'
+    network_mode: host
     environment:
       - PORT=4002
-      - DB_HOST=dlsu-portal-postgres
-      - DB_PORT=5432
+      - DB_HOST=localhost
+      - DB_PORT=5438
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=dlsu-portal-redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6389
       - SOURCE_DB_HOST=192.168.9.158
       - SOURCE_DB_PORT=1433
     env_file:
@@ -101,8 +92,6 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    networks:
-      - app-network
 
   dlsu-gate-system-api-3:
     build:
@@ -110,17 +99,16 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     container_name: dlsu-portal-api-3
-    ports:
-      - '4003:4003'
+    network_mode: host
     environment:
       - PORT=4003
-      - DB_HOST=dlsu-portal-postgres
-      - DB_PORT=5432
+      - DB_HOST=localhost
+      - DB_PORT=5438
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=dlsu-portal-redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6389
       - SOURCE_DB_HOST=192.168.9.158
       - SOURCE_DB_PORT=1433
     env_file:
@@ -139,8 +127,6 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    networks:
-      - app-network
 
   dlsu-gate-system-api-4:
     build:
@@ -148,17 +134,16 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     container_name: dlsu-portal-api-4
-    ports:
-      - '4004:4004'
+    network_mode: host
     environment:
       - PORT=4004
-      - DB_HOST=dlsu-portal-postgres
-      - DB_PORT=5432
+      - DB_HOST=localhost
+      - DB_PORT=5438
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=dlsu-portal-redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6389
       - SOURCE_DB_HOST=192.168.9.158
       - SOURCE_DB_PORT=1433
     env_file:
@@ -177,8 +162,6 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    networks:
-      - app-network
 
   dlsu-gate-system-api-5:
     build:
@@ -186,17 +169,16 @@ services:
       dockerfile: Dockerfile
       no_cache: true
     container_name: dlsu-portal-api-5
-    ports:
-      - '4005:4005'
+    network_mode: host
     environment:
       - PORT=4005
-      - DB_HOST=dlsu-portal-postgres
-      - DB_PORT=5432
+      - DB_HOST=localhost
+      - DB_PORT=5438
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
       - DB_NAME=${DB_NAME:-dlsu_gate_system}
-      - REDIS_HOST=dlsu-portal-redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6389
       - SOURCE_DB_HOST=192.168.9.158
       - SOURCE_DB_PORT=1433
     env_file:
@@ -215,18 +197,16 @@ services:
           cpus: '1.00'
           memory: 1024M
     restart: always
-    networks:
-      - app-network
 
   postgres:
     image: postgres:latest
     container_name: dlsu-portal-postgres
-    ports:
-      - '5438:5432'
+    network_mode: host
     environment:
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
       POSTGRES_DB: ${DB_NAME:-dlsu_gate_system}
+      PGPORT: 5438
     volumes:
       - postgres_data:/var/lib/postgresql/data
     deploy:
@@ -257,14 +237,11 @@ services:
       timeout: 5s
       retries: 5
     restart: always
-    networks:
-      - app-network
 
   redis:
-    image: redis:alpine
+    image: redis:latest
     container_name: dlsu-portal-redis
-    ports:
-      - '6389:6379'
+    network_mode: host
     deploy:
       resources:
         limits:
@@ -273,16 +250,13 @@ services:
         reservations:
           cpus: '0.50'
           memory: 512M
-    command: redis-server --maxmemory 768mb --maxmemory-policy allkeys-lru
+    command: redis-server --port 6389 --maxmemory 768mb --maxmemory-policy allkeys-lru
     restart: always
-    networks:
-      - app-network
 
   pgadmin:
     image: dpage/pgadmin4
     container_name: dlsu-portal-pgadmin
-    ports:
-      - '8080:8080'
+    network_mode: host
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
@@ -302,12 +276,6 @@ services:
           cpus: '0.25'
           memory: 512M
     restart: always
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
 
 volumes:
   postgres_data:
