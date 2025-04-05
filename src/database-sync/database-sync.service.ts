@@ -1315,6 +1315,43 @@ ${skippedTable.toString()}
           const firstLine = fs.readFileSync(csvFilePath, 'utf8').split('\n')[0];
           const headers = firstLine.split(',');
 
+          // Read the CSV file to get face template data
+          const csvData = fs
+            .readFileSync(csvFilePath, 'utf8')
+            .split('\n')
+            .slice(1);
+          const faceTemplateData = new Map();
+
+          for (const line of csvData) {
+            if (!line.trim()) continue;
+            const values = line.split(',');
+            const userId = values[0]; // user_id is the first column
+            const faceImage1 = values[11]; // face_image_file1 column
+            const faceImage2 = values[12]; // face_image_file2 column
+
+            if (faceImage1 && faceImage1.includes('|')) {
+              const [, templateFile] = faceImage1.split('|');
+              const templatePath = path.join(tempDir, templateFile);
+              if (fs.existsSync(templatePath)) {
+                const templateData = JSON.parse(
+                  fs.readFileSync(templatePath, 'utf8'),
+                );
+                faceTemplateData.set(`${userId}_1`, templateData);
+              }
+            }
+
+            if (faceImage2 && faceImage2.includes('|')) {
+              const [, templateFile] = faceImage2.split('|');
+              const templatePath = path.join(tempDir, templateFile);
+              if (fs.existsSync(templatePath)) {
+                const templateData = JSON.parse(
+                  fs.readFileSync(templatePath, 'utf8'),
+                );
+                faceTemplateData.set(`${userId}_2`, templateData);
+              }
+            }
+          }
+
           const importPayload = {
             File: {
               uri: uploadedFileName,
@@ -1421,6 +1458,61 @@ ${skippedTable.toString()}
             this.logger.log(
               `CSV import successful - All ${formattedRecords.length} records processed`,
             );
+
+            // Now update each user with their face templates
+            for (const [key, templateData] of faceTemplateData.entries()) {
+              const [userId, templateNumber] = key.split('_');
+              try {
+                // Update user with face template
+                const updateResponse = await axios.put(
+                  `${this.apiBaseUrl}/api/users/${userId}`,
+                  {
+                    User: {
+                      credentials: {
+                        visualFaces: [
+                          {
+                            template_ex_normalized_image:
+                              templateData.normalizedImage,
+                            templates: [
+                              {
+                                credential_bin_type: '9', // FACE_TEMPLATE_EX_VER_3 for BioStation 3 and W3
+                                template_ex: templateData.template,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  {
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                      'bs-session-id': sessionId,
+                    },
+                    httpsAgent: new https.Agent({
+                      rejectUnauthorized: false,
+                    }),
+                  },
+                );
+
+                if (updateResponse.data?.Response?.code !== '0') {
+                  this.logger.warn(
+                    `Failed to update face template for user ${userId}, template ${templateNumber}:`,
+                    updateResponse.data?.Response?.message,
+                  );
+                } else {
+                  this.logger.log(
+                    `Successfully updated face template for user ${userId}, template ${templateNumber}`,
+                  );
+                }
+              } catch (error) {
+                this.logger.error(
+                  `Error updating face template for user ${userId}, template ${templateNumber}:`,
+                  error.message,
+                );
+              }
+            }
           }
 
           this.logger.log('CSV file uploaded successfully');
@@ -1749,6 +1841,69 @@ ${skippedTable.toString()}
     }
   }
 
+  private async extractFaceTemplate(
+    base64Image: string,
+    studentId: string,
+  ): Promise<{ template: string; normalizedImage: string } | null> {
+    try {
+      const { token, sessionId } = await this.getApiToken();
+
+      // Step 1: Detect face and retrieve template from image
+      const response = await axios.put(
+        `${this.apiBaseUrl}/api/users/check/upload_picture`,
+        {
+          template_ex_picture: base64Image,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'bs-session-id': sessionId,
+          },
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+        },
+      );
+
+      if (response.data?.Response?.code !== '0') {
+        this.logger.error('Failed to extract face template:', {
+          studentId,
+          error: response.data?.Response?.message,
+        });
+        return null;
+      }
+
+      // For BioStar 2.9.7 and above
+      if (response.data?.image_template_2) {
+        return {
+          template: response.data.image_template_2,
+          normalizedImage: response.data.image,
+        };
+      }
+      // For BioStar 2.9.1 to 2.9.6
+      else if (response.data?.image_template) {
+        return {
+          template: response.data.image_template,
+          normalizedImage: response.data.image,
+        };
+      }
+      // For BioStar 2.9.0 and below
+      else {
+        return {
+          template: response.data.image,
+          normalizedImage: response.data.image,
+        };
+      }
+    } catch (error) {
+      this.logger.error('Error extracting face template:', {
+        error: error.message,
+        studentId,
+      });
+      return null;
+    }
+  }
+
   private async processFaceImage(
     base64Data: string,
     studentId: string,
@@ -1806,13 +1961,38 @@ ${skippedTable.toString()}
         await processedImage.toFile(filePath);
       }
 
+      // Extract face template
+      const processedBase64 = fs.readFileSync(filePath).toString('base64');
+      const templateData = await this.extractFaceTemplate(
+        processedBase64,
+        studentId,
+      );
+
+      if (!templateData) {
+        this.logger.warn(
+          `Failed to extract face template for student ${studentId}, face image ${imageNumber}`,
+        );
+        return '';
+      }
+
+      // Save the template data to a JSON file alongside the image
+      const templateFileName = `${studentId}_face_${imageNumber}_template.json`;
+      const templateFilePath = path.join(csvDir, templateFileName);
+      fs.writeFileSync(
+        templateFilePath,
+        JSON.stringify({
+          template: templateData.template,
+          normalizedImage: templateData.normalizedImage,
+        }),
+      );
+
       // Log successful image processing
       this.logger.log(
         `Successfully processed face image for student ${studentId}: ${width}x${height}px, ${(fileSize / 1024 / 1024).toFixed(2)}MB`,
       );
 
-      // Return just the filename since it's in the same directory as the CSV
-      return fileName;
+      // Return both the image filename and template filename
+      return `${fileName}|${templateFileName}`;
     } catch (error) {
       this.logger.error('Error processing face image:', {
         error: error.message,
