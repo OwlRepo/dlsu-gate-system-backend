@@ -89,11 +89,19 @@ export class DatabaseSyncQueueService {
     id: string,
     status: 'pending' | 'processing' | 'completed' | 'failed',
   ) {
-    await this.syncQueueRepository.update(id, {
-      status,
-      completedAt:
-        status === 'completed' || status === 'failed' ? new Date() : null,
+    const queueItem = await this.syncQueueRepository.findOne({
+      where: { id },
     });
+
+    if (!queueItem) {
+      throw new NotFoundException('Queue item not found');
+    }
+
+    queueItem.status = status;
+    queueItem.completedAt =
+      status === 'completed' || status === 'failed' ? new Date() : null;
+
+    await this.syncQueueRepository.save(queueItem);
   }
 
   async findNextPendingJob(): Promise<SyncQueue | null> {
