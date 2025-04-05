@@ -51,6 +51,7 @@ export class DatabaseSyncQueueService {
         () => {},
         null,
         false,
+        'Asia/Manila',
       );
       const nextRun = cronJob.nextDate().toJSDate();
 
