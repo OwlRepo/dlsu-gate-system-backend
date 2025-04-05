@@ -52,9 +52,9 @@ export class EmployeeAuthService {
     };
   }
 
-  async getEmployeeInfo(employee_id: number): Promise<Employee> {
+  async getEmployeeInfo(employee_id: string): Promise<Employee> {
     const employee = await this.employeeRepository.findOne({
-      where: { id: employee_id.toString() },
+      where: { id: employee_id },
     });
 
     if (!employee) {

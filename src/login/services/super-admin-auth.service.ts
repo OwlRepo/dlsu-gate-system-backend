@@ -10,6 +10,8 @@ import { SuperAdminLoginDto } from '../../super-admin/dto/super-admin.dto';
 import * as bcrypt from 'bcryptjs';
 import { SuperAdmin } from '../../super-admin/entities/super-admin.entity';
 import { TokenBlacklistService } from '../../auth/token-blacklist.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class SuperAdminAuthService {
@@ -17,6 +19,8 @@ export class SuperAdminAuthService {
     private superAdminService: SuperAdminService,
     private jwtService: JwtService,
     private readonly tokenBlacklistService: TokenBlacklistService,
+    @InjectRepository(SuperAdmin)
+    private readonly superAdminRepository: Repository<SuperAdmin>,
   ) {}
 
   async login(loginDto: SuperAdminLoginDto) {
@@ -42,7 +46,7 @@ export class SuperAdminAuthService {
 
     const { password, ...userInfo } = superAdmin;
     const payload = {
-      sub: superAdmin.super_admin_id,
+      sub: superAdmin.id,
       username: superAdmin.username,
       role: 'super-admin',
     };
@@ -82,8 +86,10 @@ export class SuperAdminAuthService {
     }
   }
 
-  async getSuperAdminInfo(super_admin_id: string): Promise<SuperAdmin> {
-    const superAdmin = await this.superAdminService.findOneById(super_admin_id);
+  async getSuperAdminInfo(id: string): Promise<SuperAdmin> {
+    const superAdmin = await this.superAdminRepository.findOne({
+      where: { id: parseInt(id) },
+    });
 
     if (!superAdmin) {
       throw new NotFoundException('Super admin not found');

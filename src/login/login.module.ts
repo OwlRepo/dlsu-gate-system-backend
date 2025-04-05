@@ -11,22 +11,24 @@ import { EmployeeAuthService } from './services/employee-auth.service';
 import { AuthModule } from '../auth/auth.module';
 import { ScreensaverModule } from '../screensaver/screensaver.module';
 import { SuperAdmin } from '../super-admin/entities/super-admin.entity';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin, Employee, SuperAdmin]),
+    TypeOrmModule.forFeature([Admin, SuperAdmin, Employee]),
     JwtModule.register({
       secret:
         process.env.JWT_SECRET ||
         'e34e5367877d04f91c919816b894a331c2a91908eacb36167e5d40f866cb4e1e3f5877a18975698d26ce49ee990e7d26f0c0f840c51e2d4dde56cdbf5e09affb',
       signOptions: { expiresIn: '60m' },
     }),
+    ConfigModule.forRoot(),
     SuperAdminModule,
     AuthModule,
     ScreensaverModule,
   ],
   controllers: [LoginController],
   providers: [LoginService, SuperAdminAuthService, EmployeeAuthService],
-  exports: [TypeOrmModule],
+  exports: [LoginService],
 })
 export class LoginModule {}
