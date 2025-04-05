@@ -3,18 +3,26 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 
-@Entity()
+@Entity('sync_queue')
 export class SyncQueue {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  @Column()
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'processing', 'completed', 'failed'],
+    default: 'pending',
+  })
   status: 'pending' | 'processing' | 'completed' | 'failed';
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 
   @Column({ nullable: true })
   completedAt: Date;

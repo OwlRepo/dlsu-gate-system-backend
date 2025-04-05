@@ -11,7 +11,7 @@ export const defaultSuperAdmin = {
 export const defaultAdmin = {
   email: faker.internet.email(),
   password: 'admin123',
-  username: faker.internet.userName(),
+  username: 'defaultadmin',
   firstName: faker.person.firstName(),
   lastName: faker.person.lastName(),
   name: faker.person.fullName(),

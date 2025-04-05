@@ -6,26 +6,66 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SyncQueue } from './entities/sync-queue.entity';
+import { SyncSchedule } from './entities/sync-schedule.entity';
+import { CronJob } from 'cron';
 
 @Injectable()
 export class DatabaseSyncQueueService {
   constructor(
     @InjectRepository(SyncQueue)
     private syncQueueRepository: Repository<SyncQueue>,
+    @InjectRepository(SyncSchedule)
+    private syncScheduleRepository: Repository<SyncSchedule>,
   ) {}
 
   async addToQueue() {
-    const currentQueueSize = await this.getCurrentQueueSize();
-    if (currentQueueSize >= 4) {
+    // Check if there's already a job running
+    const runningJob = await this.syncQueueRepository.findOne({
+      where: { status: 'processing' },
+    });
+
+    if (runningJob) {
       throw new BadRequestException(
-        'Queue is full - maximum 4 pending syncs allowed',
+        'A sync job is already running. Please wait for it to complete before starting a new one.',
       );
+    }
+
+    // Check if there are any pending jobs
+    const pendingJob = await this.syncQueueRepository.findOne({
+      where: { status: 'pending' },
+    });
+
+    if (pendingJob) {
+      throw new BadRequestException(
+        'There is already a pending sync job in the queue. Please wait for it to complete before starting a new one.',
+      );
+    }
+
+    // Check for upcoming scheduled syncs
+    const schedules = await this.syncScheduleRepository.find();
+    const now = new Date();
+
+    for (const schedule of schedules) {
+      const cronJob = new CronJob(
+        schedule.cronExpression,
+        () => {},
+        null,
+        false,
+      );
+      const nextRun = cronJob.nextDate().toJSDate();
+
+      // If there's a scheduled sync within the next 30 minutes, prevent manual sync
+      if (nextRun.getTime() - now.getTime() <= 30 * 60 * 1000) {
+        throw new BadRequestException(
+          `Cannot start manual sync: A scheduled sync is due to run at ${nextRun.toLocaleTimeString()}. Please wait for the scheduled sync to complete.`,
+        );
+      }
     }
 
     const queueId = await this.createQueueEntry();
     return {
       queueId,
-      position: currentQueueSize + 1,
+      position: 1, // Since we only allow one job at a time, position is always 1
     };
   }
 
@@ -46,23 +86,21 @@ export class DatabaseSyncQueueService {
   }
 
   async updateQueueStatus(
-    id: number,
-    status: 'processing' | 'completed' | 'failed',
+    id: string,
+    status: 'pending' | 'processing' | 'completed' | 'failed',
   ) {
-    const queueItem = await this.syncQueueRepository.findOne({
-      where: { id },
+    await this.syncQueueRepository.update(id, {
+      status,
+      completedAt:
+        status === 'completed' || status === 'failed' ? new Date() : null,
     });
+  }
 
-    if (!queueItem) {
-      throw new BadRequestException('Queue item not found');
-    }
-
-    queueItem.status = status;
-    if (status === 'completed') {
-      queueItem.completedAt = new Date();
-    }
-
-    return this.syncQueueRepository.save(queueItem);
+  async findNextPendingJob(): Promise<SyncQueue | null> {
+    return this.syncQueueRepository.findOne({
+      where: { status: 'pending' },
+      order: { createdAt: 'ASC' },
+    });
   }
 
   private async getCurrentQueueSize(): Promise<number> {
@@ -81,11 +119,11 @@ export class DatabaseSyncQueueService {
 
   private async findQueueItem(queueId: string): Promise<SyncQueue | null> {
     return this.syncQueueRepository.findOne({
-      where: { id: parseInt(queueId) },
+      where: { id: queueId },
     });
   }
 
   private async deleteQueueItem(queueId: string): Promise<void> {
-    await this.syncQueueRepository.delete(parseInt(queueId));
+    await this.syncQueueRepository.delete(queueId);
   }
 }

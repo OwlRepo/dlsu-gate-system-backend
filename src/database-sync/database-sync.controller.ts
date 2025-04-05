@@ -27,14 +27,13 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import * as csv from 'csv-parse';
 
 @ApiTags('Database Sync')
-@ApiBearerAuth()
 @Controller('database-sync')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN, Role.SUPER_ADMIN)
 export class DatabaseSyncController {
   constructor(private readonly databaseSyncService: DatabaseSyncService) {}
 
   @Post('schedule')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Update sync schedule',
     description: `
@@ -109,16 +108,13 @@ export class DatabaseSyncController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Insufficient permissions',
-  })
   async triggerManualSync() {
     return this.databaseSyncService.triggerManualSync();
   }
 
   @Get('schedules')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get all scheduled syncs',
     description: `
@@ -149,6 +145,8 @@ export class DatabaseSyncController {
   }
 
   @Get('test-connection')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Test SQL Server connection',
     description:
@@ -171,6 +169,8 @@ export class DatabaseSyncController {
   }
 
   @Get('running-syncs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get currently running syncs',
     description: `
@@ -203,6 +203,8 @@ export class DatabaseSyncController {
   }
 
   @Post('delete-users')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Bulk delete users',
     description: `

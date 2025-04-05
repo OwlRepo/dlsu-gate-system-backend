@@ -6,7 +6,6 @@ import { ConfigService } from '@nestjs/config';
 import { ScheduledSyncDto } from './dto/scheduled-sync.dto';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
-import { v4 as uuid } from 'uuid';
 import * as sql from 'mssql';
 import * as fs from 'fs';
 import axios from 'axios';
@@ -16,14 +15,9 @@ import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
 import * as FormData from 'form-data';
 import { In } from 'typeorm';
-import * as dayjs from 'dayjs';
-import * as utc from 'dayjs/plugin/utc';
-import * as timezone from 'dayjs/plugin/timezone';
 import * as Table from 'cli-table3';
 import * as sharp from 'sharp';
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
+import { DatabaseSyncQueueService } from './database-sync-queue.service';
 
 @Injectable()
 export class DatabaseSyncService {
@@ -69,6 +63,7 @@ export class DatabaseSyncService {
     private studentRepository: Repository<Student>,
     private configService: ConfigService,
     private schedulerRegistry: SchedulerRegistry,
+    private databaseSyncQueueService: DatabaseSyncQueueService,
   ) {
     this.initializeSchedules();
 
@@ -268,10 +263,10 @@ export class DatabaseSyncService {
         time: schedule.time,
         isActive: job?.running ?? false,
         lastSyncTime: schedule.lastSyncTime
-          ? dayjs(schedule.lastSyncTime).tz('Asia/Manila').toDate()
+          ? new Date(schedule.lastSyncTime)
           : null,
         nextRun: job?.nextDate()?.toJSDate()
-          ? dayjs(job.nextDate().toJSDate()).tz('Asia/Manila').toDate()
+          ? new Date(job.nextDate().toJSDate())
           : null,
         timezone: 'Asia/Manila',
       };
@@ -992,19 +987,26 @@ export class DatabaseSyncService {
       // Transform records to match format
       const skippedRecords = [];
 
-      const currentDate = dayjs().utc();
-      const startDate = currentDate
-        .subtract(10, 'year')
-        .format('YYYYMMDD HH:mm:ss.SSS');
+      const currentDate = new Date();
+      const startDate = new Date(currentDate);
+      startDate.setFullYear(startDate.getFullYear() - 10);
+      const formattedStartDate =
+        startDate.toISOString().replace('T', ' ').substring(0, 19) + '.000';
 
-      // Calculate expiry dates
-      const startDateObj = dayjs().utc().subtract(10, 'year'); // For start date
-      const expiryDateEnabled = startDateObj
-        .add(dayjs().year() - startDateObj.year() + 10, 'year') // Add years from current year + 10
-        .format('YYYYMMDD HH:mm:ss.SSS');
-      const expiryDateDisabled = currentDate // Use current date instead of start date
-        .subtract(1, 'month') // Subtract 1 month from current date
-        .format('YYYYMMDD HH:mm:ss.SSS');
+      const startDateObj = new Date();
+      startDateObj.setFullYear(startDateObj.getFullYear() - 10);
+
+      const expiryDateEnabled = new Date(startDateObj);
+      expiryDateEnabled.setFullYear(expiryDateEnabled.getFullYear() + 10);
+      const formattedExpiryDateEnabled =
+        expiryDateEnabled.toISOString().replace('T', ' ').substring(0, 19) +
+        '.000';
+
+      const expiryDateDisabled = new Date(currentDate);
+      expiryDateDisabled.setMonth(expiryDateDisabled.getMonth() - 1);
+      const formattedExpiryDateDisabled =
+        expiryDateDisabled.toISOString().replace('T', ' ').substring(0, 19) +
+        '.000';
 
       const formattedRecords = (
         await Promise.all(
@@ -1073,11 +1075,11 @@ export class DatabaseSyncService {
                 2,
                 tempDir,
               ),
-              start_datetime: startDate,
+              start_datetime: formattedStartDate,
               expiry_datetime:
                 record.Campus_Entry.toString().toUpperCase() === 'N'
-                  ? expiryDateDisabled
-                  : expiryDateEnabled,
+                  ? formattedExpiryDateDisabled
+                  : formattedExpiryDateEnabled,
               original_campus_entry: record.Campus_Entry,
             };
           }),
@@ -1238,10 +1240,10 @@ ${failedTable.toString()}
             '',
             '',
             'All Users',
-            startDate,
+            formattedStartDate,
             r.Campus_Entry?.toString()?.toUpperCase() === 'N'
-              ? expiryDateDisabled
-              : expiryDateEnabled,
+              ? formattedExpiryDateDisabled
+              : formattedExpiryDateEnabled,
             r.Lived_Name || '',
             r.Remarks || '',
             r.ID_Number,
@@ -1577,29 +1579,91 @@ ${skippedTable.toString()}
   }
 
   async triggerManualSync() {
-    const queueId = uuid();
-    const jobName = `manual-${queueId}`;
-
     try {
-      await this.executeDatabaseSync(jobName);
+      // Add the sync job to the queue
+      const { queueId, position } =
+        await this.databaseSyncQueueService.addToQueue();
+
+      // Start processing the queue if not already running
+      this.processQueue();
+
       return {
         success: true,
-        message: 'Manual sync completed successfully',
+        message: 'Sync job added to queue',
         queueId,
+        position,
       };
     } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-
-      this.logger.error('Manual sync failed:', error);
+      this.logger.error('Failed to add sync job to queue:', error);
       throw new BadRequestException({
-        message: 'Manual Sync Failed',
+        message: 'Failed to add sync job to queue',
         details: error.message,
-        biostarMessage: error.response?.data?.Response?.message,
-        step: error.step || 'unknown',
-        queueId,
       });
+    }
+  }
+
+  private async processQueue() {
+    // Check if queue processor is already running
+    if (this.activeJobs.get('queue-processor')) {
+      this.logger.debug('Queue processor is already running');
+      return;
+    }
+
+    // Mark queue processor as active
+    this.activeJobs.set('queue-processor', true);
+
+    try {
+      // Process all pending jobs in the queue
+      await this.processNextQueueItem();
+    } catch (error) {
+      this.logger.error('Error processing queue:', error);
+    } finally {
+      // Mark queue processor as inactive
+      this.activeJobs.set('queue-processor', false);
+    }
+  }
+
+  private async processNextQueueItem() {
+    // Find the next pending job in the queue
+    const pendingJob = await this.databaseSyncQueueService.findNextPendingJob();
+
+    if (!pendingJob) {
+      this.logger.debug('No pending jobs in queue');
+      return;
+    }
+
+    // Update job status to processing
+    await this.databaseSyncQueueService.updateQueueStatus(
+      pendingJob.id,
+      'processing',
+    );
+
+    try {
+      // Generate a unique job name
+      const jobName = `manual-${pendingJob.id}`;
+
+      // Execute the sync job
+      await this.executeDatabaseSync(jobName);
+
+      // Update job status to completed
+      await this.databaseSyncQueueService.updateQueueStatus(
+        pendingJob.id,
+        'completed',
+      );
+
+      // Process next item in queue
+      await this.processNextQueueItem();
+    } catch (error) {
+      // Update job status to failed
+      await this.databaseSyncQueueService.updateQueueStatus(
+        pendingJob.id,
+        'failed',
+      );
+
+      this.logger.error(`Sync job ${pendingJob.id} failed:`, error);
+
+      // Process next item in queue
+      await this.processNextQueueItem();
     }
   }
 
