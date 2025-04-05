@@ -208,9 +208,8 @@ export class DatabaseSyncService {
 
   private convertMilitaryTimeToCron(time: string): string {
     const [hours, minutes] = time.split(':');
-    // Convert to UTC time (Philippine Time is UTC+8)
-    const utcHours = (parseInt(hours) - 8 + 24) % 24; // Add 24 before modulo to handle negative hours
-    return `${minutes} ${utcHours} * * *`;
+    // No need to convert to UTC since we're using Asia/Manila timezone in CronJob
+    return `${minutes} ${hours} * * *`;
   }
 
   async updateSchedule(scheduleNumber: number, time: string) {
