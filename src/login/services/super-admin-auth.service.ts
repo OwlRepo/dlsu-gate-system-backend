@@ -89,6 +89,20 @@ export class SuperAdminAuthService {
   async getSuperAdminInfo(id: string): Promise<SuperAdmin> {
     const superAdmin = await this.superAdminRepository.findOne({
       where: { id: parseInt(id) },
+      select: {
+        id: true,
+        super_admin_id: true,
+        username: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+        role: true,
+        created_at: true,
+        updated_at: true,
+        is_active: true,
+        date_activated: true,
+        date_deactivated: true,
+      },
     });
 
     if (!superAdmin) {

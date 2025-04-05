@@ -55,6 +55,19 @@ export class EmployeeAuthService {
   async getEmployeeInfo(employee_id: string): Promise<Employee> {
     const employee = await this.employeeRepository.findOne({
       where: { id: employee_id },
+      select: {
+        id: true,
+        username: true,
+        employee_id: true,
+        first_name: true,
+        last_name: true,
+        is_active: true,
+        date_created: true,
+        date_activated: true,
+        date_deactivated: true,
+        device_id: true,
+        email: true,
+      },
     });
 
     if (!employee) {

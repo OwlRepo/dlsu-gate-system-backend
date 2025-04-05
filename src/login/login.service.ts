@@ -133,6 +133,19 @@ export class LoginService {
   async getAdminInfo(admin_id: number): Promise<Admin> {
     const admin = await this.adminRepository.findOne({
       where: { id: admin_id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        admin_id: true,
+        first_name: true,
+        last_name: true,
+        is_active: true,
+        created_at: true,
+        date_activated: true,
+        date_deactivated: true,
+      },
     });
 
     if (!admin) {
