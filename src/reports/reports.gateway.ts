@@ -2,10 +2,12 @@ import {
   WebSocketGateway,
   WebSocketServer,
   OnGatewayConnection,
+  OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { ReportsService } from './reports.service';
-import { OnModuleInit } from '@nestjs/common';
+import { OnModuleInit, Logger } from '@nestjs/common';
 import { Report } from './entities/report.entity';
 import { Interval } from '@nestjs/schedule';
 import { startOfDay, endOfDay } from 'date-fns';
@@ -28,10 +30,23 @@ interface GateStats {
     origin: '*',
   },
   path: '/socket.io/',
+  transports: ['websocket', 'polling'], // Explicitly define transports
 })
-export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
+export class ReportsGateway
+  implements
+    OnModuleInit,
+    OnGatewayConnection,
+    OnGatewayDisconnect,
+    OnGatewayInit
+{
   @WebSocketServer()
   server: Server;
+
+  private readonly logger = new Logger(ReportsGateway.name);
+  private isPollingActive = true;
+  private connectedClients = 0;
+  private lastSuccessfulUpdate: Date = new Date();
+  private readonly FALLBACK_THRESHOLD = 10000; // 10 seconds in milliseconds
 
   private currentStats: GateStats = {
     onPremise: 0,
@@ -47,29 +62,97 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
 
   constructor(private readonly reportsService: ReportsService) {}
 
-  onModuleInit() {
-    // Initialize stats when the server starts
-    this.initializeStats();
+  afterInit() {
+    this.logger.log('WebSocket Gateway initialized');
+  }
+
+  async onModuleInit() {
+    try {
+      await this.initializeStats();
+      this.logger.log('Initial stats calculated successfully');
+    } catch (error) {
+      this.logger.error(`Failed to initialize stats: ${error.message}`);
+    }
   }
 
   handleConnection(client: Socket) {
-    // Send current stats to newly connected client
-    client.emit('stats-update', this.currentStats);
+    this.connectedClients++;
+    this.logger.log(
+      `Client connected: ${client.id}. Total clients: ${this.connectedClients}`,
+    );
+
+    try {
+      client.emit('stats-update', this.currentStats);
+    } catch (error) {
+      this.logger.error(
+        `Error sending initial stats to client ${client.id}: ${error.message}`,
+      );
+    }
+  }
+
+  handleDisconnect(client: Socket) {
+    this.connectedClients--;
+    this.logger.log(
+      `Client disconnected: ${client.id}. Total clients: ${this.connectedClients}`,
+    );
   }
 
   private async initializeStats() {
-    this.currentStats = await this.calculateTodayStats();
-    this.server?.emit('stats-update', this.currentStats);
+    try {
+      this.currentStats = await this.calculateTodayStats();
+      if (this.server?.sockets?.sockets?.size > 0) {
+        this.server.emit('stats-update', this.currentStats);
+        this.logger.debug('Stats broadcast to all clients');
+      }
+    } catch (error) {
+      this.logger.error(`Failed to initialize stats: ${error.message}`);
+      throw error;
+    }
   }
 
-  @Interval(parseInt(process.env.POLLING_INTERVAL)) // Update every 1 second
+  @Interval(parseInt(process.env.POLLING_INTERVAL) || 1000)
   async handleInterval() {
-    const newStats = await this.calculateTodayStats();
+    if (!this.isPollingActive || this.connectedClients === 0) {
+      return;
+    }
 
-    // Only emit if there are changes
-    if (this.hasStatsChanged(newStats)) {
-      this.currentStats = newStats;
-      this.server.emit('stats-update', this.currentStats);
+    try {
+      const newStats = await this.calculateTodayStats();
+
+      if (this.hasStatsChanged(newStats)) {
+        this.currentStats = newStats;
+        this.server.emit('stats-update', this.currentStats);
+        this.logger.debug('Stats updated and broadcast to clients');
+        this.lastSuccessfulUpdate = new Date();
+      }
+    } catch (error) {
+      this.logger.error(`Error during stats polling: ${error.message}`);
+      this.server.emit('stats-error', { message: 'Failed to update stats' });
+    }
+  }
+
+  @Interval(10000) // Run every 10 seconds
+  async fallbackRefresh() {
+    if (this.connectedClients === 0) {
+      return;
+    }
+
+    const timeSinceLastUpdate =
+      Date.now() - this.lastSuccessfulUpdate.getTime();
+
+    if (timeSinceLastUpdate >= this.FALLBACK_THRESHOLD) {
+      this.logger.warn(
+        `No successful updates in ${timeSinceLastUpdate}ms, triggering fallback refresh`,
+      );
+      try {
+        const success = await this.refreshStats();
+        if (success) {
+          this.lastSuccessfulUpdate = new Date();
+          this.logger.log('Fallback refresh successful');
+        }
+      } catch (error) {
+        this.logger.error(`Fallback refresh failed: ${error.message}`);
+      }
     }
   }
 
@@ -89,14 +172,21 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
 
   private async calculateTodayStats(): Promise<GateStats> {
     const today = new Date();
-    const todayReports = await this.reportsService.find({
-      where: {
-        datetime: Between(startOfDay(today), endOfDay(today)),
-      },
-      order: {
-        datetime: 'DESC',
-      },
-    });
+    let todayReports: Report[] = [];
+
+    try {
+      todayReports = await this.reportsService.find({
+        where: {
+          datetime: Between(startOfDay(today), endOfDay(today)),
+        },
+        order: {
+          datetime: 'DESC',
+        },
+      });
+    } catch (error) {
+      this.logger.error(`Failed to fetch reports: ${error.message}`);
+      throw new Error(`Database query failed: ${error.message}`);
+    }
 
     const stats: GateStats = {
       onPremise: 0,
@@ -155,6 +245,24 @@ export class ReportsGateway implements OnModuleInit, OnGatewayConnection {
 
   // Method to manually trigger stats recalculation
   async refreshStats() {
-    await this.initializeStats();
+    try {
+      await this.initializeStats();
+      this.logger.log('Stats refreshed successfully');
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to refresh stats: ${error.message}`);
+      return false;
+    }
+  }
+
+  // Health check method
+  async checkHealth(): Promise<boolean> {
+    try {
+      await this.calculateTodayStats();
+      return true;
+    } catch (error) {
+      this.logger.error(`Health check failed: ${error.message}`);
+      return false;
+    }
   }
 }
