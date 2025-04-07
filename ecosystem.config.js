@@ -39,13 +39,15 @@ module.exports = {
         HEADERS_TIMEOUT: 66000,
       },
       exp_backoff_restart_delay: 100,
-      merge_logs: true,
+      merge_logs: false,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       time: true,
-      // Log rotation settings
-      max_size: '10M',
-      retain: 5,
-      compress: true,
+      // Log configuration
+      error_file: 'logs/error.log',
+      out_file: 'logs/out.log',
+      log_rotate: true,
+      log_max_size: '10M',
+      log_max_files: 5,
       // Graceful shutdown and reload
       kill_timeout: 30000,
       wait_ready: true,
@@ -73,12 +75,7 @@ module.exports = {
       // Add watch options
       watch: false,
       ignore_watch: ['node_modules', 'logs', '*.log'],
-      // Add crash handling
-      max_memory_restart: '1G',
       // Add clustering options
-      exec_mode: 'cluster',
-      instances: 5,
-      // Add deep health checks
       deep_monitoring: true,
     },
   ],
