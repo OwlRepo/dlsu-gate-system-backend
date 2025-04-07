@@ -8,6 +8,12 @@ import { createObjectCsvWriter } from 'csv-writer';
 import { CreateReportDto } from './dto/create-report.dto';
 import { EnhancedReportQueryDto } from './dto/enhanced-report-query.dto';
 import { Student } from '../students/entities/student.entity';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 @Injectable()
 export class ReportsService {
@@ -121,13 +127,28 @@ export class ReportsService {
     endDate: Date,
     includePhoto: boolean = false,
   ): Promise<{ filePath: string; fileName: string }> {
+    // Ensure proper date range by setting time to start and end of day using dayjs
+    const start = dayjs(startDate).startOf('day').toDate();
+    const end = dayjs(endDate).endOf('day').toDate();
+
+    console.log(
+      `Fetching reports between ${dayjs(start).format()} and ${dayjs(end).format()}`,
+    );
+
     const reports = await this.reportRepository.find({
       where: {
-        datetime: Between(startDate, endDate),
+        datetime: Between(start, end),
+      },
+      order: {
+        datetime: 'ASC',
       },
     });
 
+    console.log(`Found ${reports.length} reports`);
+
     const userIds = [...new Set(reports.map((report) => report.user_id))];
+    console.log(`Found ${userIds.length} unique user IDs`);
+
     const studentMap = new Map();
 
     if (userIds.length > 0) {
@@ -147,6 +168,8 @@ export class ReportsService {
         .select(columns)
         .where('student.ID_Number IN (:...userIds)', { userIds })
         .getRawMany();
+
+      console.log(`Found ${students.length} matching students`);
 
       students.forEach((student) => {
         studentMap.set(student.id, {
@@ -174,7 +197,7 @@ export class ReportsService {
       headers.push({ id: 'photo', title: 'Photo' });
     }
 
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = dayjs().format('YYYY-MM-DD');
     const fileName = `reports-${dateStr}.csv`;
     const uploadDir = path.join(process.cwd(), 'persistent_uploads', 'reports');
     const filePath = path.join(uploadDir, fileName);
@@ -191,7 +214,7 @@ export class ReportsService {
     const formattedRecords = reports.map((report) => {
       const student = studentMap.get(report.user_id);
       const record = {
-        timestamp: report.datetime.toISOString(),
+        timestamp: dayjs(report.datetime).format(),
         id_number: report.user_id,
         card_number: student?.card || 'null',
         name: report.name,
@@ -207,7 +230,10 @@ export class ReportsService {
       return record;
     });
 
+    console.log(`Writing ${formattedRecords.length} records to CSV`);
     await csvWriter.writeRecords(formattedRecords);
+    console.log(`CSV file written successfully to ${filePath}`);
+
     return { filePath, fileName };
   }
 
