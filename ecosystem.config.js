@@ -41,8 +41,6 @@ module.exports = {
       exp_backoff_restart_delay: 100,
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      error_file: 'logs/pm2/error.log',
-      out_file: 'logs/pm2/out.log',
       time: true,
       // Log rotation settings
       max_size: '10M',
