@@ -44,6 +44,10 @@ module.exports = {
       error_file: 'logs/pm2/error.log',
       out_file: 'logs/pm2/out.log',
       time: true,
+      // Log rotation settings
+      max_size: '10M',
+      retain: 5,
+      compress: true,
       // Graceful shutdown and reload
       kill_timeout: 30000,
       wait_ready: true,
