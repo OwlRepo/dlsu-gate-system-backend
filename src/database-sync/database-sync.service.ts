@@ -994,24 +994,27 @@ export class DatabaseSyncService {
       const skippedRecords = [];
 
       const currentDate = new Date();
+      // Set time to midnight for consistency
+      currentDate.setHours(0, 0, 0, 0);
+
       const startDate = new Date(currentDate);
       startDate.setFullYear(startDate.getFullYear() - 10);
       const formattedStartDate =
         startDate.toISOString().replace('T', ' ').substring(0, 19) + '.000';
 
-      const startDateObj = new Date();
+      const startDateObj = new Date(currentDate);
       startDateObj.setFullYear(startDateObj.getFullYear() - 10);
 
       // Set expiry date to 1 year in the future for enabled accounts
       const expiryDateEnabled = new Date(currentDate);
-      expiryDateEnabled.setFullYear(expiryDateEnabled.getFullYear() + 1);
+      expiryDateEnabled.setFullYear(currentDate.getFullYear() + 1);
       const formattedExpiryDateEnabled =
         expiryDateEnabled.toISOString().replace('T', ' ').substring(0, 19) +
         '.000';
 
       // Set expiry date to yesterday for disabled accounts (instant deactivation)
       const expiryDateDisabled = new Date(currentDate);
-      expiryDateDisabled.setDate(expiryDateDisabled.getDate() - 1);
+      expiryDateDisabled.setDate(currentDate.getDate() - 1);
       const formattedExpiryDateDisabled =
         expiryDateDisabled.toISOString().replace('T', ' ').substring(0, 19) +
         '.000';
