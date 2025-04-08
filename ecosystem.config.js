@@ -6,77 +6,69 @@ module.exports = {
       instances: 5,
       exec_mode: 'cluster',
       autorestart: true,
-      watch: false,
       max_memory_restart: '1G',
+
+      // Environment variables
       env: {
         NODE_ENV: 'development',
         PORT: 9580,
-        // Database configuration
         TYPEORM_CONNECTION_RETRIES: 5,
         TYPEORM_MAX_QUERY_EXECUTION_TIME: 60000,
         TYPEORM_ENTITIES_CACHE: true,
         TYPEORM_POOL_SIZE: 30,
-        // Add Node.js specific settings
         NODE_OPTIONS:
           '--max-old-space-size=2048 --expose-gc --max-http-header-size=16384',
-        // Add keep-alive settings
         KEEP_ALIVE_TIMEOUT: 65000,
         HEADERS_TIMEOUT: 66000,
       },
       env_production: {
         NODE_ENV: 'production',
         PORT: 9580,
-        // Database configuration
         TYPEORM_CONNECTION_RETRIES: 5,
         TYPEORM_MAX_QUERY_EXECUTION_TIME: 60000,
         TYPEORM_ENTITIES_CACHE: true,
         TYPEORM_POOL_SIZE: 30,
-        // Add Node.js specific settings
         NODE_OPTIONS:
           '--max-old-space-size=2048 --expose-gc --max-http-header-size=16384',
-        // Add keep-alive settings
         KEEP_ALIVE_TIMEOUT: 65000,
         HEADERS_TIMEOUT: 66000,
       },
-      exp_backoff_restart_delay: 100,
-      merge_logs: false,
+
+      // Logging
+      merge_logs: true, // Merge logs from all instances
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      time: true,
-      // Log configuration
-      error_file: 'logs/error.log',
       out_file: 'logs/out.log',
-      log_rotate: true,
-      log_max_size: '10M',
-      log_max_files: 5,
-      // Graceful shutdown and reload
+      error_file: 'logs/error.log',
+
+      // Make sure pm2-logrotate is installed and configured
+      // These options will work only with pm2-logrotate installed
+      // To install: `pm2 install pm2-logrotate`
+      // Rotation settings are controlled separately via pm2 set commands
+
+      // Clustering
+      increment_var: 'PORT',
+      instance_var: 'INSTANCE_ID',
+
+      // Graceful shutdown and restarts
       kill_timeout: 30000,
       wait_ready: true,
       listen_timeout: 30000,
-      // Cluster management
-      increment_var: 'PORT',
-      instance_var: 'INSTANCE_ID',
-      // Health check endpoint
-      status_endpoint: '/health',
-      // Restart settings
+      exp_backoff_restart_delay: 100,
       max_restarts: 5,
       min_uptime: '30s',
-      // Error handling
+      restart_delay: 10000,
+      force: false,
+
+      // Optional features
+      time: true, // timestamp in logs
+      deep_monitoring: true,
+
+      // Node args
       node_args: [
         '--max-old-space-size=2048',
         '--expose-gc',
         '--max-http-header-size=16384',
       ],
-      // Source map support
-      source_map_support: true,
-      // Restart behavior
-      restart_delay: 10000,
-      // Graceful reload
-      force: false,
-      // Add watch options
-      watch: false,
-      ignore_watch: ['node_modules', 'logs', '*.log'],
-      // Add clustering options
-      deep_monitoring: true,
     },
   ],
 };
