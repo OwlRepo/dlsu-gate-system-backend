@@ -901,6 +901,13 @@ export class DatabaseSyncService {
 
       // STEP 4: Sort through all records
       for (const record of allRecords) {
+        // Convert Unique_ID from hex to decimal if it's a valid hex string
+        let uniqueId = record.Unique_ID;
+        if (typeof uniqueId === 'string' && /^[0-9A-Fa-f\s]+$/.test(uniqueId)) {
+          // Remove spaces and convert to decimal
+          uniqueId = parseInt(uniqueId.replace(/\s/g, ''), 16);
+        }
+
         // Prepare the data we want to save
         const data = {
           ID_Number: record.ID_Number,
@@ -909,7 +916,7 @@ export class DatabaseSyncService {
           Remarks: record.Remarks,
           Photo: record.Photo,
           Campus_Entry: record.Campus_Entry,
-          Unique_ID: record.Unique_ID,
+          Unique_ID: uniqueId,
           isArchived: record.isArchived === 'Y',
           updatedAt: new Date(),
         };
