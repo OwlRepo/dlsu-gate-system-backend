@@ -1002,14 +1002,16 @@ export class DatabaseSyncService {
       const startDateObj = new Date();
       startDateObj.setFullYear(startDateObj.getFullYear() - 10);
 
-      const expiryDateEnabled = new Date(startDateObj);
-      expiryDateEnabled.setFullYear(expiryDateEnabled.getFullYear() + 10);
+      // Set expiry date to 1 year in the future for enabled accounts
+      const expiryDateEnabled = new Date(currentDate);
+      expiryDateEnabled.setFullYear(expiryDateEnabled.getFullYear() + 1);
       const formattedExpiryDateEnabled =
         expiryDateEnabled.toISOString().replace('T', ' ').substring(0, 19) +
         '.000';
 
+      // Set expiry date to yesterday for disabled accounts (instant deactivation)
       const expiryDateDisabled = new Date(currentDate);
-      expiryDateDisabled.setMonth(expiryDateDisabled.getMonth() - 1);
+      expiryDateDisabled.setDate(expiryDateDisabled.getDate() - 1);
       const formattedExpiryDateDisabled =
         expiryDateDisabled.toISOString().replace('T', ' ').substring(0, 19) +
         '.000';
