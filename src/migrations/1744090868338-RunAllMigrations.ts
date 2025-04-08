@@ -19,11 +19,14 @@ export class RunAllMigrations1744090868338 implements MigrationInterface {
         "first_name" VARCHAR(255) DEFAULT 'Unknown',
         "last_name" VARCHAR(255) DEFAULT 'Admin',
         "is_active" BOOLEAN DEFAULT true,
-        "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "is_activated" BOOLEAN DEFAULT false,
+        "activation_token" VARCHAR(255),
+        "activation_token_expires" TIMESTAMP
       )
     `);
 
-    // Create super-admin table
+    // Create super-admin table with timestamps and trigger
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "super-admin" (
         "id" SERIAL PRIMARY KEY,
@@ -34,9 +37,31 @@ export class RunAllMigrations1744090868338 implements MigrationInterface {
         "first_name" VARCHAR(255) DEFAULT 'Unknown',
         "last_name" VARCHAR(255) DEFAULT 'User',
         "role" VARCHAR(255) NOT NULL,
+        "is_active" BOOLEAN DEFAULT true,
+        "date_activated" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "date_deactivated" TIMESTAMP,
         "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    // Create trigger function for super-admin updated_at
+    await queryRunner.query(`
+      CREATE OR REPLACE FUNCTION update_super_admin_updated_at()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    // Create trigger for super-admin
+    await queryRunner.query(`
+      CREATE TRIGGER trigger_update_super_admin_updated_at
+      BEFORE UPDATE ON "super-admin"
+      FOR EACH ROW
+      EXECUTE FUNCTION update_super_admin_updated_at();
     `);
 
     // Create employee table
@@ -57,17 +82,17 @@ export class RunAllMigrations1744090868338 implements MigrationInterface {
       )
     `);
 
-    // Create students table
+    // Create students table with proper column types
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "students" (
         "id" SERIAL PRIMARY KEY,
-        "ID_Number" VARCHAR(32) NOT NULL,
-        "Name" VARCHAR(99),
-        "Lived_Name" INTEGER,
-        "Remarks" VARCHAR(7),
-        "Photo" VARCHAR(46) NOT NULL,
-        "Campus_Entry" VARCHAR(1) NOT NULL,
-        "Unique_ID" INTEGER,
+        "ID_Number" TEXT,
+        "Name" TEXT,
+        "Lived_Name" TEXT,
+        "Remarks" TEXT,
+        "Photo" TEXT,
+        "Campus_Entry" TEXT,
+        "Unique_ID" BIGINT,
         "isArchived" BOOLEAN DEFAULT false,
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -101,7 +126,7 @@ export class RunAllMigrations1744090868338 implements MigrationInterface {
       )
     `);
 
-    // Create sync_queue table
+    // Create sync_queue table with updatedAt
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "sync_queue" (
         "id" SERIAL PRIMARY KEY,
@@ -112,37 +137,14 @@ export class RunAllMigrations1744090868338 implements MigrationInterface {
       )
     `);
 
-    // Create token_blacklist table
+    // Create token_blacklist table with blacklistedAt
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "token_blacklist" (
         "id" SERIAL PRIMARY KEY,
         "token" TEXT NOT NULL,
-        "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "blacklistedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `);
-
-    // Add activation columns to users
-    await queryRunner.query(`
-      ALTER TABLE "admin" 
-      ADD COLUMN IF NOT EXISTS "is_activated" BOOLEAN DEFAULT false,
-      ADD COLUMN IF NOT EXISTS "activation_token" VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS "activation_token_expires" TIMESTAMP
-    `);
-
-    // Update student column types and constraints
-    await queryRunner.query(`
-      ALTER TABLE "students" 
-      ALTER COLUMN "Lived_Name" DROP NOT NULL,
-      ALTER COLUMN "Name" DROP NOT NULL,
-      ALTER COLUMN "Remarks" DROP NOT NULL,
-      ALTER COLUMN "Photo" DROP NOT NULL,
-      ALTER COLUMN "Campus_Entry" DROP NOT NULL
-    `);
-
-    // Update Unique_ID column type
-    await queryRunner.query(`
-      ALTER TABLE "students" 
-      ALTER COLUMN "Unique_ID" TYPE VARCHAR(255)
     `);
   }
 
@@ -153,6 +155,12 @@ export class RunAllMigrations1744090868338 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE IF EXISTS "reports"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "students"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "employee"`);
+    await queryRunner.query(
+      `DROP TRIGGER IF EXISTS trigger_update_super_admin_updated_at ON "super-admin"`,
+    );
+    await queryRunner.query(
+      `DROP FUNCTION IF EXISTS update_super_admin_updated_at()`,
+    );
     await queryRunner.query(`DROP TABLE IF EXISTS "super-admin"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "admin"`);
     await queryRunner.query(`DROP TABLE IF EXISTS "token_blacklist"`);
