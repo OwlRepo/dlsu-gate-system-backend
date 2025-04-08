@@ -18,6 +18,9 @@ import { In } from 'typeorm';
 import * as Table from 'cli-table3';
 import * as sharp from 'sharp';
 import { DatabaseSyncQueueService } from './database-sync-queue.service';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
 
 @Injectable()
 export class DatabaseSyncService {
@@ -993,31 +996,28 @@ export class DatabaseSyncService {
       // Transform records to match format
       const skippedRecords = [];
 
-      const currentDate = new Date();
-      // Set time to midnight for consistency
-      currentDate.setHours(0, 0, 0, 0);
+      // Initialize dayjs with plugins
+      dayjs.extend(utc);
+      dayjs.extend(timezone);
 
-      const startDate = new Date(currentDate);
-      startDate.setFullYear(startDate.getFullYear() - 10);
-      const formattedStartDate =
-        startDate.toISOString().replace('T', ' ').substring(0, 19) + '.000';
+      // Set timezone to Asia/Manila
+      const currentDate = dayjs().tz('Asia/Manila').startOf('day');
 
-      const startDateObj = new Date(currentDate);
-      startDateObj.setFullYear(startDateObj.getFullYear() - 10);
+      // Calculate start date (10 years ago)
+      const startDate = currentDate.subtract(10, 'year');
+      const formattedStartDate = startDate.format('YYYY-MM-DD HH:mm:ss.SSS');
 
       // Set expiry date to 1 year in the future for enabled accounts
-      const expiryDateEnabled = new Date(currentDate);
-      expiryDateEnabled.setFullYear(currentDate.getFullYear() + 1);
-      const formattedExpiryDateEnabled =
-        expiryDateEnabled.toISOString().replace('T', ' ').substring(0, 19) +
-        '.000';
+      const expiryDateEnabled = currentDate.add(1, 'year');
+      const formattedExpiryDateEnabled = expiryDateEnabled.format(
+        'YYYY-MM-DD HH:mm:ss.SSS',
+      );
 
       // Set expiry date to yesterday for disabled accounts (instant deactivation)
-      const expiryDateDisabled = new Date(currentDate);
-      expiryDateDisabled.setDate(currentDate.getDate() - 1);
-      const formattedExpiryDateDisabled =
-        expiryDateDisabled.toISOString().replace('T', ' ').substring(0, 19) +
-        '.000';
+      const expiryDateDisabled = currentDate.subtract(1, 'day');
+      const formattedExpiryDateDisabled = expiryDateDisabled.format(
+        'YYYY-MM-DD HH:mm:ss.SSS',
+      );
 
       const formattedRecords = (
         await Promise.all(
