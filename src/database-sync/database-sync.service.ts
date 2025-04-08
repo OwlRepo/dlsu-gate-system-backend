@@ -2030,7 +2030,7 @@ ${skippedTable.toString()}
       // Detect image format
       const imageFormat = await this.detectImageFormat(imageBuffer);
 
-      // If it's a BMP, fix byte order first then convert to PNG
+      // If it's a BMP, fix byte order first then convert to JPEG
       if (imageFormat.format === 'BMP') {
         try {
           // Fix BMP byte order if needed
@@ -2043,30 +2043,30 @@ ${skippedTable.toString()}
             imageBuffer = fixedBmpBuffer;
           }
 
-          // Convert to PNG
-          this.logger.debug(`[Student ${studentId}] Converting BMP to PNG`);
-          const pngBuffer = await sharp(imageBuffer, {
+          // Convert directly to JPEG
+          this.logger.debug(`[Student ${studentId}] Converting BMP to JPEG`);
+          const jpegBuffer = await sharp(imageBuffer, {
             failOnError: true,
           })
-            .png()
+            .jpeg({
+              quality: 90,
+              mozjpeg: true,
+            })
             .toBuffer();
 
-          imageBuffer = pngBuffer;
+          imageBuffer = jpegBuffer;
           this.logger.debug(
-            `[Student ${studentId}] Successfully converted BMP to PNG`,
+            `[Student ${studentId}] Successfully converted BMP to JPEG`,
             {
               originalSize: imageBuffer.length,
-              newSize: pngBuffer.length,
+              newSize: jpegBuffer.length,
             },
           );
         } catch (conversionError) {
-          this.logger.error(
-            `[Student ${studentId}] Failed to convert BMP to PNG`,
-            {
-              error: conversionError.message,
-              originalFormat: imageFormat.format,
-            },
-          );
+          this.logger.error(`[Student ${studentId}] Failed to convert BMP`, {
+            error: conversionError.message,
+            originalFormat: imageFormat.format,
+          });
           return '';
         }
       }
