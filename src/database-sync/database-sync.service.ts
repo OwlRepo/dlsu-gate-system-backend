@@ -2043,15 +2043,28 @@ ${skippedTable.toString()}
             imageBuffer = fixedBmpBuffer;
           }
 
-          // Convert BMP using Sharp with specific options
-          this.logger.debug(`[Student ${studentId}] Converting BMP`);
-          const convertedBuffer = await sharp(imageBuffer, {
-            failOnError: false, // Don't fail on corrupt images
-            limitInputPixels: false, // Don't limit input size
-            sequentialRead: true, // Read image sequentially
+          // Extract raw pixel data from BMP
+          const { width, height, pixels } = this.extractBmpPixels(imageBuffer);
+
+          // Create raw RGB buffer that Sharp can handle
+          this.logger.debug(
+            `[Student ${studentId}] Converting BMP to raw format`,
+            {
+              width,
+              height,
+              pixelCount: pixels.length / 3,
+            },
+          );
+
+          // Convert to raw pixels then to Sharp
+          const convertedBuffer = await sharp(pixels, {
+            raw: {
+              width,
+              height,
+              channels: 3,
+            },
           })
-            .rotate() // Auto-rotate based on EXIF
-            .normalise() // Normalize pixel values
+            .jpeg()
             .toBuffer();
 
           imageBuffer = convertedBuffer;
@@ -2315,5 +2328,44 @@ ${skippedTable.toString()}
         format: 'Error detecting format',
       };
     }
+  }
+
+  private extractBmpPixels(buffer: Buffer): {
+    width: number;
+    height: number;
+    pixels: Buffer;
+  } {
+    // Read BMP header
+    const width = buffer.readInt32LE(18);
+    const height = Math.abs(buffer.readInt32LE(22));
+    const bitsPerPixel = buffer.readUInt16LE(28);
+    const compression = buffer.readUInt32LE(30);
+    const dataOffset = buffer.readUInt32LE(10);
+
+    if (compression !== 0 || bitsPerPixel !== 24) {
+      throw new Error(
+        `Unsupported BMP format: ${bitsPerPixel}bpp, compression ${compression}`,
+      );
+    }
+
+    // Calculate row size (must be multiple of 4 bytes)
+    const rowSize = Math.floor((width * bitsPerPixel + 31) / 32) * 4;
+    const pixelCount = width * height;
+    const pixels = Buffer.alloc(pixelCount * 3); // RGB format
+
+    // Extract pixels (BMP stores them bottom-to-top by default)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const bmpOffset = dataOffset + (height - 1 - y) * rowSize + x * 3;
+        const rgbOffset = (y * width + x) * 3;
+
+        // BMP stores in BGR, we need RGB
+        pixels[rgbOffset] = buffer[bmpOffset + 2]; // R
+        pixels[rgbOffset + 1] = buffer[bmpOffset + 1]; // G
+        pixels[rgbOffset + 2] = buffer[bmpOffset]; // B
+      }
+    }
+
+    return { width, height, pixels };
   }
 }
