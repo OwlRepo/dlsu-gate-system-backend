@@ -29,7 +29,7 @@ export class Student {
   @Column({ nullable: true })
   Campus_Entry: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'bigint', nullable: true })
   Unique_ID: string;
 
   @Column({ type: 'boolean', default: false })
