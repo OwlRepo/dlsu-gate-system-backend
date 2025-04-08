@@ -2029,6 +2029,48 @@ ${skippedTable.toString()}
 
       // Detect image format
       const imageFormat = await this.detectImageFormat(imageBuffer);
+
+      // If it's a BMP, fix byte order first then convert to PNG
+      if (imageFormat.format === 'BMP') {
+        try {
+          // Fix BMP byte order if needed
+          const fixedBmpBuffer = this.fixBmpByteOrder(imageBuffer);
+          if (fixedBmpBuffer) {
+            this.logger.debug(`[Student ${studentId}] Fixed BMP byte order`, {
+              originalSize: imageBuffer.length,
+              fixedSize: fixedBmpBuffer.length,
+            });
+            imageBuffer = fixedBmpBuffer;
+          }
+
+          // Convert to PNG
+          this.logger.debug(`[Student ${studentId}] Converting BMP to PNG`);
+          const pngBuffer = await sharp(imageBuffer, {
+            failOnError: true,
+          })
+            .png()
+            .toBuffer();
+
+          imageBuffer = pngBuffer;
+          this.logger.debug(
+            `[Student ${studentId}] Successfully converted BMP to PNG`,
+            {
+              originalSize: imageBuffer.length,
+              newSize: pngBuffer.length,
+            },
+          );
+        } catch (conversionError) {
+          this.logger.error(
+            `[Student ${studentId}] Failed to convert BMP to PNG`,
+            {
+              error: conversionError.message,
+              originalFormat: imageFormat.format,
+            },
+          );
+          return '';
+        }
+      }
+
       if (!imageFormat.valid) {
         this.logger.error(
           `[Student ${studentId}] Unsupported or invalid image format`,
@@ -2170,6 +2212,52 @@ ${skippedTable.toString()}
         },
       );
       return '';
+    }
+  }
+
+  private fixBmpByteOrder(buffer: Buffer): Buffer | null {
+    try {
+      // Check if it's a BMP file
+      if (buffer.length < 54 || buffer.toString('ascii', 0, 2) !== 'BM') {
+        return null;
+      }
+
+      // Read the size fields
+      const fileSize = buffer.readUInt32LE(2);
+      const pixelOffset = buffer.readUInt32LE(10);
+      const headerSize = buffer.readUInt32LE(14);
+
+      // Check if size fields need fixing
+      if (
+        fileSize === buffer.length &&
+        pixelOffset >= 54 &&
+        pixelOffset < fileSize &&
+        [12, 40, 52, 56, 108, 124].includes(headerSize)
+      ) {
+        // BMP structure looks valid, no fix needed
+        return buffer;
+      }
+
+      // Try fixing byte order
+      const newBuffer = Buffer.alloc(buffer.length);
+      buffer.copy(newBuffer); // Copy original data
+
+      // Swap byte order for size field if it looks wrong
+      const swappedSize =
+        ((fileSize & 0xff) << 24) |
+        ((fileSize & 0xff00) << 8) |
+        ((fileSize & 0xff0000) >> 8) |
+        ((fileSize & 0xff000000) >> 24);
+
+      if (swappedSize <= buffer.length && swappedSize >= 54) {
+        newBuffer.writeUInt32LE(swappedSize, 2);
+        return newBuffer;
+      }
+
+      return buffer; // Return original if swap doesn't help
+    } catch (error) {
+      this.logger.error('Failed to fix BMP byte order:', error);
+      return null;
     }
   }
 
