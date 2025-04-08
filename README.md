@@ -57,7 +57,8 @@ Enterprise-grade backend service featuring:
 
 1. **Prerequisites**
 
-   - Docker Desktop/Engine
+   - Node.js (v18 or higher)
+   - PM2 (Process Manager)
    - Git
    - Bun
 
@@ -71,8 +72,14 @@ cd dlsu-gate-system-backend
 cp .env.example .env
 # Edit .env with your credentials
 
-# Launch system
-docker-compose up -d
+# Install dependencies
+bun install
+
+# Build the application
+bun run build
+
+# Start with PM2
+pm2 start ecosystem.config.js
 ```
 
 3. **Access Points**
@@ -80,7 +87,6 @@ docker-compose up -d
 - API: `http://localhost:9580`
 - Docs: `http://localhost:9580/api/docs`
 - Health: `http://localhost:9580/health`
-- PgAdmin: `http://localhost:9580/pgadmin`
 
 ## Development
 
@@ -121,8 +127,8 @@ logs/
 
 ```bash
 curl http://localhost:9580/health
-docker-compose ps
-docker-compose logs -f
+pm2 status
+pm2 logs
 ```
 
 ## Technology Stack
@@ -131,6 +137,7 @@ docker-compose logs -f
 - **PostgreSQL**: ACID-compliant database
 - **Redis**: Distributed caching
 - **Nginx**: Load balancing and security
+- **PM2**: Process management and clustering
 
 ## Deployment
 
@@ -147,22 +154,30 @@ docker-compose logs -f
 # Pull latest changes
 git pull origin main
 
-# Build and deploy with zero downtime
-docker-compose up -d
+# Install dependencies
+bun install
 
-# Note: The system automatically deploys 5 API instances as defined in docker-compose.yml
+# Build the application
+bun run build
+
+# Start with PM2
+pm2 start ecosystem.config.js
+
+# Note: The system automatically deploys 5 API instances as defined in ecosystem.config.js
 ```
 
 ### Maintenance
 
 ```bash
 # Backup
-docker exec postgres pg_dump -U postgres dlsu_gate_system > backup.sql
+pg_dump -U postgres dlsu_gate_system > backup.sql
 
 # Updates
-docker-compose pull
-docker-compose up -d
-npm run migration:run  run migration:run
+git pull origin main
+bun install
+bun run build
+pm2 reload ecosystem.config.js
+bun run migration:run
 ```
 
 ## License
