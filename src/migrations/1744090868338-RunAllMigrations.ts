@@ -47,6 +47,9 @@ export class RunAllMigrations1744090868338 implements MigrationInterface {
 
     // Create trigger function for super-admin updated_at
     await queryRunner.query(`
+      DROP TRIGGER IF EXISTS trigger_update_super_admin_updated_at ON "super-admin";
+      DROP FUNCTION IF EXISTS update_super_admin_updated_at();
+      
       CREATE OR REPLACE FUNCTION update_super_admin_updated_at()
       RETURNS TRIGGER AS $$
       BEGIN
