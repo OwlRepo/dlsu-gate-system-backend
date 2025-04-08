@@ -1981,95 +1981,251 @@ ${skippedTable.toString()}
     csvDir: string,
   ): Promise<string> {
     try {
+      // Input validation
       if (!base64Data) {
         this.logger.warn(
-          `No image data provided for student ${studentId}, face image ${imageNumber}`,
+          `[Student ${studentId}] No image data provided for face image ${imageNumber}`,
         );
         return '';
       }
 
-      // Create file path in the same directory as the CSV
+      // Create file paths
       const fileName = `${studentId}_face_${imageNumber}.jpg`;
       const filePath = path.join(csvDir, fileName);
 
-      // Convert base64 to buffer
-      const imageBuffer = Buffer.from(base64Data, 'base64');
-
-      // Process image with Sharp
-      const processedImage = await sharp(imageBuffer)
-        .resize(250, 250, {
-          fit: 'cover', // Ensure minimum size of 250x250
-          position: 'center', // Center the image when resizing
-        })
-        .jpeg({
-          quality: 90, // High quality JPG
-          mozjpeg: true, // Use mozjpeg for better compression
-        });
-
-      // Get image metadata to check size and dimensions
-      const metadata = await processedImage.metadata();
-      const fileSize = metadata.size || 0;
-      const width = metadata.width || 0;
-      const height = metadata.height || 0;
-
-      // Validate image requirements
-      if (width < 250 || height < 250) {
+      // Validate base64 format
+      if (!this.isValidBase64(base64Data)) {
         this.logger.error(
-          `Face image for student ${studentId} is too small: ${width}x${height}px`,
+          `[Student ${studentId}] Invalid base64 format for face image ${imageNumber}`,
+          {
+            dataLength: base64Data.length,
+            sampleData: base64Data.substring(0, 50) + '...',
+          },
         );
         return '';
       }
 
-      if (fileSize > 10 * 1024 * 1024) {
-        this.logger.warn(
-          `Face image for student ${studentId} exceeds 10MB (${(fileSize / 1024 / 1024).toFixed(2)}MB), reducing quality`,
+      // Convert base64 to buffer with detailed logging
+      let imageBuffer: Buffer;
+      try {
+        imageBuffer = Buffer.from(base64Data, 'base64');
+        this.logger.debug(
+          `[Student ${studentId}] Successfully converted base64 to buffer`,
+          {
+            bufferLength: imageBuffer.length,
+            bufferSample: imageBuffer.slice(0, 16).toString('hex'),
+          },
         );
-        await processedImage
-          .jpeg({ quality: 70 }) // Reduce quality if too large
-          .toFile(filePath);
-      } else {
-        await processedImage.toFile(filePath);
+      } catch (bufferError) {
+        this.logger.error(
+          `[Student ${studentId}] Failed to convert base64 to buffer`,
+          {
+            error: bufferError.message,
+            dataLength: base64Data.length,
+          },
+        );
+        return '';
+      }
+
+      // Detect image format
+      const imageFormat = await this.detectImageFormat(imageBuffer);
+      if (!imageFormat.valid) {
+        this.logger.error(
+          `[Student ${studentId}] Unsupported or invalid image format`,
+          {
+            detectedFormat: imageFormat.format,
+            signature: imageBuffer.slice(0, 8).toString('hex'),
+            error: imageFormat.error,
+          },
+        );
+        return '';
+      }
+
+      this.logger.debug(`[Student ${studentId}] Processing image`, {
+        format: imageFormat.format,
+        originalSize: imageBuffer.length,
+      });
+
+      // Process image with Sharp with enhanced error handling
+      let processedImage;
+      try {
+        processedImage = await sharp(imageBuffer, {
+          failOnError: true,
+          pages: 1, // Only process first page of multi-page formats
+        })
+          .resize(250, 250, {
+            fit: 'cover',
+            position: 'center',
+          })
+          .jpeg({
+            quality: 90,
+            mozjpeg: true,
+          });
+      } catch (sharpError) {
+        this.logger.error(`[Student ${studentId}] Sharp processing failed`, {
+          error: sharpError.message,
+          code: sharpError.code,
+          nativeError: sharpError.nativeError,
+          format: imageFormat.format,
+        });
+        return '';
+      }
+
+      // Get and validate image metadata
+      const metadata = await processedImage.metadata();
+      this.logger.debug(`[Student ${studentId}] Image metadata`, {
+        width: metadata.width,
+        height: metadata.height,
+        format: metadata.format,
+        size: metadata.size,
+      });
+
+      // Size validation
+      if (metadata.width < 250 || metadata.height < 250) {
+        this.logger.error(`[Student ${studentId}] Image dimensions too small`, {
+          width: metadata.width,
+          height: metadata.height,
+          minimumRequired: '250x250',
+        });
+        return '';
+      }
+
+      // Process final image with size optimization
+      try {
+        if (metadata.size > 10 * 1024 * 1024) {
+          this.logger.warn(
+            `[Student ${studentId}] Large image detected, reducing quality`,
+            {
+              originalSize: `${(metadata.size / 1024 / 1024).toFixed(2)}MB`,
+            },
+          );
+          await processedImage.jpeg({ quality: 70 }).toFile(filePath);
+        } else {
+          await processedImage.toFile(filePath);
+        }
+      } catch (saveError) {
+        this.logger.error(
+          `[Student ${studentId}] Failed to save processed image`,
+          {
+            error: saveError.message,
+            path: filePath,
+          },
+        );
+        return '';
       }
 
       // Extract face template
-      const processedBase64 = fs.readFileSync(filePath).toString('base64');
-      const templateData = await this.extractFaceTemplate(
-        processedBase64,
-        studentId,
-      );
+      try {
+        const processedBase64 = fs.readFileSync(filePath).toString('base64');
+        const templateData = await this.extractFaceTemplate(
+          processedBase64,
+          studentId,
+        );
 
-      if (!templateData) {
-        this.logger.warn(
-          `Failed to extract face template for student ${studentId}, face image ${imageNumber}`,
+        if (!templateData) {
+          this.logger.warn(
+            `[Student ${studentId}] Failed to extract face template for image ${imageNumber}`,
+          );
+          return '';
+        }
+
+        // Save template data
+        const templateFileName = `${studentId}_face_${imageNumber}_template.json`;
+        const templateFilePath = path.join(csvDir, templateFileName);
+        fs.writeFileSync(
+          templateFilePath,
+          JSON.stringify({
+            template: templateData.template,
+            normalizedImage: templateData.normalizedImage,
+          }),
+        );
+
+        this.logger.log(
+          `[Student ${studentId}] Successfully processed face image`,
+          {
+            dimensions: `${metadata.width}x${metadata.height}`,
+            size: `${(metadata.size / 1024 / 1024).toFixed(2)}MB`,
+            format: metadata.format,
+          },
+        );
+
+        return `${fileName}|${templateFileName}`;
+      } catch (templateError) {
+        this.logger.error(
+          `[Student ${studentId}] Face template extraction failed`,
+          {
+            error: templateError.message,
+            imageNumber,
+          },
         );
         return '';
       }
-
-      // Save the template data to a JSON file alongside the image
-      const templateFileName = `${studentId}_face_${imageNumber}_template.json`;
-      const templateFilePath = path.join(csvDir, templateFileName);
-      fs.writeFileSync(
-        templateFilePath,
-        JSON.stringify({
-          template: templateData.template,
-          normalizedImage: templateData.normalizedImage,
-        }),
-      );
-
-      // Log successful image processing
-      this.logger.log(
-        `Successfully processed face image for student ${studentId}: ${width}x${height}px, ${(fileSize / 1024 / 1024).toFixed(2)}MB`,
-      );
-
-      // Return both the image filename and template filename
-      return `${fileName}|${templateFileName}`;
     } catch (error) {
-      this.logger.error('Error processing face image:', {
-        error: error.message,
-        studentId,
-        imageNumber,
-      });
+      this.logger.error(
+        `[Student ${studentId}] Critical error in processFaceImage`,
+        {
+          error: error.message,
+          stack: error.stack,
+          imageNumber,
+        },
+      );
       return '';
+    }
+  }
+
+  private isValidBase64(str: string): boolean {
+    try {
+      // Check if string matches base64 pattern
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(str)) {
+        return false;
+      }
+      // Check if length is valid (must be multiple of 4)
+      if (str.length % 4 !== 0) {
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.log(error);
+      return false;
+    }
+  }
+
+  private async detectImageFormat(
+    buffer: Buffer,
+  ): Promise<{ valid: boolean; format?: string; error?: string }> {
+    try {
+      // Check common image format signatures
+      const signatures = {
+        ffd8ff: 'JPEG',
+        '89504e47': 'PNG',
+        '47494638': 'GIF',
+        '424d': 'BMP',
+      };
+
+      const signature = buffer.slice(0, 4).toString('hex');
+
+      for (const [sig, format] of Object.entries(signatures)) {
+        if (signature.startsWith(sig)) {
+          return { valid: true, format };
+        }
+      }
+
+      // Additional check for JPEG variations
+      if (signature.startsWith('ffd8')) {
+        return { valid: true, format: 'JPEG' };
+      }
+
+      return {
+        valid: false,
+        error: 'Unrecognized image format',
+        format: `Unknown (signature: ${signature})`,
+      };
+    } catch (error) {
+      return {
+        valid: false,
+        error: error.message,
+        format: 'Error detecting format',
+      };
     }
   }
 }
