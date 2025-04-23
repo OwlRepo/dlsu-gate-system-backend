@@ -28,6 +28,9 @@ export class Report {
   @Column()
   status: string;
 
+  @Column({ type: 'text', nullable: true })
+  device: string;
+
   @CreateDateColumn()
   created_at: Date;
 }

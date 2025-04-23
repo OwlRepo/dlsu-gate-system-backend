@@ -1,4 +1,9 @@
-import { IsNotEmpty, IsString, IsDateString } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsDateString,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateReportDto {
@@ -32,4 +37,13 @@ export class CreateReportDto {
   @IsNotEmpty()
   @IsString()
   status: string;
+
+  @ApiProperty({
+    example: 'Mobile App',
+    description: 'Device used for reporting',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  device?: string;
 }

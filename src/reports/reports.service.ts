@@ -190,6 +190,7 @@ export class ReportsService {
       { id: 'lived_name', title: 'Lived_Name' },
       { id: 'remarks', title: 'Remarks' },
       { id: 'status', title: 'Status' },
+      { id: 'device', title: 'Device' }, // Added device header
     ];
 
     // Add photo header if needed
@@ -221,6 +222,7 @@ export class ReportsService {
         lived_name: student?.lived_name || 'null',
         remarks: student?.remarks || 'null',
         status: report.status || 'null',
+        device: report.device || 'null', // Added device field
       };
 
       if (includePhoto) {
