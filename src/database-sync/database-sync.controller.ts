@@ -27,12 +27,14 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import * as csv from 'csv-parse';
 
 @ApiTags('Database Sync')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('database-sync')
 export class DatabaseSyncController {
   constructor(private readonly databaseSyncService: DatabaseSyncService) {}
 
   @Post('schedule')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Update sync schedule',
@@ -113,7 +115,7 @@ export class DatabaseSyncController {
   }
 
   @Get('schedules')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get all scheduled syncs',
@@ -145,7 +147,7 @@ export class DatabaseSyncController {
   }
 
   @Get('test-connection')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Test SQL Server connection',
@@ -169,7 +171,7 @@ export class DatabaseSyncController {
   }
 
   @Get('running-syncs')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Get currently running syncs',
@@ -203,7 +205,7 @@ export class DatabaseSyncController {
   }
 
   @Post('delete-users')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({
     summary: 'Bulk delete users',
