@@ -771,7 +771,6 @@ export class DatabaseSyncService {
     }
 
     let pool: sql.ConnectionPool | null = null;
-    let csvFilePath: string | null = null;
 
     try {
       this.activeJobs.set(jobName, true);
@@ -816,8 +815,20 @@ export class DatabaseSyncService {
       const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 100;
       let offset = 0;
       let allRecords = [];
-
+      let totalProcessed = 0;
+      let totalSkipped = 0;
+      let totalEnabled = 0;
+      let totalDisabled = 0;
+      let formattedRecordsAll = [];
+      let skippedRecordsAll = [];
+      let failedRecordsAll = [];
+      const tempDir = path.join(process.cwd(), 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+      }
+      let batchNumber = 0;
       while (true) {
+        batchNumber++;
         // Modify query based on isArchived column existence
         const query = hasIsArchivedColumn
           ? `
@@ -835,11 +846,10 @@ export class DatabaseSyncService {
           `;
 
         const result = await pool.request().query(query);
-
         if (result.recordset.length === 0) break;
 
-        // Convert photos to base64 before adding to allRecords
-        const recordsWithBase64Photos = await Promise.all(
+        // Convert photos to base64 before adding to batchRecords
+        const batchRecords = await Promise.all(
           result.recordset.map(async (record) => ({
             ...record,
             Photo: await this.convertPhotoToBase64(
@@ -848,711 +858,453 @@ export class DatabaseSyncService {
             ),
           })),
         );
-
-        allRecords = allRecords.concat(recordsWithBase64Photos);
+        allRecords = allRecords.concat(batchRecords);
         offset += batchSize;
-      }
 
-      // Early return if no records found
-      if (allRecords.length === 0) {
-        this.logger.log('No records found in SQL Server to sync');
-
-        // Update lastSyncTime even when no records found
-        const scheduleNumber = parseInt(jobName.replace('sync-', ''));
-        if (!isNaN(scheduleNumber)) {
-          const schedule = await this.syncScheduleRepository.findOne({
-            where: { scheduleNumber },
-          });
-          if (schedule) {
-            schedule.lastSyncTime = new Date();
-            await this.syncScheduleRepository.save(schedule);
-            this.logger.log(
-              `Updated last sync time for schedule ${scheduleNumber} (no records found)`,
-            );
-          }
-        }
-
-        return {
-          success: true,
-          message: 'Sync completed - no records found to process',
-          recordsProcessed: 0,
-        };
-      }
-
-      this.logger.log(`Found ${allRecords.length} records to sync`);
-
-      // 4. Sync data to PostgreSQL
-      this.logger.log('Syncing data to PostgreSQL database');
-
-      // STEP 1: Get all existing students from database in one query
-      // - More efficient than checking one by one
-      // - Creates a baseline of what's already in our database
-      const existingStudents = await this.studentRepository.find({
-        where: { ID_Number: In(allRecords.map((r) => r.ID_Number)) },
-      });
-
-      // STEP 2: Create a quick lookup map using ID_Number
-      // - Makes it fast to check if a student exists
-      // - Avoids looping through array each time
-      const existingMap = new Map(
-        existingStudents.map((s) => [s.ID_Number, s]),
-      );
-
-      // STEP 3: Prepare lists for bulk operations
-      const toCreate = []; // Will hold new students
-      const toUpdate = []; // Will hold students that need updates
-
-      // STEP 4: Sort through all records
-      for (const record of allRecords) {
-        // Convert Unique_ID from hex to decimal if it's a valid hex string
-        let uniqueId = record.Unique_ID;
-        if (typeof uniqueId === 'string' && /^[0-9A-Fa-f\s]+$/.test(uniqueId)) {
-          // Remove spaces and convert to decimal
-          uniqueId = parseInt(uniqueId.replace(/\s/g, ''), 16);
-        }
-
-        // Prepare the data we want to save
-        const data = {
-          ID_Number: record.ID_Number,
-          Name: record.Name,
-          Lived_Name: record.Lived_Name,
-          Remarks: record.Remarks,
-          Photo: record.Photo,
-          Campus_Entry: record.Campus_Entry,
-          Unique_ID: uniqueId,
-          isArchived: record.isArchived === 'Y',
-          updatedAt: new Date(),
-        };
-
-        // Check if student already exists
-        const existing = existingMap.get(record.ID_Number);
-
-        if (!existing) {
-          // CASE 1: New student - add to creation list
-          toCreate.push(data);
-        } else if (
-          // CASE 2: Existing student - check if anything changed
-          existing.Name !== record.Name ||
-          existing.Lived_Name !== record.Lived_Name ||
-          existing.Remarks !== record.Remarks ||
-          existing.Photo !== record.Photo ||
-          existing.Campus_Entry !== record.Campus_Entry ||
-          existing.Unique_ID !== record.Unique_ID ||
-          existing.isArchived !== record.isArchived
-        ) {
-          // Something changed - add to update list
-          toUpdate.push({ ...data, id: existing.id });
-        }
-        // CASE 3: No changes - do nothing (skip)
-      }
-
-      // STEP 5: Perform bulk operations
-      // Create all new records at once
-      if (toCreate.length) {
-        await this.studentRepository.insert(toCreate);
-      }
-
-      // Update all changed records at once
-      if (toUpdate.length) {
-        await this.studentRepository.save(toUpdate);
-      }
-
-      // STEP 6: Log the results
-      this.logger.log(
-        `Synced ${toCreate.length + toUpdate.length} records (${
-          allRecords.length - (toCreate.length + toUpdate.length)
-        } unchanged)`,
-      );
-
-      // 5. Convert to CSV with specific format
-      const tempDir = path.join(process.cwd(), 'temp');
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir);
-      }
-
-      csvFilePath = path.join(tempDir, `sync_${Date.now()}.csv`);
-      const csvWriter = createObjectCsvWriter({
-        path: csvFilePath,
-        header: [
-          { id: 'user_id', title: 'user_id' },
-          { id: 'name', title: 'name' },
-          { id: 'department', title: 'department' },
-          { id: 'user_title', title: 'user_title' },
-          { id: 'phone', title: 'phone' },
-          { id: 'email', title: 'email' },
-          { id: 'user_group', title: 'user_group' },
-          { id: 'lived_name', title: 'Lived Name' },
-          { id: 'remarks', title: 'Remarks' },
-          { id: 'csn', title: 'csn' },
-          { id: 'photo', title: 'photo' },
-          { id: 'face_image_file1', title: 'face_image_file1' },
-          { id: 'face_image_file2', title: 'face_image_file2' },
-          { id: 'start_datetime', title: 'start_datetime' },
-          { id: 'expiry_datetime', title: 'expiry_datetime' },
-          { id: 'original_campus_entry', title: 'original_campus_entry' },
-        ],
-      });
-
-      // Transform records to match format
-      const skippedRecords = [];
-
-      // Initialize dayjs with plugins
-      dayjs.extend(utc);
-      dayjs.extend(timezone);
-
-      // Set timezone to Asia/Manila
-      const currentDate = dayjs().tz('Asia/Manila').startOf('day');
-
-      // Calculate start date (10 years ago)
-      const startDate = currentDate.subtract(10, 'year');
-      const formattedStartDate = startDate.format('YYYY-MM-DD HH:mm:ss.SSS');
-
-      // Set expiry date to 1 year in the future for enabled accounts
-      const expiryDateEnabled = currentDate.add(1, 'year');
-      const formattedExpiryDateEnabled = expiryDateEnabled.format(
-        'YYYY-MM-DD HH:mm:ss.SSS',
-      );
-
-      // Set expiry date to yesterday for disabled accounts (instant deactivation)
-      const expiryDateDisabled = currentDate.subtract(1, 'day');
-      const formattedExpiryDateDisabled = expiryDateDisabled.format(
-        'YYYY-MM-DD HH:mm:ss.SSS',
-      );
-
-      const formattedRecords = (
-        await Promise.all(
-          allRecords.map(async (record) => {
-            const userId = this.sanitizeUserId(
-              record.Unique_ID !== null && record.Unique_ID !== undefined
-                ? record.Unique_ID?.toString()?.trim()
-                : record.ID_Number?.toString()?.trim() || '',
-            );
-            const name = this.removeSpecialChars(record.Name?.trim() || '');
-            const livedName = record.Lived_Name?.trim() || '';
-            const remarks = record.Remarks?.trim() || '';
-
-            // Validate all required fields
-            const validationErrors = [];
-
-            if (!userId || userId.length > 10) {
-              validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
-            }
-
-            if (!name) {
-              validationErrors.push('Empty name');
-            }
-
-            if (validationErrors.length > 0) {
-              skippedRecords.push({
-                ID_Number: record.ID_Number,
-                userId,
-                name,
-                livedName,
-                remarks,
-                length: userId.length,
-                reasons: validationErrors,
-                timestamp: new Date().toISOString(),
-              });
-              this.logger.warn(
-                `Skipping record with validation errors - ID: ${record.ID_Number}, Errors: ${validationErrors.join(', ')}`,
-              );
-              return null;
-            }
-
-            return {
-              user_id: record.ID_Number,
-              name: name,
-              department: 'DLSU',
-              user_title: 'Student',
-              phone: '',
-              email: '',
-              user_group: 'All Users',
-              lived_name: livedName,
-              remarks: remarks,
-              csn: userId,
-              photo: await this.convertPhotoToBase64(
-                record.Photo,
-                record.ID_Number,
-              ),
-              face_image_file1: await this.processFaceImage(
-                await this.convertPhotoToBase64(record.Photo, record.ID_Number),
-                record.ID_Number,
-                1,
-                tempDir,
-              ),
-              face_image_file2: await this.processFaceImage(
-                await this.convertPhotoToBase64(record.Photo, record.ID_Number),
-                record.ID_Number,
-                2,
-                tempDir,
-              ),
-              start_datetime: formattedStartDate,
-              expiry_datetime:
-                record.Campus_Entry.toString().toUpperCase() === 'N'
-                  ? formattedExpiryDateDisabled
-                  : formattedExpiryDateEnabled,
-              original_campus_entry: record.Campus_Entry,
-            };
-          }),
-        )
-      ).filter((record) => record !== null);
-
-      // Add logging for disabled accounts
-      const disabledCount = formattedRecords.filter(
-        (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
-      ).length;
-      this.logger.log(
-        `${disabledCount} student accounts are disabled (Campus Entry: N)`,
-      );
-
-      // Add after formattedRecords is created and before the disabled count logging
-      const enabledCount = formattedRecords.filter(
-        (r) => r.original_campus_entry.toString().toUpperCase() === 'Y',
-      ).length;
-      this.logger.log(
-        `
-Data Summary:
--------------
-Total Records: ${formattedRecords.length}
-Enabled Accounts (Campus Entry: Y): ${enabledCount}
-Disabled Accounts (Campus Entry: N): ${disabledCount}
--------------`,
-      );
-
-      const tableConfig = {
-        head: [
-          'user_id (varchar)',
-          'name (varchar)',
-          'department (varc',
-          'user_title (varc',
-          'phone (varchar)',
-          'email (varchar)',
-          'user_group (',
-          'start_datetime (datet',
-          'expiry_datetime (datet',
-          'Lived_Name (varchar)',
-          'Remarks (varchar)',
-          'csn (varchar)',
-          'photo (varchar)',
-          'face_image_file1 (varchar)',
-          'face_image_file2 (varchar)',
-        ],
-        chars: {
-          top: '─',
-          'top-mid': '┬',
-          'top-left': '┌',
-          'top-right': '┐',
-          bottom: '─',
-          'bottom-mid': '┴',
-          'bottom-left': '└',
-          'bottom-right': '┘',
-          left: '│',
-          'left-mid': '├',
-          mid: '─',
-          'mid-mid': '┼',
-          right: '│',
-          'right-mid': '┤',
-          middle: '│',
-        },
-        colWidths: [15, 20, 15, 15, 14, 14, 12, 18, 18, 17, 16, 12, 15, 20, 20],
-      };
-
-      const table = new Table({
-        ...tableConfig,
-        style: {
-          head: ['green'],
-          border: ['green'],
-        },
-      });
-
-      // Add all records to the table
-      formattedRecords.slice(0, 100).forEach((r) => {
-        table.push([
-          r.user_id,
-          r.name,
-          r.department,
-          r.user_title,
-          r.phone || '',
-          r.email || '',
-          r.user_group,
-          r.start_datetime,
-          r.expiry_datetime,
-          r.lived_name || '',
-          r.remarks || '',
-          r.csn,
-          r.photo ? '(set)' : '(none)',
-          r.face_image_file1 ? '(set)' : '(none)',
-          r.face_image_file2 ? '(set)' : '(none)',
-        ]);
-      });
-
-      // Create failed records table
-      const failedRecords = formattedRecords.filter(
-        (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
-      );
-
-      const failedTable = new Table({
-        ...tableConfig,
-        style: {
-          head: ['red'],
-          border: ['red'],
-        },
-      });
-
-      // Add failed records to the table
-      failedRecords.slice(0, 14).forEach((r) => {
-        failedTable.push([
-          r.user_id,
-          r.name,
-          r.department,
-          r.user_title,
-          r.phone || '',
-          r.email || '',
-          r.user_group,
-          r.start_datetime,
-          r.expiry_datetime,
-          r.lived_name || '',
-          r.remarks || '',
-          r.csn,
-          r.photo ? '(set)' : '(none)',
-          r.face_image_file1 ? '(set)' : '(none)',
-          r.face_image_file2 ? '(set)' : '(none)',
-        ]);
-      });
-
-      this.logger.log(
-        `
-CSV Contents to be uploaded:
-${table.toString()}
-... ${formattedRecords.length > 100 ? `and ${formattedRecords.length - 100} more records` : ''}
-
-Failed Records (${failedRecords.length} total):
-${failedTable.toString()}
-`,
-      );
-
-      // After processing records, write skipped records to log file
-      if (skippedRecords.length > 0) {
-        const skippedTable = new Table({
-          ...tableConfig,
-          style: {
-            head: ['yellow'], // Using yellow since cli-table3 doesn't support orange
-            border: ['yellow'],
-          },
+        // --- Per-batch Postgres sync ---
+        // STEP 1: Get all existing students from database in one query
+        const existingStudents = await this.studentRepository.find({
+          where: { ID_Number: In(batchRecords.map((r) => r.ID_Number)) },
         });
-
-        // Add skipped records to table
-        skippedRecords.forEach((r) => {
-          skippedTable.push([
-            r.ID_Number,
-            r.Name,
-            'DLSU',
-            'Student',
-            '',
-            '',
-            'All Users',
-            formattedStartDate,
-            r.Campus_Entry?.toString()?.toUpperCase() === 'N'
-              ? formattedExpiryDateDisabled
-              : formattedExpiryDateEnabled,
-            r.Lived_Name || '',
-            r.Remarks || '',
-            r.ID_Number,
-            r.Photo ? '(set)' : '(none)',
-            r.Photo ? '(set)' : '(none)',
-            r.Photo ? '(set)' : '(none)',
-          ]);
-        });
-
-        this.logger.log(
-          `
-Skipped Records (${skippedRecords.length} total):
-${skippedTable.toString()}
-`,
+        const existingMap = new Map(
+          existingStudents.map((s) => [s.ID_Number, s]),
         );
-
-        this.ensureLogDirectory();
-        const logFile = path.join(
-          this.logDir,
-          `skipped_${new Date().toISOString().split('T')[0]}.json`,
-        );
-        fs.writeFileSync(logFile, JSON.stringify(skippedRecords, null, 2));
-        this.logger.log(
-          `Saved ${skippedRecords.length} skipped records to ${logFile}`,
-        );
-      }
-
-      await csvWriter.writeRecords(formattedRecords);
-      this.logger.log(`CSV file created at ${csvFilePath}`);
-
-      // After successful CSV upload and before cleanup
-      await this.logSyncedRecords(formattedRecords, jobName);
-
-      // 6. Upload to API with retries
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          const { token, sessionId } = await this.getApiToken();
-
-          // Step 1: Upload the CSV file to /api/attachments
-          const uploadFormData = new FormData();
-          uploadFormData.append('file', fs.createReadStream(csvFilePath));
-
-          this.logger.log('Uploading CSV file to attachments...');
-          const uploadResponse = await axios.post(
-            `${this.apiBaseUrl}/api/attachments`,
-            uploadFormData,
-            {
-              headers: {
-                ...uploadFormData.getHeaders(),
-                Authorization: `Bearer ${token}`,
-                'bs-session-id': sessionId,
-              },
-              maxBodyLength: Infinity,
-              maxContentLength: Infinity,
-              timeout: 30000,
-              httpsAgent: new https.Agent({
-                rejectUnauthorized: false,
-              }),
-            },
-          );
-
-          if (!uploadResponse.data?.filename) {
-            throw new Error('Failed to get filename from upload response');
+        const toCreate = [];
+        const toUpdate = [];
+        for (const record of batchRecords) {
+          let uniqueId = record.Unique_ID;
+          if (
+            typeof uniqueId === 'string' &&
+            /^[0-9A-Fa-f\s]+$/.test(uniqueId)
+          ) {
+            uniqueId = parseInt(uniqueId.replace(/\s/g, ''), 16);
           }
-
-          const uploadedFileName = uploadResponse.data.filename;
-          this.logger.log(`File uploaded successfully as: ${uploadedFileName}`);
-
-          // Step 2: Import the uploaded CSV
-          const firstLine = fs.readFileSync(csvFilePath, 'utf8').split('\n')[0];
-          const headers = firstLine.split(',');
-
-          // Read the CSV file to get face template data
-          const csvData = fs
-            .readFileSync(csvFilePath, 'utf8')
-            .split('\n')
-            .slice(1);
-          const faceTemplateData = new Map();
-
-          for (const line of csvData) {
-            if (!line.trim()) continue;
-            const values = line.split(',');
-            const userId = values[0]; // user_id is the first column
-            const faceImage1 = values[11]; // face_image_file1 column
-            const faceImage2 = values[12]; // face_image_file2 column
-
-            if (faceImage1 && faceImage1.includes('|')) {
-              const [, templateFile] = faceImage1.split('|');
-              const templatePath = path.join(tempDir, templateFile);
-              if (fs.existsSync(templatePath)) {
-                const templateData = JSON.parse(
-                  fs.readFileSync(templatePath, 'utf8'),
-                );
-                faceTemplateData.set(`${userId}_1`, templateData);
-              }
-            }
-
-            if (faceImage2 && faceImage2.includes('|')) {
-              const [, templateFile] = faceImage2.split('|');
-              const templatePath = path.join(tempDir, templateFile);
-              if (fs.existsSync(templatePath)) {
-                const templateData = JSON.parse(
-                  fs.readFileSync(templatePath, 'utf8'),
-                );
-                faceTemplateData.set(`${userId}_2`, templateData);
-              }
-            }
-          }
-
-          const importPayload = {
-            File: {
-              uri: uploadedFileName,
-              fileName: uploadedFileName,
-            },
-            CsvOption: {
-              columns: {
-                total: headers.length.toString(),
-                rows: headers,
-                formats: headers.map(() => 'Text'),
-              },
-              start_line: 2,
-              import_option: 2,
-            },
-            Query: {
-              headers: headers,
-              columns: headers,
-            },
+          const data = {
+            ID_Number: record.ID_Number,
+            Name: record.Name,
+            Lived_Name: record.Lived_Name,
+            Remarks: record.Remarks,
+            Photo: record.Photo,
+            Campus_Entry: record.Campus_Entry,
+            Unique_ID: uniqueId,
+            isArchived: record.isArchived === 'Y',
+            updatedAt: new Date(),
           };
+          const existing = existingMap.get(record.ID_Number);
+          if (!existing) {
+            toCreate.push(data);
+          } else if (
+            existing.Name !== record.Name ||
+            existing.Lived_Name !== record.Lived_Name ||
+            existing.Remarks !== record.Remarks ||
+            existing.Photo !== record.Photo ||
+            existing.Campus_Entry !== record.Campus_Entry ||
+            existing.Unique_ID !== record.Unique_ID ||
+            existing.isArchived !== record.isArchived
+          ) {
+            toUpdate.push({ ...data, id: existing.id });
+          }
+        }
+        if (toCreate.length) {
+          await this.studentRepository.insert(toCreate);
+        }
+        if (toUpdate.length) {
+          await this.studentRepository.save(toUpdate);
+        }
+        this.logger.log(
+          `[Batch ${batchNumber}] Synced ${toCreate.length + toUpdate.length} records (${batchRecords.length - (toCreate.length + toUpdate.length)} unchanged)`,
+        );
 
-          this.logger.log('Importing CSV file...');
-          const importResponse = await axios.post(
-            `${this.apiBaseUrl}/api/users/csv_import`,
-            importPayload,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-                'bs-session-id': sessionId,
-              },
-              httpsAgent: new https.Agent({
-                rejectUnauthorized: false,
-              }),
-            },
-          );
-
-          if (importResponse.data?.Response?.code === '1') {
-            // Code 1 means partial success
-            this.logger.log(
-              'Partial success detected, analyzing failed rows...',
-            );
-
-            // Log which rows failed (from CsvRowCollection)
-            if (importResponse.data.CsvRowCollection) {
-              const failedRows = importResponse.data.CsvRowCollection.rows;
-              this.logger.warn(
-                `Failed rows (line numbers): ${failedRows.join(', ')}`,
+        // --- Per-batch CSV/Import/FaceTemplate ---
+        const csvFilePath = path.join(
+          tempDir,
+          `sync_${jobName}_batch${batchNumber}_${Date.now()}.csv`,
+        );
+        const csvWriter = createObjectCsvWriter({
+          path: csvFilePath,
+          header: [
+            { id: 'user_id', title: 'user_id' },
+            { id: 'name', title: 'name' },
+            { id: 'department', title: 'department' },
+            { id: 'user_title', title: 'user_title' },
+            { id: 'phone', title: 'phone' },
+            { id: 'email', title: 'email' },
+            { id: 'user_group', title: 'user_group' },
+            { id: 'lived_name', title: 'Lived Name' },
+            { id: 'remarks', title: 'Remarks' },
+            { id: 'csn', title: 'csn' },
+            { id: 'photo', title: 'photo' },
+            { id: 'face_image_file1', title: 'face_image_file1' },
+            { id: 'face_image_file2', title: 'face_image_file2' },
+            { id: 'start_datetime', title: 'start_datetime' },
+            { id: 'expiry_datetime', title: 'expiry_datetime' },
+            { id: 'original_campus_entry', title: 'original_campus_entry' },
+          ],
+        });
+        const skippedRecords = [];
+        dayjs.extend(utc);
+        dayjs.extend(timezone);
+        const currentDate = dayjs().tz('Asia/Manila').startOf('day');
+        const startDate = currentDate.subtract(10, 'year');
+        const formattedStartDate = startDate.format('YYYY-MM-DD HH:mm:ss.SSS');
+        const expiryDateEnabled = currentDate.add(1, 'year');
+        const formattedExpiryDateEnabled = expiryDateEnabled.format(
+          'YYYY-MM-DD HH:mm:ss.SSS',
+        );
+        const expiryDateDisabled = currentDate.subtract(1, 'day');
+        const formattedExpiryDateDisabled = expiryDateDisabled.format(
+          'YYYY-MM-DD HH:mm:ss.SSS',
+        );
+        const formattedRecords = (
+          await Promise.all(
+            batchRecords.map(async (record) => {
+              const userId = this.sanitizeUserId(
+                record.Unique_ID !== null && record.Unique_ID !== undefined
+                  ? record.Unique_ID?.toString()?.trim()
+                  : record.ID_Number?.toString()?.trim() || '',
               );
-
-              // Read original CSV to get the actual data that failed
-              const csvLines = fs.readFileSync(csvFilePath, 'utf8').split('\n');
-
-              this.logger.warn('Failed records:');
-              failedRows.forEach((rowNum) => {
-                if (rowNum < csvLines.length) {
-                  this.logger.warn(`Line ${rowNum}: ${csvLines[rowNum - 1]}`);
-                }
-              });
-
-              // Log error file name for reference
-              if (importResponse.data.File?.uri) {
-                this.logger.warn(
-                  `Error details file generated: ${importResponse.data.File.uri}`,
-                );
+              const name = this.removeSpecialChars(record.Name?.trim() || '');
+              const livedName = record.Lived_Name?.trim() || '';
+              const remarks = record.Remarks?.trim() || '';
+              const validationErrors = [];
+              if (!userId || userId.length > 10) {
+                validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
               }
-
-              throw new BadRequestException({
-                message: `Import partially successful. ${failedRows.length} rows failed to import.`,
-                details: `Failed rows: ${failedRows.join(', ')}`,
-                biostarMessage: importResponse.data?.Response?.message,
-                failedRows: failedRows,
-              });
-            }
-          } else if (importResponse.data?.Response?.code !== '0') {
-            this.logger.error('Import API Response:', importResponse.data);
-
-            // Handle specific error codes with enhanced messages
-            let errorMessage;
-            switch (importResponse.data?.Response?.code) {
-              case '20':
-                errorMessage =
-                  'Permission denied. Please check API credentials and permissions.';
-                break;
-              case '211':
-                errorMessage =
-                  'Field mapping error. Please check CSV format and required fields.';
-                break;
-              case '105':
-                errorMessage =
-                  'Invalid query parameters. Please check CSV format and field mappings.';
-                break;
-              default:
-                errorMessage = 'Unknown error occurred during import';
-            }
-
-            throw new BadRequestException({
-              message: errorMessage,
-              details: importResponse.data,
-              biostarMessage: importResponse.data?.Response?.message,
-              step: 'csv-import',
-            });
-          } else {
-            // Success case (code === '0')
+              if (!name) {
+                validationErrors.push('Empty name');
+              }
+              if (validationErrors.length > 0) {
+                skippedRecords.push({
+                  ID_Number: record.ID_Number,
+                  userId,
+                  name,
+                  livedName,
+                  remarks,
+                  length: userId.length,
+                  reasons: validationErrors,
+                  timestamp: new Date().toISOString(),
+                });
+                this.logger.warn(
+                  `[Batch ${batchNumber}] Skipping record with validation errors - ID: ${record.ID_Number}, Errors: ${validationErrors.join(', ')}`,
+                );
+                return null;
+              }
+              return {
+                user_id: record.ID_Number,
+                name: name,
+                department: 'DLSU',
+                user_title: 'Student',
+                phone: '',
+                email: '',
+                user_group: 'All Users',
+                lived_name: livedName,
+                remarks: remarks,
+                csn: userId,
+                photo: await this.convertPhotoToBase64(
+                  record.Photo,
+                  record.ID_Number,
+                ),
+                face_image_file1: await this.processFaceImage(
+                  await this.convertPhotoToBase64(
+                    record.Photo,
+                    record.ID_Number,
+                  ),
+                  record.ID_Number,
+                  1,
+                  tempDir,
+                ),
+                face_image_file2: await this.processFaceImage(
+                  await this.convertPhotoToBase64(
+                    record.Photo,
+                    record.ID_Number,
+                  ),
+                  record.ID_Number,
+                  2,
+                  tempDir,
+                ),
+                start_datetime: formattedStartDate,
+                expiry_datetime:
+                  record.Campus_Entry.toString().toUpperCase() === 'N'
+                    ? formattedExpiryDateDisabled
+                    : formattedExpiryDateEnabled,
+                original_campus_entry: record.Campus_Entry,
+              };
+            }),
+          )
+        ).filter((record) => record !== null);
+        await csvWriter.writeRecords(formattedRecords);
+        this.logger.log(
+          `[Batch ${batchNumber}] CSV file created at ${csvFilePath}`,
+        );
+        // After successful CSV upload and before cleanup
+        await this.logSyncedRecords(formattedRecords, jobName);
+        // 6. Upload to API with retries (per batch)
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            const { token, sessionId } = await this.getApiToken();
+            // Step 1: Upload the CSV file to /api/attachments
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', fs.createReadStream(csvFilePath));
             this.logger.log(
-              `CSV import successful - All ${formattedRecords.length} records processed`,
+              `[Batch ${batchNumber}] Uploading CSV file to attachments...`,
             );
-
-            // Now update each user with their face templates
-            for (const [key, templateData] of faceTemplateData.entries()) {
-              const [userId, templateNumber] = key.split('_');
-              try {
-                // Update user with face template
-                const updateResponse = await axios.put(
-                  `${this.apiBaseUrl}/api/users/${userId}`,
-                  {
-                    User: {
-                      credentials: {
-                        visualFaces: [
-                          {
-                            template_ex_normalized_image:
-                              templateData.normalizedImage,
-                            templates: [
-                              {
-                                credential_bin_type: '9', // FACE_TEMPLATE_EX_VER_3 for BioStation 3 and W3
-                                template_ex: templateData.template,
-                              },
-                            ],
-                          },
-                        ],
+            const uploadResponse = await axios.post(
+              `${this.apiBaseUrl}/api/attachments`,
+              uploadFormData,
+              {
+                headers: {
+                  ...uploadFormData.getHeaders(),
+                  Authorization: `Bearer ${token}`,
+                  'bs-session-id': sessionId,
+                },
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity,
+                timeout: 30000,
+                httpsAgent: new https.Agent({
+                  rejectUnauthorized: false,
+                }),
+              },
+            );
+            if (!uploadResponse.data?.filename) {
+              throw new Error('Failed to get filename from upload response');
+            }
+            const uploadedFileName = uploadResponse.data.filename;
+            this.logger.log(
+              `[Batch ${batchNumber}] File uploaded successfully as: ${uploadedFileName}`,
+            );
+            // Step 2: Import the uploaded CSV
+            const firstLine = fs
+              .readFileSync(csvFilePath, 'utf8')
+              .split('\n')[0];
+            const headers = firstLine.split(',');
+            // Read the CSV file to get face template data
+            const csvData = fs
+              .readFileSync(csvFilePath, 'utf8')
+              .split('\n')
+              .slice(1);
+            const faceTemplateData = new Map();
+            for (const line of csvData) {
+              if (!line.trim()) continue;
+              const values = line.split(',');
+              const userId = values[0];
+              const faceImage1 = values[11];
+              const faceImage2 = values[12];
+              if (faceImage1 && faceImage1.includes('|')) {
+                const [, templateFile] = faceImage1.split('|');
+                const templatePath = path.join(tempDir, templateFile);
+                if (fs.existsSync(templatePath)) {
+                  const templateData = JSON.parse(
+                    fs.readFileSync(templatePath, 'utf8'),
+                  );
+                  faceTemplateData.set(`${userId}_1`, templateData);
+                }
+              }
+              if (faceImage2 && faceImage2.includes('|')) {
+                const [, templateFile] = faceImage2.split('|');
+                const templatePath = path.join(tempDir, templateFile);
+                if (fs.existsSync(templatePath)) {
+                  const templateData = JSON.parse(
+                    fs.readFileSync(templatePath, 'utf8'),
+                  );
+                  faceTemplateData.set(`${userId}_2`, templateData);
+                }
+              }
+            }
+            const importPayload = {
+              File: {
+                uri: uploadedFileName,
+                fileName: uploadedFileName,
+              },
+              CsvOption: {
+                columns: {
+                  total: headers.length.toString(),
+                  rows: headers,
+                  formats: headers.map(() => 'Text'),
+                },
+                start_line: 2,
+                import_option: 2,
+              },
+              Query: {
+                headers: headers,
+                columns: headers,
+              },
+            };
+            this.logger.log(`[Batch ${batchNumber}] Importing CSV file...`);
+            const importResponse = await axios.post(
+              `${this.apiBaseUrl}/api/users/csv_import`,
+              importPayload,
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                  'bs-session-id': sessionId,
+                },
+                httpsAgent: new https.Agent({
+                  rejectUnauthorized: false,
+                }),
+              },
+            );
+            if (importResponse.data?.Response?.code === '1') {
+              this.logger.log(
+                `[Batch ${batchNumber}] Partial success detected, analyzing failed rows...`,
+              );
+              if (importResponse.data.CsvRowCollection) {
+                const failedRows = importResponse.data.CsvRowCollection.rows;
+                this.logger.warn(
+                  `[Batch ${batchNumber}] Failed rows (line numbers): ${failedRows.join(', ')}`,
+                );
+                const csvLines = fs
+                  .readFileSync(csvFilePath, 'utf8')
+                  .split('\n');
+                this.logger.warn(`[Batch ${batchNumber}] Failed records:`);
+                failedRows.forEach((rowNum) => {
+                  if (rowNum < csvLines.length) {
+                    this.logger.warn(
+                      `[Batch ${batchNumber}] Line ${rowNum}: ${csvLines[rowNum - 1]}`,
+                    );
+                  }
+                });
+                if (importResponse.data.File?.uri) {
+                  this.logger.warn(
+                    `[Batch ${batchNumber}] Error details file generated: ${importResponse.data.File.uri}`,
+                  );
+                }
+                throw new BadRequestException({
+                  message: `Import partially successful. ${failedRows.length} rows failed to import.`,
+                  details: `Failed rows: ${failedRows.join(', ')}`,
+                  biostarMessage: importResponse.data?.Response?.message,
+                  failedRows: failedRows,
+                });
+              }
+            } else if (importResponse.data?.Response?.code !== '0') {
+              this.logger.error(
+                `[Batch ${batchNumber}] Import API Response:`,
+                importResponse.data,
+              );
+              let errorMessage;
+              switch (importResponse.data?.Response?.code) {
+                case '20':
+                  errorMessage =
+                    'Permission denied. Please check API credentials and permissions.';
+                  break;
+                case '211':
+                  errorMessage =
+                    'Field mapping error. Please check CSV format and required fields.';
+                  break;
+                case '105':
+                  errorMessage =
+                    'Invalid query parameters. Please check CSV format and field mappings.';
+                  break;
+                default:
+                  errorMessage = 'Unknown error occurred during import';
+              }
+              throw new BadRequestException({
+                message: errorMessage,
+                details: importResponse.data,
+                biostarMessage: importResponse.data?.Response?.message,
+                step: 'csv-import',
+              });
+            } else {
+              this.logger.log(
+                `[Batch ${batchNumber}] CSV import successful - All ${formattedRecords.length} records processed`,
+              );
+              for (const [key, templateData] of faceTemplateData.entries()) {
+                const [userId, templateNumber] = key.split('_');
+                try {
+                  const updateResponse = await axios.put(
+                    `${this.apiBaseUrl}/api/users/${userId}`,
+                    {
+                      User: {
+                        credentials: {
+                          visualFaces: [
+                            {
+                              template_ex_normalized_image:
+                                templateData.normalizedImage,
+                              templates: [
+                                {
+                                  credential_bin_type: '9',
+                                  template_ex: templateData.template,
+                                },
+                              ],
+                            },
+                          ],
+                        },
                       },
                     },
-                  },
-                  {
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${token}`,
-                      'bs-session-id': sessionId,
+                    {
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                        'bs-session-id': sessionId,
+                      },
+                      httpsAgent: new https.Agent({
+                        rejectUnauthorized: false,
+                      }),
                     },
-                    httpsAgent: new https.Agent({
-                      rejectUnauthorized: false,
-                    }),
-                  },
-                );
-
-                if (updateResponse.data?.Response?.code !== '0') {
-                  this.logger.warn(
-                    `Failed to update face template for user ${userId}, template ${templateNumber}:`,
-                    updateResponse.data?.Response?.message,
                   );
-                } else {
-                  this.logger.log(
-                    `Successfully updated face template for user ${userId}, template ${templateNumber}`,
+                  if (updateResponse.data?.Response?.code !== '0') {
+                    this.logger.warn(
+                      `[Batch ${batchNumber}] Failed to update face template for user ${userId}, template ${templateNumber}:`,
+                      updateResponse.data?.Response?.message,
+                    );
+                  } else {
+                    this.logger.log(
+                      `[Batch ${batchNumber}] Successfully updated face template for user ${userId}, template ${templateNumber}`,
+                    );
+                  }
+                } catch (error) {
+                  this.logger.error(
+                    `[Batch ${batchNumber}] Error updating face template for user ${userId}, template ${templateNumber}:`,
+                    error.message,
                   );
                 }
-              } catch (error) {
-                this.logger.error(
-                  `Error updating face template for user ${userId}, template ${templateNumber}:`,
-                  error.message,
-                );
               }
             }
+            this.logger.log(
+              `[Batch ${batchNumber}] CSV file uploaded successfully`,
+            );
+            break;
+          } catch (error) {
+            retries--;
+            const errorMessage = axios.isAxiosError(error)
+              ? `API Error: ${error.response?.status} - ${error.response?.data?.message || error.message}`
+              : `Upload Error: ${error.message}`;
+            if (retries === 0) {
+              this.logger.error(
+                `[Batch ${batchNumber}] Final upload attempt failed: ${errorMessage}`,
+              );
+              throw new BadRequestException({
+                message: 'CSV upload failed after all retries',
+                details: errorMessage,
+                biostarMessage: axios.isAxiosError(error)
+                  ? error.response?.data?.Response?.message
+                  : undefined,
+                step: 'csv-upload',
+              });
+            }
+            this.logger.warn(
+              `[Batch ${batchNumber}] Upload attempt failed (${retries} retries left): ${errorMessage}`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 5000));
           }
-
-          this.logger.log('CSV file uploaded successfully');
-          break;
-        } catch (error) {
-          retries--;
-          const errorMessage = axios.isAxiosError(error)
-            ? `API Error: ${error.response?.status} - ${error.response?.data?.message || error.message}`
-            : `Upload Error: ${error.message}`;
-
-          if (retries === 0) {
-            this.logger.error(`Final upload attempt failed: ${errorMessage}`);
-            throw new BadRequestException({
-              message: 'CSV upload failed after all retries',
-              details: errorMessage,
-              biostarMessage: axios.isAxiosError(error)
-                ? error.response?.data?.Response?.message
-                : undefined,
-              step: 'csv-upload',
-            });
-          }
-
-          this.logger.warn(
-            `Upload attempt failed (${retries} retries left): ${errorMessage}`,
-          );
-          await new Promise((resolve) => setTimeout(resolve, 5000));
         }
+        // Tally for summary
+        totalProcessed += formattedRecords.length;
+        totalSkipped += skippedRecords.length;
+        totalEnabled += formattedRecords.filter(
+          (r) => r.original_campus_entry.toString().toUpperCase() === 'Y',
+        ).length;
+        totalDisabled += formattedRecords.filter(
+          (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
+        ).length;
+        formattedRecordsAll = formattedRecordsAll.concat(formattedRecords);
+        skippedRecordsAll = skippedRecordsAll.concat(skippedRecords);
+        failedRecordsAll = failedRecordsAll.concat(
+          formattedRecords.filter(
+            (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
+          ),
+        );
       }
 
       // Update lastSyncTime if it's a scheduled job
@@ -1573,7 +1325,7 @@ ${skippedTable.toString()}
       return {
         success: true,
         message: 'Sync completed successfully',
-        recordsProcessed: formattedRecords.length,
+        recordsProcessed: totalProcessed,
       };
     } catch (error) {
       this.logger.error(`Sync failed for ${jobName}:`, error);
