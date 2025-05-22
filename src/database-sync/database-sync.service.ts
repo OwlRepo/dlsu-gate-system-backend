@@ -813,7 +813,7 @@ export class DatabaseSyncService {
       );
 
       // 3. Fetch data with pagination for large datasets
-      const batchSize = 1000;
+      const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 100;
       let offset = 0;
       let allRecords = [];
 
