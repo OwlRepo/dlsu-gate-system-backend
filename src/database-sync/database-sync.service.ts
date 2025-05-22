@@ -1170,12 +1170,14 @@ export class DatabaseSyncService {
                     `[Batch ${batchNumber}] Error details file generated: ${importResponse.data.File.uri}`,
                   );
                 }
-                throw new BadRequestException({
-                  message: `Import partially successful. ${failedRows.length} rows failed to import.`,
-                  details: `Failed rows: ${failedRows.join(', ')}`,
-                  biostarMessage: importResponse.data?.Response?.message,
-                  failedRows: failedRows,
+                // Instead of throwing, log and record failed batch, then continue
+                failedRecordsAll.push({
+                  batchNumber,
+                  error: `Partial import: ${failedRows.length} rows failed`,
+                  failedRows,
+                  importResponse: importResponse.data,
                 });
+                break; // Continue to next batch
               }
             } else if (importResponse.data?.Response?.code !== '0') {
               this.logger.error(
@@ -1199,12 +1201,13 @@ export class DatabaseSyncService {
                 default:
                   errorMessage = 'Unknown error occurred during import';
               }
-              throw new BadRequestException({
-                message: errorMessage,
-                details: importResponse.data,
-                biostarMessage: importResponse.data?.Response?.message,
-                step: 'csv-import',
+              // Instead of throwing, log and record failed batch, then continue
+              failedRecordsAll.push({
+                batchNumber,
+                error: errorMessage,
+                importResponse: importResponse.data,
               });
+              break; // Continue to next batch
             } else {
               this.logger.log(
                 `[Batch ${batchNumber}] CSV import successful - All ${formattedRecords.length} records processed`,
@@ -1274,14 +1277,12 @@ export class DatabaseSyncService {
               this.logger.error(
                 `[Batch ${batchNumber}] Final upload attempt failed: ${errorMessage}`,
               );
-              throw new BadRequestException({
-                message: 'CSV upload failed after all retries',
+              failedRecordsAll.push({
+                batchNumber,
+                error: 'CSV upload failed after all retries',
                 details: errorMessage,
-                biostarMessage: axios.isAxiosError(error)
-                  ? error.response?.data?.Response?.message
-                  : undefined,
-                step: 'csv-upload',
               });
+              break; // Continue to next batch
             }
             this.logger.warn(
               `[Batch ${batchNumber}] Upload attempt failed (${retries} retries left): ${errorMessage}`,
