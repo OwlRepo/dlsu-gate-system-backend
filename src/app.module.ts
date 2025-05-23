@@ -68,7 +68,7 @@ import { StudentsModule } from './students/students.module';
     }),
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: '60m' },
+      signOptions: { expiresIn: '2d' },
     }),
     EmployeeModule,
     ReportsModule,
