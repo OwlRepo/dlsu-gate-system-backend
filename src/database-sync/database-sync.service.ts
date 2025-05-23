@@ -764,6 +764,48 @@ export class DatabaseSyncService {
     this.logger.log(`- CSV: ${csvFilePath}`);
   }
 
+  private async *fetchBatches(
+    pool: any,
+    hasIsArchivedColumn: boolean,
+    batchSize: number,
+  ) {
+    let offset = 0;
+    let batchNumber = 0;
+    while (true) {
+      batchNumber++;
+      const query = hasIsArchivedColumn
+        ? `\n            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} \n            WHERE isArchived = 'N' OR isArchived IS NULL\n            ORDER BY ID_Number \n            OFFSET ${offset} ROWS \n            FETCH NEXT ${batchSize} ROWS ONLY\n          `
+        : `\n            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} \n            ORDER BY ID_Number \n            OFFSET ${offset} ROWS \n            FETCH NEXT ${batchSize} ROWS ONLY\n          `;
+      const result = await pool.request().query(query);
+      if (result.recordset.length === 0) break;
+      yield { batchRecords: result.recordset, batchNumber };
+      offset += batchSize;
+    }
+  }
+
+  private logMemoryUsage(batchNumber: number) {
+    const used = process.memoryUsage();
+    this.logger.log(
+      `[Batch ${batchNumber}] Memory usage: RSS ${(used.rss / 1024 / 1024).toFixed(2)} MB, Heap ${(used.heapUsed / 1024 / 1024).toFixed(2)} MB`,
+    );
+  }
+
+  private async cleanupTempFiles(tempDir: string) {
+    try {
+      if (fs.existsSync(tempDir)) {
+        fs.readdirSync(tempDir).forEach((file) => {
+          const filePath = path.join(tempDir, file);
+          const stat = fs.statSync(filePath);
+          if (stat.isFile()) {
+            fs.unlinkSync(filePath);
+          } // skip directories
+        });
+      }
+    } catch (e) {
+      this.logger.warn('Failed to cleanup temp files:', e);
+    }
+  }
+
   private async executeDatabaseSync(jobName: string) {
     if (this.activeJobs.get(jobName)) {
       this.logger.warn(`Sync ${jobName} is already running`);
@@ -810,11 +852,7 @@ export class DatabaseSyncService {
       this.logger.log(
         `Table ${hasIsArchivedColumn ? 'has' : 'does not have'} isArchived column`,
       );
-
-      // 3. Fetch data with pagination for large datasets
-      const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 100;
-      let offset = 0;
-      let allRecords = [];
+      const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 1000; // default to 1000
       let totalProcessed = 0;
       let totalSkipped = 0;
       let totalEnabled = 0;
@@ -826,31 +864,15 @@ export class DatabaseSyncService {
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir);
       }
-      let batchNumber = 0;
-      while (true) {
-        batchNumber++;
-        // Modify query based on isArchived column existence
-        const query = hasIsArchivedColumn
-          ? `
-            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} 
-            WHERE isArchived = 'N' OR isArchived IS NULL
-            ORDER BY ID_Number 
-            OFFSET ${offset} ROWS 
-            FETCH NEXT ${batchSize} ROWS ONLY
-          `
-          : `
-            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} 
-            ORDER BY ID_Number 
-            OFFSET ${offset} ROWS 
-            FETCH NEXT ${batchSize} ROWS ONLY
-          `;
-
-        const result = await pool.request().query(query);
-        if (result.recordset.length === 0) break;
-
+      // Use async generator for batch fetching
+      for await (const { batchRecords, batchNumber } of this.fetchBatches(
+        pool,
+        hasIsArchivedColumn,
+        batchSize,
+      )) {
         // Convert photos to base64 before adding to batchRecords
-        const batchRecords = await Promise.all(
-          result.recordset.map(async (record) => ({
+        const batchRecordsWithPhoto = await Promise.all(
+          batchRecords.map(async (record) => ({
             ...record,
             Photo: await this.convertPhotoToBase64(
               record.Photo,
@@ -858,20 +880,19 @@ export class DatabaseSyncService {
             ),
           })),
         );
-        allRecords = allRecords.concat(batchRecords);
-        offset += batchSize;
-
         // --- Per-batch Postgres sync ---
         // STEP 1: Get all existing students from database in one query
         const existingStudents = await this.studentRepository.find({
-          where: { ID_Number: In(batchRecords.map((r) => r.ID_Number)) },
+          where: {
+            ID_Number: In(batchRecordsWithPhoto.map((r) => r.ID_Number)),
+          },
         });
         const existingMap = new Map(
           existingStudents.map((s) => [s.ID_Number, s]),
         );
         const toCreate = [];
         const toUpdate = [];
-        for (const record of batchRecords) {
+        for (const record of batchRecordsWithPhoto) {
           let uniqueId = record.Unique_ID;
           if (
             typeof uniqueId === 'string' &&
@@ -912,7 +933,7 @@ export class DatabaseSyncService {
           await this.studentRepository.save(toUpdate);
         }
         this.logger.log(
-          `[Batch ${batchNumber}] Synced ${toCreate.length + toUpdate.length} records (${batchRecords.length - (toCreate.length + toUpdate.length)} unchanged)`,
+          `[Batch ${batchNumber}] Synced ${toCreate.length + toUpdate.length} records (${batchRecordsWithPhoto.length - (toCreate.length + toUpdate.length)} unchanged)`,
         );
 
         // --- Per-batch CSV/Import/FaceTemplate ---
@@ -957,7 +978,7 @@ export class DatabaseSyncService {
         );
         const formattedRecords = (
           await Promise.all(
-            batchRecords.map(async (record) => {
+            batchRecordsWithPhoto.map(async (record) => {
               const userId = this.sanitizeUserId(
                 record.Unique_ID !== null && record.Unique_ID !== undefined
                   ? record.Unique_ID?.toString()?.trim()
@@ -1290,7 +1311,35 @@ export class DatabaseSyncService {
             await new Promise((resolve) => setTimeout(resolve, 5000));
           }
         }
-        // Tally for summary
+        // Write skipped records to disk per batch (not in memory)
+        if (skippedRecords.length > 0) {
+          const skippedFile = path.join(
+            this.logDir,
+            `skipped_batch_${jobName}_${batchNumber}_${Date.now()}.json`,
+          );
+          fs.writeFileSync(
+            skippedFile,
+            JSON.stringify(skippedRecords, null, 2),
+          );
+          this.logger.log(
+            `[Batch ${batchNumber}] Skipped records written to ${skippedFile}`,
+          );
+        }
+        // Write failed records to disk per batch (not in memory)
+        if (failedRecordsAll.length > 0) {
+          const failedFile = path.join(
+            this.logDir,
+            `failed_batch_${jobName}_${batchNumber}_${Date.now()}.json`,
+          );
+          fs.writeFileSync(
+            failedFile,
+            JSON.stringify(failedRecordsAll, null, 2),
+          );
+          this.logger.log(
+            `[Batch ${batchNumber}] Failed records written to ${failedFile}`,
+          );
+        }
+        // Tally for summary (counters only)
         totalProcessed += formattedRecords.length;
         totalSkipped += skippedRecords.length;
         totalEnabled += formattedRecords.filter(
@@ -1299,13 +1348,21 @@ export class DatabaseSyncService {
         totalDisabled += formattedRecords.filter(
           (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
         ).length;
-        formattedRecordsAll = formattedRecordsAll.concat(formattedRecords);
-        skippedRecordsAll = skippedRecordsAll.concat(skippedRecords);
-        failedRecordsAll = failedRecordsAll.concat(
-          formattedRecords.filter(
-            (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
-          ),
-        );
+        // Explicitly nullify large objects and arrays
+        batchRecords.length = 0;
+        batchRecordsWithPhoto.length = 0;
+        skippedRecords.length = 0;
+        failedRecordsAll.length = 0;
+        // Remove references to formattedRecords
+        for (let i = 0; i < formattedRecords.length; i++) {
+          formattedRecords[i] = null;
+        }
+        // Clean up temp files and force GC
+        this.logMemoryUsage(batchNumber);
+        await this.cleanupTempFiles(tempDir);
+        if (global.gc) {
+          global.gc();
+        }
       }
 
       // Update lastSyncTime if it's a scheduled job
