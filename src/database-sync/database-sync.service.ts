@@ -1201,35 +1201,6 @@ export class DatabaseSyncService {
                 break; // Continue to next batch
               }
             } else if (importResponse.data?.Response?.code !== '0') {
-              this.logger.error(
-                `[Batch ${batchNumber}] Import API Response:`,
-                importResponse.data,
-              );
-              let errorMessage;
-              switch (importResponse.data?.Response?.code) {
-                case '20':
-                  errorMessage =
-                    'Permission denied. Please check API credentials and permissions.';
-                  break;
-                case '211':
-                  errorMessage =
-                    'Field mapping error. Please check CSV format and required fields.';
-                  break;
-                case '105':
-                  errorMessage =
-                    'Invalid query parameters. Please check CSV format and field mappings.';
-                  break;
-                default:
-                  errorMessage = 'Unknown error occurred during import';
-              }
-              // Instead of throwing, log and record failed batch, then continue
-              failedRecordsAll.push({
-                batchNumber,
-                error: errorMessage,
-                importResponse: importResponse.data,
-              });
-              break; // Continue to next batch
-            } else {
               this.logger.log(
                 `[Batch ${batchNumber}] CSV import successful - All ${formattedRecords.length} records processed`,
               );
@@ -1295,7 +1266,7 @@ export class DatabaseSyncService {
               ? `API Error: ${error.response?.status} - ${error.response?.data?.message || error.message}`
               : `Upload Error: ${error.message}`;
             if (retries === 0) {
-              this.logger.error(
+              this.logger.warn(
                 `[Batch ${batchNumber}] Final upload attempt failed: ${errorMessage}`,
               );
               failedRecordsAll.push({
@@ -1303,7 +1274,7 @@ export class DatabaseSyncService {
                 error: 'CSV upload failed after all retries',
                 details: errorMessage,
               });
-              break; // Continue to next batch
+              break; // Continue to next batch, do not throw
             }
             this.logger.warn(
               `[Batch ${batchNumber}] Upload attempt failed (${retries} retries left): ${errorMessage}`,
