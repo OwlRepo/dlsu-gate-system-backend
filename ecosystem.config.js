@@ -17,7 +17,7 @@ module.exports = {
         TYPEORM_ENTITIES_CACHE: true,
         TYPEORM_POOL_SIZE: 30,
         NODE_OPTIONS:
-          '--max-old-space-size=2048 --expose-gc --max-http-header-size=16384',
+          '--max-old-space-size=8192 --expose-gc --max-http-header-size=16384',
         KEEP_ALIVE_TIMEOUT: 65000,
         HEADERS_TIMEOUT: 66000,
       },
@@ -29,7 +29,7 @@ module.exports = {
         TYPEORM_ENTITIES_CACHE: true,
         TYPEORM_POOL_SIZE: 30,
         NODE_OPTIONS:
-          '--max-old-space-size=2048 --expose-gc --max-http-header-size=16384',
+          '--max-old-space-size=8192 --expose-gc --max-http-header-size=16384',
         KEEP_ALIVE_TIMEOUT: 65000,
         HEADERS_TIMEOUT: 66000,
       },
