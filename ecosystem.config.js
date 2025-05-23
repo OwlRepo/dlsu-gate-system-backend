@@ -6,7 +6,7 @@ module.exports = {
       instances: 5,
       exec_mode: 'cluster',
       autorestart: true,
-      max_memory_restart: '1G',
+      max_memory_restart: '8G',
 
       // Environment variables
       env: {
