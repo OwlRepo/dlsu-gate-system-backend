@@ -1010,6 +1010,33 @@ export class DatabaseSyncService {
                 );
                 return null;
               }
+
+              // --- BioStar 2 Visual Face CSV Import Extension ---
+              // Save face images as files and reference them in CSV
+              const faceImageBase64 = await this.convertPhotoToBase64(
+                record.Photo,
+                record.ID_Number,
+              );
+              let faceImageFile1 = '';
+              let faceImageFile2 = '';
+              if (faceImageBase64) {
+                // Write two image files per user (for demo, use same image for both)
+                const fileName1 = `${userId}_1.jpg`;
+                const fileName2 = `${userId}_2.jpg`;
+                const filePath1 = path.join(tempDir, fileName1);
+                const filePath2 = path.join(tempDir, fileName2);
+                fs.writeFileSync(
+                  filePath1,
+                  Buffer.from(faceImageBase64, 'base64'),
+                );
+                fs.writeFileSync(
+                  filePath2,
+                  Buffer.from(faceImageBase64, 'base64'),
+                );
+                faceImageFile1 = fileName1;
+                faceImageFile2 = fileName2;
+              }
+
               return {
                 user_id: record.ID_Number,
                 name: name,
@@ -1021,28 +1048,9 @@ export class DatabaseSyncService {
                 lived_name: livedName,
                 remarks: remarks,
                 csn: userId,
-                photo: await this.convertPhotoToBase64(
-                  record.Photo,
-                  record.ID_Number,
-                ),
-                face_image_file1: await this.processFaceImage(
-                  await this.convertPhotoToBase64(
-                    record.Photo,
-                    record.ID_Number,
-                  ),
-                  record.ID_Number,
-                  1,
-                  tempDir,
-                ),
-                face_image_file2: await this.processFaceImage(
-                  await this.convertPhotoToBase64(
-                    record.Photo,
-                    record.ID_Number,
-                  ),
-                  record.ID_Number,
-                  2,
-                  tempDir,
-                ),
+                photo: faceImageBase64, // retain photo value for API
+                face_image_file1: faceImageFile1, // reference image file
+                face_image_file2: faceImageFile2, // reference image file
                 start_datetime: formattedStartDate,
                 expiry_datetime:
                   record.Campus_Entry.toString().toUpperCase() === 'N'
@@ -1204,57 +1212,57 @@ export class DatabaseSyncService {
               this.logger.log(
                 `[Batch ${batchNumber}] CSV import successful - All ${formattedRecords.length} records processed`,
               );
-              for (const [key, templateData] of faceTemplateData.entries()) {
-                const [userId, templateNumber] = key.split('_');
-                try {
-                  const updateResponse = await axios.put(
-                    `${this.apiBaseUrl}/api/users/${userId}`,
-                    {
-                      User: {
-                        credentials: {
-                          visualFaces: [
-                            {
-                              template_ex_normalized_image:
-                                templateData.normalizedImage,
-                              templates: [
-                                {
-                                  credential_bin_type: '9',
-                                  template_ex: templateData.template,
-                                },
-                              ],
-                            },
-                          ],
-                        },
-                      },
-                    },
-                    {
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
-                        'bs-session-id': sessionId,
-                      },
-                      httpsAgent: new https.Agent({
-                        rejectUnauthorized: false,
-                      }),
-                    },
-                  );
-                  if (updateResponse.data?.Response?.code !== '0') {
-                    this.logger.warn(
-                      `[Batch ${batchNumber}] Failed to update face template for user ${userId}, template ${templateNumber}:`,
-                      updateResponse.data?.Response?.message,
-                    );
-                  } else {
-                    this.logger.log(
-                      `[Batch ${batchNumber}] Successfully updated face template for user ${userId}, template ${templateNumber}`,
-                    );
-                  }
-                } catch (error) {
-                  this.logger.error(
-                    `[Batch ${batchNumber}] Error updating face template for user ${userId}, template ${templateNumber}:`,
-                    error.message,
-                  );
-                }
-              }
+              // for (const [key, templateData] of faceTemplateData.entries()) {
+              //   const [userId, templateNumber] = key.split('_');
+              //   try {
+              //     const updateResponse = await axios.put(
+              //       `${this.apiBaseUrl}/api/users/${userId}`,
+              //       {
+              //         User: {
+              //           credentials: {
+              //             visualFaces: [
+              //               {
+              //                 template_ex_normalized_image:
+              //                   templateData.normalizedImage,
+              //                 templates: [
+              //                   {
+              //                     credential_bin_type: '9',
+              //                     template_ex: templateData.template,
+              //                   },
+              //                 ],
+              //               },
+              //             ],
+              //           },
+              //         },
+              //       },
+              //       {
+              //         headers: {
+              //           'Content-Type': 'application/json',
+              //           Authorization: `Bearer ${token}`,
+              //           'bs-session-id': sessionId,
+              //         },
+              //         httpsAgent: new https.Agent({
+              //           rejectUnauthorized: false,
+              //         }),
+              //       },
+              //     );
+              //     if (updateResponse.data?.Response?.code !== '0') {
+              //       this.logger.warn(
+              //         `[Batch ${batchNumber}] Failed to update face template for user ${userId}, template ${templateNumber}:`,
+              //         updateResponse.data?.Response?.message,
+              //       );
+              //     } else {
+              //       this.logger.log(
+              //         `[Batch ${batchNumber}] Successfully updated face template for user ${userId}, template ${templateNumber}`,
+              //       );
+              //     }
+              //   } catch (error) {
+              //     this.logger.error(
+              //       `[Batch ${batchNumber}] Error updating face template for user ${userId}, template ${templateNumber}:`,
+              //       error.message,
+              //     );
+              //   }
+              // }
             }
             this.logger.log(
               `[Batch ${batchNumber}] CSV file uploaded successfully`,
@@ -1328,7 +1336,7 @@ export class DatabaseSyncService {
         for (let i = 0; i < formattedRecords.length; i++) {
           formattedRecords[i] = null;
         }
-        // Clean up temp files and force GC
+        // Clean up temp files and force GC after each batch
         this.logMemoryUsage(batchNumber);
         await this.cleanupTempFiles(tempDir);
         if (global.gc) {
