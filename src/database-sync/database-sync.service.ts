@@ -1195,17 +1195,76 @@ export class DatabaseSyncService {
                   }
                 });
                 if (importResponse.data.File?.uri) {
+                  const errorFileUri = importResponse.data.File.uri;
                   this.logger.warn(
-                    `[Batch ${batchNumber}] Error details file generated: ${importResponse.data.File.uri}`,
+                    `[Batch ${batchNumber}] Error details file generated: ${errorFileUri}`,
                   );
+
+                  // Download the error details file
+                  try {
+                    const errorFilePath = path.join(
+                      this.logDir,
+                      `error_details_batch_${jobName}_${batchNumber}_${Date.now()}.csv`,
+                    );
+
+                    // Make a GET request to download the error file
+                    const downloadResponse = await axios.get(
+                      `${this.apiBaseUrl}/download/${errorFileUri}`,
+                      {
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                          'bs-session-id': sessionId,
+                        },
+                        responseType: 'stream',
+                        httpsAgent: new https.Agent({
+                          rejectUnauthorized: false,
+                        }),
+                      },
+                    );
+
+                    // Save the file to disk
+                    const writer = fs.createWriteStream(errorFilePath);
+                    downloadResponse.data.pipe(writer);
+
+                    await new Promise((resolve, reject) => {
+                      writer.on('finish', resolve);
+                      writer.on('error', reject);
+                    });
+
+                    this.logger.log(
+                      `[Batch ${batchNumber}] Error details file downloaded to ${errorFilePath}`,
+                    );
+
+                    // Add the downloaded file path to the failed records
+                    failedRecordsAll.push({
+                      batchNumber,
+                      error: `Partial import: ${failedRows.length} rows failed`,
+                      failedRows,
+                      importResponse: importResponse.data,
+                      errorDetailsFilePath: errorFilePath,
+                    });
+                  } catch (downloadError) {
+                    this.logger.error(
+                      `[Batch ${batchNumber}] Failed to download error details file: ${downloadError.message}`,
+                    );
+
+                    failedRecordsAll.push({
+                      batchNumber,
+                      error: `Partial import: ${failedRows.length} rows failed`,
+                      failedRows,
+                      importResponse: importResponse.data,
+                      downloadError: downloadError.message,
+                    });
+                  }
+                } else {
+                  // No error details file was generated
+                  failedRecordsAll.push({
+                    batchNumber,
+                    error: `Partial import: ${failedRows.length} rows failed`,
+                    failedRows,
+                    importResponse: importResponse.data,
+                  });
                 }
-                // Instead of throwing, log and record failed batch, then continue
-                failedRecordsAll.push({
-                  batchNumber,
-                  error: `Partial import: ${failedRows.length} rows failed`,
-                  failedRows,
-                  importResponse: importResponse.data,
-                });
                 break; // Continue to next batch
               }
             } else if (importResponse.data?.Response?.code !== '0') {
