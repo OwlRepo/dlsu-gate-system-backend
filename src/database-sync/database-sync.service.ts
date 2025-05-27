@@ -384,7 +384,7 @@ export class DatabaseSyncService {
       existingLogs.push(logEntry);
       fs.writeFileSync(logFile, JSON.stringify(existingLogs, null, 2));
     } catch (error) {
-      this.logger.error('Failed to log photo conversion failure:', error);
+      this.logger.error('Failed to log photo conversion failure');
     }
   }
 
@@ -1175,25 +1175,9 @@ export class DatabaseSyncService {
               },
             );
             if (importResponse.data?.Response?.code === '1') {
-              this.logger.log(
-                `[Batch ${batchNumber}] Partial success detected, analyzing failed rows...`,
-              );
               if (importResponse.data.CsvRowCollection) {
                 const failedRows = importResponse.data.CsvRowCollection.rows;
-                this.logger.warn(
-                  `[Batch ${batchNumber}] Failed rows (line numbers): ${failedRows.join(', ')}`,
-                );
-                const csvLines = fs
-                  .readFileSync(csvFilePath, 'utf8')
-                  .split('\n');
-                this.logger.warn(`[Batch ${batchNumber}] Failed records:`);
-                failedRows.forEach((rowNum) => {
-                  if (rowNum < csvLines.length) {
-                    this.logger.warn(
-                      `[Batch ${batchNumber}] Line ${rowNum}: ${csvLines[rowNum - 1]}`,
-                    );
-                  }
-                });
+
                 if (importResponse.data.File?.uri) {
                   const errorFileUri = importResponse.data.File.uri;
                   this.logger.warn(
