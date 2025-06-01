@@ -80,13 +80,13 @@ export class DatabaseSyncService {
         encrypt: false,
         trustServerCertificate: true,
         enableArithAbort: true,
-        connectTimeout: 30000,
-        requestTimeout: 30000,
+        connectTimeout: 120000,
+        requestTimeout: 120000,
       },
       pool: {
         max: 10,
         min: 0,
-        idleTimeoutMillis: 30000,
+        idleTimeoutMillis: 120000,
       },
     };
 
@@ -1089,7 +1089,7 @@ export class DatabaseSyncService {
                 },
                 maxBodyLength: Infinity,
                 maxContentLength: Infinity,
-                timeout: 30000,
+                timeout: 120000,
                 httpsAgent: new https.Agent({
                   rejectUnauthorized: false,
                 }),
