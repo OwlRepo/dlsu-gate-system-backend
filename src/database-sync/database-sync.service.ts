@@ -505,13 +505,13 @@ export class DatabaseSyncService {
       const signature = imageBuffer.slice(0, 4).toString('hex');
       const extendedSignature = imageBuffer.slice(0, 8).toString('hex');
 
-      this.logger.debug('Photo conversion debug - signature check', {
-        studentId,
-        signature,
-        extendedSignature,
-        bufferLength: imageBuffer.length,
-        isBuffer: Buffer.isBuffer(imageBuffer),
-      });
+      // this.logger.debug('Photo conversion debug - signature check', {
+      //   studentId,
+      //   signature,
+      //   extendedSignature,
+      //   bufferLength: imageBuffer.length,
+      //   isBuffer: Buffer.isBuffer(imageBuffer),
+      // });
 
       // Validate image buffer
       if (!imageBuffer || imageBuffer.length === 0) {
@@ -584,61 +584,61 @@ export class DatabaseSyncService {
           }
         }
 
-        const supportedSignatures = {
-          png: ['89504e47'], // PNG
-          jpeg: [
-            'ffd8ffe0', // JPEG
-            'ffd8ffe1', // JPEG with EXIF
-            'ffd8ffe2', // JPEG with SPIFF
-            'ffd8ffe3', // JPEG with JFIF
-          ],
-          bmp: [
-            '424d', // Standard BMP
-            // Removing custom variants as they don't follow standard BMP structure
-          ],
-        };
+        // const supportedSignatures = {
+        //   png: ['89504e47'], // PNG
+        //   jpeg: [
+        //     'ffd8ffe0', // JPEG
+        //     'ffd8ffe1', // JPEG with EXIF
+        //     'ffd8ffe2', // JPEG with SPIFF
+        //     'ffd8ffe3', // JPEG with JFIF
+        //   ],
+        //   bmp: [
+        //     '424d', // Standard BMP
+        //     // Removing custom variants as they don't follow standard BMP structure
+        //   ],
+        // };
 
         // Check if signature matches any supported format
-        const isSupported = Object.values(supportedSignatures)
-          .flat()
-          .some((supported) => {
-            const matches = signature.startsWith(supported);
-            if (matches) {
-              this.logger.debug(
-                `Matched signature: ${supported} for format ${Object.keys(
-                  supportedSignatures,
-                ).find((key) => supportedSignatures[key].includes(supported))}`,
-              );
-            }
-            return matches;
-          });
+        // const isSupported = Object.values(supportedSignatures)
+        //   .flat()
+        //   .some((supported) => {
+        //     const matches = signature.startsWith(supported);
+        //     if (matches) {
+        //       this.logger.debug(
+        //         `Matched signature: ${supported} for format ${Object.keys(
+        //           supportedSignatures,
+        //         ).find((key) => supportedSignatures[key].includes(supported))}`,
+        //       );
+        //     }
+        //     return matches;
+        //   });
 
-        if (!isSupported) {
-          this.logger.warn(
-            'Invalid image signature detected, using default image',
-            {
-              signature,
-              extendedSignature,
-              bufferLength: imageBuffer.length,
-              studentId,
-              supportedFormats: Object.values(supportedSignatures).flat(),
-            },
-          );
-          this.logPhotoConversionFailure(
-            photoData,
-            `Invalid image signature detected: ${signature}`,
-            studentId,
-          );
-          imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
-        } else {
-          this.logger.debug('Valid image signature detected', {
-            signature,
-            studentId,
-            format: Object.keys(supportedSignatures).find((key) =>
-              supportedSignatures[key].some((s) => signature.startsWith(s)),
-            ),
-          });
-        }
+        // if (!isSupported) {
+        //   this.logger.warn(
+        //     'Invalid image signature detected, using default image',
+        //     {
+        //       signature,
+        //       extendedSignature,
+        //       bufferLength: imageBuffer.length,
+        //       studentId,
+        //       supportedFormats: Object.values(supportedSignatures).flat(),
+        //     },
+        //   );
+        //   this.logPhotoConversionFailure(
+        //     photoData,
+        //     `Invalid image signature detected: ${signature}`,
+        //     studentId,
+        //   );
+        //   imageBuffer = fs.readFileSync(path.join(process.cwd(), 'dlsu.png'));
+        // } else {
+        //   this.logger.debug('Valid image signature detected', {
+        //     signature,
+        //     studentId,
+        //     format: Object.keys(supportedSignatures).find((key) =>
+        //       supportedSignatures[key].some((s) => signature.startsWith(s)),
+        //     ),
+        //   });
+        // }
       } catch (signatureError) {
         this.logger.error('Error checking image signature:', {
           error: signatureError.message,
@@ -1065,6 +1065,50 @@ export class DatabaseSyncService {
         this.logger.log(
           `[Batch ${batchNumber}] CSV file created at ${csvFilePath}`,
         );
+        // Ensure the CSV file exists and is fully written before upload
+        let csvFileReady = false;
+        for (let i = 0; i < 10; i++) {
+          // Try for up to ~2 seconds
+          try {
+            await fs.promises.access(
+              csvFilePath,
+              fs.constants.F_OK | fs.constants.R_OK,
+            );
+            const stats = await fs.promises.stat(csvFilePath);
+            if (stats.size > 0) {
+              csvFileReady = true;
+              break;
+            }
+          } catch (e) {
+            this.logger.warn(
+              `[Batch ${batchNumber}] CSV file not ready yet, retrying...`,
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        if (!csvFileReady) {
+          this.logger.error(
+            `[Batch ${batchNumber}] CSV file was not created or is empty. Aborting upload for this batch.`,
+          );
+          failedRecordsAll.push({
+            batchNumber,
+            error: 'CSV file not created or empty',
+            details: `File: ${csvFilePath}`,
+          });
+          // Write failed record log immediately
+          const failedFile = path.join(
+            this.logDir,
+            `failed_batch_${jobName}_${batchNumber}_${Date.now()}.json`,
+          );
+          fs.writeFileSync(
+            failedFile,
+            JSON.stringify(failedRecordsAll, null, 2),
+          );
+          this.logger.log(
+            `[Batch ${batchNumber}] Failed records written to ${failedFile}`,
+          );
+          continue; // Skip this batch
+        }
         // After successful CSV upload and before cleanup
         await this.logSyncedRecords(formattedRecords, jobName);
         // 6. Upload to API with retries (per batch)
@@ -1381,6 +1425,8 @@ export class DatabaseSyncService {
         }
         // Clean up temp files and force GC after each batch
         this.logMemoryUsage(batchNumber);
+        // Only cleanup temp files after logs and uploads are complete
+        // (Moved cleanupTempFiles here, after all logs and uploads)
         await this.cleanupTempFiles(tempDir);
         if (global.gc) {
           global.gc();
