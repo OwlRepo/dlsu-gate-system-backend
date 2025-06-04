@@ -70,6 +70,17 @@ export class DatabaseSyncService {
   ) {
     this.initializeSchedules();
 
+    // Add process event handlers for unhandled errors
+    process.on('uncaughtException', async (error) => {
+      this.logger.error('Uncaught Exception:', error);
+      await this.handleAppCrash();
+    });
+
+    process.on('unhandledRejection', async (reason, promise) => {
+      this.logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      await this.handleAppCrash();
+    });
+
     this.sqlConfig = {
       user: this.configService.get('SOURCE_DB_USERNAME'),
       password: this.configService.get('SOURCE_DB_PASSWORD'),
@@ -806,6 +817,31 @@ export class DatabaseSyncService {
     }
   }
 
+  private async handleAppCrash() {
+    try {
+      // Get all active jobs
+      const activeJobs = Array.from(this.activeJobs.entries())
+        .filter(([_, isActive]) => isActive)
+        .map(([jobName]) => jobName);
+
+      // Update status for each active job
+      for (const jobName of activeJobs) {
+        if (jobName.startsWith('manual-')) {
+          const jobId = jobName.replace('manual-', '');
+          await this.databaseSyncQueueService.updateQueueStatus(
+            jobId,
+            'failed',
+          );
+          this.logger.log(
+            `Updated queue status to failed for job ${jobId} due to app crash`,
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error handling app crash:', error);
+    }
+  }
+
   private async executeDatabaseSync(jobName: string) {
     if (this.activeJobs.get(jobName)) {
       this.logger.warn(`Sync ${jobName} is already running`);
@@ -813,11 +849,17 @@ export class DatabaseSyncService {
     }
 
     let pool: sql.ConnectionPool | null = null;
+    let currentJobId: string | null = null;
 
     try {
       this.activeJobs.set(jobName, true);
       this.jobStartTimes.set(jobName, new Date());
       this.logger.log(`Starting database sync for ${jobName}`);
+
+      // Extract job ID if it's a manual sync
+      if (jobName.startsWith('manual-')) {
+        currentJobId = jobName.replace('manual-', '');
+      }
 
       // Add detailed connection logging
       this.logger.log('Attempting SQL Server connection...');
@@ -1482,6 +1524,25 @@ export class DatabaseSyncService {
       };
     } catch (error) {
       this.logger.error(`Sync failed for ${jobName}:`, error);
+
+      // Update queue status to failed if it's a manual sync
+      if (currentJobId) {
+        try {
+          await this.databaseSyncQueueService.updateQueueStatus(
+            currentJobId,
+            'failed',
+          );
+          this.logger.log(
+            `Updated queue status to failed for job ${currentJobId}`,
+          );
+        } catch (updateError) {
+          this.logger.error(
+            `Failed to update queue status for job ${currentJobId}:`,
+            updateError,
+          );
+        }
+      }
+
       throw error;
     } finally {
       // Cleanup
