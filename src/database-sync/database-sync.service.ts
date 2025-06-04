@@ -894,11 +894,38 @@ export class DatabaseSyncService {
         const toUpdate = [];
         for (const record of batchRecordsWithPhoto) {
           let uniqueId = record.Unique_ID;
-          if (
-            typeof uniqueId === 'string' &&
-            /^[0-9A-Fa-f\s]+$/.test(uniqueId)
-          ) {
-            uniqueId = parseInt(uniqueId.replace(/\s/g, ''), 16);
+          // Remove spaces for validation and parsing
+          const uniqueIdNoSpaces =
+            typeof uniqueId === 'string'
+              ? uniqueId.replace(/\s/g, '')
+              : uniqueId;
+          // Check if Unique_ID is a string and contains only valid hex characters (no spaces allowed)
+          if (typeof uniqueId === 'string') {
+            if (/^[0-9A-Fa-f]+$/.test(uniqueIdNoSpaces)) {
+              uniqueId = parseInt(uniqueIdNoSpaces, 16);
+              if (isNaN(uniqueId)) {
+                this.logger.warn(
+                  `[Batch ${batchNumber}] Skipping record with invalid Unique_ID (not a valid hex): ${record.Unique_ID} (ID_Number: ${record.ID_Number})`,
+                );
+                failedRecordsAll.push({
+                  ...record,
+                  reason: 'Invalid Unique_ID: not a valid hexadecimal string',
+                  timestamp: new Date().toISOString(),
+                });
+                continue; // skip this record
+              }
+            } else {
+              this.logger.warn(
+                `[Batch ${batchNumber}] Skipping record with invalid Unique_ID (contains non-hex characters or spaces): ${record.Unique_ID} (ID_Number: ${record.ID_Number})`,
+              );
+              failedRecordsAll.push({
+                ...record,
+                reason:
+                  'Invalid Unique_ID: contains non-hex characters or spaces',
+                timestamp: new Date().toISOString(),
+              });
+              continue; // skip this record
+            }
           }
           const data = {
             ID_Number: record.ID_Number,
