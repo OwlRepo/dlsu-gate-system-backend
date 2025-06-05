@@ -139,15 +139,16 @@ export class DatabaseSyncService {
     return str.replace(/[^a-zA-Z0-9\s]/g, '');
   }
 
-  private sanitizeUserId(userId: string): string {
+  private sanitizeUserId(userId: string): string | null {
     // Remove spaces from the userId first
     const cleanUserId = userId.replace(/\s/g, '');
     // Convert hex to decimal if userId is a valid hex number
     if (/^[0-9A-Fa-f]+$/.test(cleanUserId)) {
       const decimal = parseInt(cleanUserId, 16);
-      if (!isNaN(decimal)) {
-        userId = decimal.toString();
+      if (isNaN(decimal)) {
+        return null;
       }
+      userId = decimal.toString();
     }
     // Ensure the userId has a maximum of 10 characters
     if (userId.length > 10) {
@@ -1083,8 +1084,27 @@ export class DatabaseSyncService {
               const livedName = record.Lived_Name?.trim() || '';
               const remarks = record.Remarks?.trim() || '';
               const validationErrors = [];
-              if (!userId || userId.length > 10) {
-                validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
+              if (!userId) {
+                validationErrors.push('Invalid hex conversion');
+                failedRecordsAll.push({
+                  ID_Number: record.ID_Number,
+                  userId:
+                    record.Unique_ID?.toString()?.trim() ||
+                    record.ID_Number?.toString()?.trim() ||
+                    '',
+                  name,
+                  livedName,
+                  remarks,
+                  reason: 'Invalid hex conversion',
+                  timestamp: new Date().toISOString(),
+                });
+                this.logger.warn(
+                  `[Batch ${batchNumber}] Skipping record with invalid hex conversion - ID: ${record.ID_Number}`,
+                );
+                return null;
+              }
+              if (userId.length > 10) {
+                validationErrors.push('ID too long');
               }
               if (!name) {
                 validationErrors.push('Empty name');
