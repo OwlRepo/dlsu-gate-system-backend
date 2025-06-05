@@ -15,7 +15,6 @@ import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
 import * as FormData from 'form-data';
 import { In } from 'typeorm';
-import * as Table from 'cli-table3';
 import * as sharp from 'sharp';
 import { DatabaseSyncQueueService } from './database-sync-queue.service';
 import * as dayjs from 'dayjs';
@@ -874,10 +873,10 @@ export class DatabaseSyncService {
         const batchRecordsWithPhoto = await Promise.all(
           batchRecords.map(async (record) => ({
             ...record,
-            Photo: await this.convertPhotoToBase64(
-              record.Photo,
-              record.ID_Number,
-            ),
+            // Photo: await this.convertPhotoToBase64(
+            //   record.Photo,
+            //   record.ID_Number,
+            // ),
           })),
         );
         // --- Per-batch Postgres sync ---
@@ -913,7 +912,7 @@ export class DatabaseSyncService {
             Name: record.Name,
             Lived_Name: record.Lived_Name,
             Remarks: record.Remarks,
-            Photo: record.Photo,
+            Photo: '',
             Campus_Entry: record.Campus_Entry,
             Unique_ID: uniqueId,
             isArchived: record.isArchived === 'Y',
@@ -926,7 +925,7 @@ export class DatabaseSyncService {
             existing.Name !== record.Name ||
             existing.Lived_Name !== record.Lived_Name ||
             existing.Remarks !== record.Remarks ||
-            existing.Photo !== record.Photo ||
+            existing.Photo !== record?.Photo ||
             existing.Campus_Entry !== record.Campus_Entry ||
             existing.Unique_ID !== uniqueId ||
             existing.isArchived !== (record.isArchived === 'Y')
@@ -1109,29 +1108,29 @@ export class DatabaseSyncService {
 
               // --- BioStar 2 Visual Face CSV Import Extension ---
               // Save face images as files and reference them in CSV
-              const faceImageBase64 = await this.convertPhotoToBase64(
-                record.Photo,
-                record.ID_Number,
-              );
-              let faceImageFile1 = '';
-              let faceImageFile2 = '';
-              if (faceImageBase64) {
-                // Write two image files per user (for demo, use same image for both)
-                const fileName1 = `${userId}_1.jpg`;
-                const fileName2 = `${userId}_2.jpg`;
-                const filePath1 = path.join(tempDir, fileName1);
-                const filePath2 = path.join(tempDir, fileName2);
-                fs.writeFileSync(
-                  filePath1,
-                  Buffer.from(faceImageBase64, 'base64'),
-                );
-                fs.writeFileSync(
-                  filePath2,
-                  Buffer.from(faceImageBase64, 'base64'),
-                );
-                faceImageFile1 = fileName1;
-                faceImageFile2 = fileName2;
-              }
+              // const faceImageBase64 = await this.convertPhotoToBase64(
+              //   record.Photo,
+              //   record.ID_Number,
+              // );
+              // let faceImageFile1 = '';
+              // let faceImageFile2 = '';
+              // if (faceImageBase64) {
+              //   // Write two image files per user (for demo, use same image for both)
+              //   const fileName1 = `${userId}_1.jpg`;
+              //   const fileName2 = `${userId}_2.jpg`;
+              //   const filePath1 = path.join(tempDir, fileName1);
+              //   const filePath2 = path.join(tempDir, fileName2);
+              //   fs.writeFileSync(
+              //     filePath1,
+              //     Buffer.from(faceImageBase64, 'base64'),
+              //   );
+              //   fs.writeFileSync(
+              //     filePath2,
+              //     Buffer.from(faceImageBase64, 'base64'),
+              //   );
+              //   faceImageFile1 = fileName1;
+              //   faceImageFile2 = fileName2;
+              // }
 
               return {
                 user_id: record.ID_Number,
@@ -1144,9 +1143,12 @@ export class DatabaseSyncService {
                 lived_name: livedName,
                 remarks: remarks,
                 csn: userId,
-                photo: faceImageBase64, // retain photo value for API
-                face_image_file1: faceImageFile1, // reference image file
-                face_image_file2: faceImageFile2, // reference image file
+                // photo: faceImageBase64, // retain photo value for API
+                // face_image_file1: faceImageFile1, // reference image file
+                // face_image_file2: faceImageFile2, // reference image file
+                photo: '', // retain photo value for API
+                face_image_file1: '', // reference image file
+                face_image_file2: '', // reference image file
                 start_datetime: formattedStartDate,
                 expiry_datetime:
                   record.Campus_Entry.toString().toUpperCase() === 'N'
@@ -1248,38 +1250,38 @@ export class DatabaseSyncService {
               .split('\n')[0];
             const headers = firstLine.split(',');
             // Read the CSV file to get face template data
-            const csvData = fs
-              .readFileSync(csvFilePath, 'utf8')
-              .split('\n')
-              .slice(1);
-            const faceTemplateData = new Map();
-            for (const line of csvData) {
-              if (!line.trim()) continue;
-              const values = line.split(',');
-              const userId = values[0];
-              const faceImage1 = values[11];
-              const faceImage2 = values[12];
-              if (faceImage1 && faceImage1.includes('|')) {
-                const [, templateFile] = faceImage1.split('|');
-                const templatePath = path.join(tempDir, templateFile);
-                if (fs.existsSync(templatePath)) {
-                  const templateData = JSON.parse(
-                    fs.readFileSync(templatePath, 'utf8'),
-                  );
-                  faceTemplateData.set(`${userId}_1`, templateData);
-                }
-              }
-              if (faceImage2 && faceImage2.includes('|')) {
-                const [, templateFile] = faceImage2.split('|');
-                const templatePath = path.join(tempDir, templateFile);
-                if (fs.existsSync(templatePath)) {
-                  const templateData = JSON.parse(
-                    fs.readFileSync(templatePath, 'utf8'),
-                  );
-                  faceTemplateData.set(`${userId}_2`, templateData);
-                }
-              }
-            }
+            // const csvData = fs
+            //   .readFileSync(csvFilePath, 'utf8')
+            //   .split('\n')
+            //   .slice(1);
+            // const faceTemplateData = new Map();
+            // for (const line of csvData) {
+            //   if (!line.trim()) continue;
+            //   const values = line.split(',');
+            //   const userId = values[0];
+            //   const faceImage1 = values[11];
+            //   const faceImage2 = values[12];
+            //   if (faceImage1 && faceImage1.includes('|')) {
+            //     const [, templateFile] = faceImage1.split('|');
+            //     const templatePath = path.join(tempDir, templateFile);
+            //     if (fs.existsSync(templatePath)) {
+            //       const templateData = JSON.parse(
+            //         fs.readFileSync(templatePath, 'utf8'),
+            //       );
+            //       faceTemplateData.set(`${userId}_1`, templateData);
+            //     }
+            //   }
+            //   if (faceImage2 && faceImage2.includes('|')) {
+            //     const [, templateFile] = faceImage2.split('|');
+            //     const templatePath = path.join(tempDir, templateFile);
+            //     if (fs.existsSync(templatePath)) {
+            //       const templateData = JSON.parse(
+            //         fs.readFileSync(templatePath, 'utf8'),
+            //       );
+            //       faceTemplateData.set(`${userId}_2`, templateData);
+            //     }
+            //   }
+            // }
             const importPayload = {
               File: {
                 uri: uploadedFileName,
