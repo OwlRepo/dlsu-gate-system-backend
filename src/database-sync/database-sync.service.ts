@@ -1061,14 +1061,22 @@ export class DatabaseSyncService {
             }),
           )
         ).filter((record) => record !== null);
+
+        if (formattedRecords.length === 0) {
+          this.logger.log(
+            `[Batch ${batchNumber}] No valid records after filtering. Skipping CSV generation and upload for this batch.`,
+          );
+          continue;
+        }
+
         await csvWriter.writeRecords(formattedRecords);
         this.logger.log(
           `[Batch ${batchNumber}] CSV file created at ${csvFilePath}`,
         );
         // Ensure the CSV file exists and is fully written before upload
         let csvFileReady = false;
-        for (let i = 0; i < 10; i++) {
-          // Try for up to ~2 seconds
+        for (let i = 0; i < 60; i++) {
+          // Try for up to ~30 seconds
           try {
             await fs.promises.access(
               csvFilePath,
@@ -1084,7 +1092,7 @@ export class DatabaseSyncService {
               `[Batch ${batchNumber}] CSV file not ready yet, retrying...`,
             );
           }
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
         if (!csvFileReady) {
           this.logger.error(
