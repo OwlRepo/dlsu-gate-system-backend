@@ -855,10 +855,6 @@ export class DatabaseSyncService {
       const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 1000; // default to 1000
       let totalProcessed = 0;
       let totalSkipped = 0;
-      let totalEnabled = 0;
-      let totalDisabled = 0;
-      let formattedRecordsAll = [];
-      let skippedRecordsAll = [];
       let failedRecordsAll = [];
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
@@ -1534,12 +1530,6 @@ export class DatabaseSyncService {
         // Tally for summary (counters only)
         totalProcessed += formattedRecords.length;
         totalSkipped += skippedRecords.length;
-        totalEnabled += formattedRecords.filter(
-          (r) => r.original_campus_entry.toString().toUpperCase() === 'Y',
-        ).length;
-        totalDisabled += formattedRecords.filter(
-          (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
-        ).length;
         // Explicitly nullify large objects and arrays
         batchRecords.length = 0;
         batchRecordsWithPhoto.length = 0;
