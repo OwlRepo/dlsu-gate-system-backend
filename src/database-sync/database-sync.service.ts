@@ -1179,6 +1179,14 @@ export class DatabaseSyncService {
             }),
           )
         ).filter((record) => record !== null);
+
+        if (formattedRecords.length === 0) {
+          this.logger.log(
+            `[Batch ${batchNumber}] No valid records after filtering. Skipping CSV generation and upload for this batch.`,
+          );
+          continue;
+        }
+
         await csvWriter.writeRecords(formattedRecords);
         this.logger.log(
           `[Batch ${batchNumber}] CSV file created at ${csvFilePath}`,
