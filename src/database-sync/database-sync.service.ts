@@ -928,8 +928,8 @@ export class DatabaseSyncService {
             existing.Remarks !== record.Remarks ||
             existing.Photo !== record.Photo ||
             existing.Campus_Entry !== record.Campus_Entry ||
-            existing.Unique_ID !== record.Unique_ID ||
-            existing.isArchived !== record.isArchived
+            existing.Unique_ID !== uniqueId ||
+            existing.isArchived !== (record.isArchived === 'Y')
           ) {
             toUpdate.push({ ...data, id: existing.id });
           }
@@ -941,16 +941,72 @@ export class DatabaseSyncService {
             this.logger.error(
               `[Batch ${batchNumber}] Batch insert failed. Error: ${error.message}`,
             );
-            // Log the failed records for debugging
-            failedRecordsAll.push({
-              batchNumber,
-              error: 'Database insert failed',
-              details: error.message,
-              failedRecords: toCreate.map((r) => ({
-                ID_Number: r.ID_Number,
-                Name: r.Name,
-              })),
-            });
+
+            // If it's a duplicate key error, try to handle it gracefully
+            if (
+              error.message.includes(
+                'duplicate key value violates unique constraint',
+              )
+            ) {
+              this.logger.warn(
+                `[Batch ${batchNumber}] Duplicate key error detected. Attempting to update existing records instead.`,
+              );
+
+              // For each failed record, try to update it instead
+              for (const failedRecord of toCreate) {
+                try {
+                  const existingRecord = await this.studentRepository.findOne({
+                    where: { ID_Number: failedRecord.ID_Number },
+                  });
+
+                  if (existingRecord) {
+                    // Update the existing record
+                    await this.studentRepository.update(
+                      { ID_Number: failedRecord.ID_Number },
+                      {
+                        Name: failedRecord.Name,
+                        Lived_Name: failedRecord.Lived_Name,
+                        Remarks: failedRecord.Remarks,
+                        Photo: failedRecord.Photo,
+                        Campus_Entry: failedRecord.Campus_Entry,
+                        Unique_ID: failedRecord.Unique_ID,
+                        isArchived: failedRecord.isArchived,
+                        updatedAt: failedRecord.updatedAt,
+                      },
+                    );
+                    this.logger.log(
+                      `[Batch ${batchNumber}] Successfully updated existing record for ID: ${failedRecord.ID_Number}`,
+                    );
+                  }
+                } catch (updateError) {
+                  this.logger.error(
+                    `[Batch ${batchNumber}] Failed to update record for ID: ${failedRecord.ID_Number}. Error: ${updateError.message}`,
+                  );
+                  failedRecordsAll.push({
+                    batchNumber,
+                    error: 'Failed to update existing record',
+                    details: updateError.message,
+                    failedRecords: [
+                      {
+                        ID_Number: failedRecord.ID_Number,
+                        Name: failedRecord.Name,
+                      },
+                    ],
+                  });
+                }
+              }
+            } else {
+              // Log the failed records for debugging
+              failedRecordsAll.push({
+                batchNumber,
+                error: 'Database insert failed',
+                details: error.message,
+                failedRecords: toCreate.map((r) => ({
+                  ID_Number: r.ID_Number,
+                  Name: r.Name,
+                })),
+              });
+            }
           }
         }
         if (toUpdate.length) {
