@@ -84,9 +84,9 @@ pm2 start ecosystem.config.js
 
 3. **Access Points**
 
-- API: `http://localhost:9580`
-- Docs: `http://localhost:9580/api/docs`
-- Health: `http://localhost:9580/health`
+- API: `http://localhost:10580`
+- Docs: `http://localhost:10580/api/docs`
+- Health: `http://localhost:10580/health`
 
 ## Development
 
@@ -126,7 +126,7 @@ logs/
 ### Health Checks
 
 ```bash
-curl http://localhost:9580/health
+curl http://localhost:10580/health
 pm2 status
 pm2 logs
 ```

@@ -148,7 +148,7 @@ export class ScreensaverService {
             const baseUrl =
               this.configService.get<string>('BASE_URL') +
               (this.isRunningInDocker()
-                ? ':9580'
+                ? ':10580'
                 : `:${this.configService.get<number>('PORT')}`);
 
             return {

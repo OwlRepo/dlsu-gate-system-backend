@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'dlsu-portal-be',
       script: 'dist/main.js',
-      instances: 5,
+      instances: 3,
       exec_mode: 'cluster',
       autorestart: true,
       max_memory_restart: '8G',
@@ -11,7 +11,7 @@ module.exports = {
       // Environment variables
       env: {
         NODE_ENV: 'development',
-        PORT: 9580,
+        PORT: 10580,
         TYPEORM_CONNECTION_RETRIES: 5,
         TYPEORM_MAX_QUERY_EXECUTION_TIME: 60000,
         TYPEORM_ENTITIES_CACHE: true,
@@ -23,7 +23,7 @@ module.exports = {
       },
       env_production: {
         NODE_ENV: 'production',
-        PORT: 9580,
+        PORT: 10580,
         TYPEORM_CONNECTION_RETRIES: 5,
         TYPEORM_MAX_QUERY_EXECUTION_TIME: 60000,
         TYPEORM_ENTITIES_CACHE: true,
