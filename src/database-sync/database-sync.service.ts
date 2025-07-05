@@ -806,6 +806,88 @@ export class DatabaseSyncService {
     }
   }
 
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number,
+    operationName: string,
+  ): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        this.logger.debug(
+          `Executing ${operationName} (attempt ${attempt}/${maxRetries})`,
+        );
+        return await operation();
+      } catch (error) {
+        lastError = error;
+
+        if (this.isTimeoutError(error)) {
+          this.logger.warn(
+            `Timeout error in ${operationName} (attempt ${attempt}/${maxRetries}): ${error.message}`,
+          );
+
+          // For timeout errors, wait longer before retrying
+          if (attempt < maxRetries) {
+            const timeoutBackoff = Math.pow(2, attempt) * 5000; // Longer backoff for timeouts
+            this.logger.debug(
+              `Waiting ${timeoutBackoff}ms for database recovery before retrying ${operationName}...`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, timeoutBackoff));
+          }
+        } else {
+          this.logger.error(
+            `Error in ${operationName} (attempt ${attempt}/${maxRetries}): ${error.message}`,
+          );
+
+          if (attempt < maxRetries) {
+            const backoffTime = Math.pow(2, attempt) * 1000; // Normal exponential backoff
+            this.logger.debug(
+              `Retrying ${operationName} in ${backoffTime}ms...`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, backoffTime));
+          }
+        }
+      }
+    }
+
+    this.logger.error(
+      `Failed to execute ${operationName} after ${maxRetries} attempts`,
+    );
+    throw lastError;
+  }
+
+  private isTimeoutError(error: any): boolean {
+    return (
+      error.message &&
+      (error.message.includes('timeout') ||
+        error.message.includes('TIMEOUT') ||
+        error.message.includes('Query read timeout') ||
+        error.message.includes('Connection timeout') ||
+        error.code === 'ECONNRESET' ||
+        error.code === 'ETIMEDOUT')
+    );
+  }
+
+  private async waitForDatabaseRecovery(seconds: number): Promise<void> {
+    this.logger.warn(`Waiting ${seconds} seconds for database recovery...`);
+    await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+  }
+
+  private async checkDatabaseConnection(): Promise<boolean> {
+    try {
+      await this.studentRepository
+        .createQueryBuilder()
+        .select('1')
+        .limit(1)
+        .getRawOne();
+      return true;
+    } catch (error) {
+      this.logger.error('Database connection check failed:', error.message);
+      return false;
+    }
+  }
+
   private async executeDatabaseSync(jobName: string) {
     if (this.activeJobs.get(jobName)) {
       this.logger.warn(`Sync ${jobName} is already running`);
@@ -852,7 +934,7 @@ export class DatabaseSyncService {
       this.logger.log(
         `Table ${hasIsArchivedColumn ? 'has' : 'does not have'} isArchived column`,
       );
-      const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 1000; // default to 1000
+      const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 500; // Reduced default batch size to avoid timeout
       let totalProcessed = 0;
       let totalSkipped = 0;
       let totalEnabled = 0;
@@ -870,6 +952,10 @@ export class DatabaseSyncService {
         hasIsArchivedColumn,
         batchSize,
       )) {
+        const batchStartTime = Date.now();
+        this.logger.log(
+          `[Batch ${batchNumber}] Starting batch processing with ${batchRecords.length} records...`,
+        );
         // Convert photos to base64 before adding to batchRecords
         const batchRecordsWithPhoto = await Promise.all(
           batchRecords.map(async (record) => ({
@@ -881,15 +967,26 @@ export class DatabaseSyncService {
           })),
         );
         // --- Per-batch Postgres sync ---
-        // STEP 1: Get all existing students from database in one query
-        const existingStudents = await this.studentRepository.find({
-          where: {
-            ID_Number: In(batchRecordsWithPhoto.map((r) => r.ID_Number)),
-          },
-        });
-        const existingMap = new Map(
-          existingStudents.map((s) => [s.ID_Number, s]),
-        );
+        // STEP 1: Get all existing students from database in smaller chunks to avoid timeout
+        const existingMap = new Map();
+        const chunkSize = 100; // Process in smaller chunks to avoid timeout
+        const idNumbers = batchRecordsWithPhoto.map((r) => r.ID_Number);
+
+        for (let i = 0; i < idNumbers.length; i += chunkSize) {
+          const chunk = idNumbers.slice(i, i + chunkSize);
+          const existingStudentsChunk = await this.executeWithRetry(
+            async () => {
+              return await this.studentRepository.find({
+                where: {
+                  ID_Number: In(chunk),
+                },
+              });
+            },
+            3,
+            `get existing students chunk ${Math.floor(i / chunkSize) + 1} for batch ${batchNumber}`,
+          );
+          existingStudentsChunk.forEach((s) => existingMap.set(s.ID_Number, s));
+        }
         const toCreate = [];
         const toUpdate = [];
         for (const record of batchRecordsWithPhoto) {
@@ -935,101 +1032,129 @@ export class DatabaseSyncService {
           }
         }
         if (toCreate.length) {
-          try {
-            await this.studentRepository.insert(toCreate);
-          } catch (error) {
-            this.logger.error(
-              `[Batch ${batchNumber}] Batch insert failed. Error: ${error.message}`,
-            );
-
-            // If it's a duplicate key error, try to handle it gracefully
-            if (
-              error.message.includes(
-                'duplicate key value violates unique constraint',
-              )
-            ) {
-              this.logger.warn(
-                `[Batch ${batchNumber}] Duplicate key error detected. Attempting to update existing records instead.`,
-              );
-
-              // For each failed record, try to update it instead
-              for (const failedRecord of toCreate) {
+          // Process inserts in smaller chunks to avoid timeout
+          const insertChunkSize = 50; // Smaller chunks for inserts
+          for (let i = 0; i < toCreate.length; i += insertChunkSize) {
+            const insertChunk = toCreate.slice(i, i + insertChunkSize);
+            await this.executeWithRetry(
+              async () => {
                 try {
-                  const existingRecord = await this.studentRepository.findOne({
-                    where: { ID_Number: failedRecord.ID_Number },
-                  });
-
-                  if (existingRecord) {
-                    // Update the existing record
-                    await this.studentRepository.update(
-                      { ID_Number: failedRecord.ID_Number },
-                      {
-                        Name: failedRecord.Name,
-                        Lived_Name: failedRecord.Lived_Name,
-                        Remarks: failedRecord.Remarks,
-                        Photo: failedRecord.Photo,
-                        Campus_Entry: failedRecord.Campus_Entry,
-                        Unique_ID: failedRecord.Unique_ID,
-                        isArchived: failedRecord.isArchived,
-                        updatedAt: failedRecord.updatedAt,
-                      },
-                    );
-                    this.logger.log(
-                      `[Batch ${batchNumber}] Successfully updated existing record for ID: ${failedRecord.ID_Number}`,
-                    );
-                  }
-                } catch (updateError) {
+                  await this.studentRepository.insert(insertChunk);
+                } catch (error) {
                   this.logger.error(
-                    `[Batch ${batchNumber}] Failed to update record for ID: ${failedRecord.ID_Number}. Error: ${updateError.message}`,
+                    `[Batch ${batchNumber}] Batch insert failed for chunk ${Math.floor(i / insertChunkSize) + 1}. Error: ${error.message}`,
                   );
-                  failedRecordsAll.push({
-                    batchNumber,
-                    error: 'Failed to update existing record',
-                    details: updateError.message,
-                    failedRecords: [
-                      {
-                        ID_Number: failedRecord.ID_Number,
-                        Name: failedRecord.Name,
-                      },
-                    ],
-                  });
+
+                  // If it's a duplicate key error, try to handle it gracefully
+                  if (
+                    error.message.includes(
+                      'duplicate key value violates unique constraint',
+                    )
+                  ) {
+                    this.logger.warn(
+                      `[Batch ${batchNumber}] Duplicate key error detected. Attempting to update existing records instead.`,
+                    );
+
+                    // For each failed record, try to update it instead
+                    for (const failedRecord of insertChunk) {
+                      try {
+                        const existingRecord =
+                          await this.studentRepository.findOne({
+                            where: { ID_Number: failedRecord.ID_Number },
+                          });
+
+                        if (existingRecord) {
+                          // Update the existing record
+                          await this.studentRepository.update(
+                            { ID_Number: failedRecord.ID_Number },
+                            {
+                              Name: failedRecord.Name,
+                              Lived_Name: failedRecord.Lived_Name,
+                              Remarks: failedRecord.Remarks,
+                              Photo: failedRecord.Photo,
+                              Campus_Entry: failedRecord.Campus_Entry,
+                              Unique_ID: failedRecord.Unique_ID,
+                              isArchived: failedRecord.isArchived,
+                              updatedAt: failedRecord.updatedAt,
+                            },
+                          );
+                          this.logger.log(
+                            `[Batch ${batchNumber}] Successfully updated existing record for ID: ${failedRecord.ID_Number}`,
+                          );
+                        }
+                      } catch (updateError) {
+                        this.logger.error(
+                          `[Batch ${batchNumber}] Failed to update record for ID: ${failedRecord.ID_Number}. Error: ${updateError.message}`,
+                        );
+                        failedRecordsAll.push({
+                          batchNumber,
+                          error: 'Failed to update existing record',
+                          details: updateError.message,
+                          failedRecords: [
+                            {
+                              ID_Number: failedRecord.ID_Number,
+                              Name: failedRecord.Name,
+                            },
+                          ],
+                        });
+                      }
+                    }
+                  } else {
+                    // Log the failed records for debugging
+                    failedRecordsAll.push({
+                      batchNumber,
+                      error: 'Database insert failed',
+                      details: error.message,
+                      failedRecords: insertChunk.map((r) => ({
+                        ID_Number: r.ID_Number,
+                        Name: r.Name,
+                      })),
+                    });
+                    // Re-throw the error to trigger retry
+                    throw error;
+                  }
                 }
-              }
-            } else {
-              // Log the failed records for debugging
-              failedRecordsAll.push({
-                batchNumber,
-                error: 'Database insert failed',
-                details: error.message,
-                failedRecords: toCreate.map((r) => ({
-                  ID_Number: r.ID_Number,
-                  Name: r.Name,
-                })),
-              });
-            }
+              },
+              3,
+              `insert batch ${batchNumber} chunk ${Math.floor(i / insertChunkSize) + 1}`,
+            );
           }
         }
         if (toUpdate.length) {
-          try {
-            await this.studentRepository.save(toUpdate);
-          } catch (error) {
-            this.logger.error(
-              `[Batch ${batchNumber}] Batch update failed. Error: ${error.message}`,
+          // Process updates in smaller chunks to avoid timeout
+          const updateChunkSize = 50; // Smaller chunks for updates
+          for (let i = 0; i < toUpdate.length; i += updateChunkSize) {
+            const updateChunk = toUpdate.slice(i, i + updateChunkSize);
+            await this.executeWithRetry(
+              async () => {
+                try {
+                  await this.studentRepository.save(updateChunk);
+                } catch (error) {
+                  this.logger.error(
+                    `[Batch ${batchNumber}] Batch update failed for chunk ${Math.floor(i / updateChunkSize) + 1}. Error: ${error.message}`,
+                  );
+                  // Log the failed records for debugging
+                  failedRecordsAll.push({
+                    batchNumber,
+                    error: 'Database update failed',
+                    details: error.message,
+                    failedRecords: updateChunk.map((r) => ({
+                      ID_Number: r.ID_Number,
+                      Name: r.Name,
+                    })),
+                  });
+                  // Re-throw the error to trigger retry
+                  throw error;
+                }
+              },
+              3,
+              `update batch ${batchNumber} chunk ${Math.floor(i / updateChunkSize) + 1}`,
             );
-            // Log the failed records for debugging
-            failedRecordsAll.push({
-              batchNumber,
-              error: 'Database update failed',
-              details: error.message,
-              failedRecords: toUpdate.map((r) => ({
-                ID_Number: r.ID_Number,
-                Name: r.Name,
-              })),
-            });
           }
         }
+        const batchDbTime = Date.now() - batchStartTime;
         this.logger.log(
-          `[Batch ${batchNumber}] Synced ${toCreate.length + toUpdate.length} records (${batchRecordsWithPhoto.length - (toCreate.length + toUpdate.length)} unchanged)`,
+          `[Batch ${batchNumber}] Synced ${toCreate.length + toUpdate.length} records (${batchRecordsWithPhoto.length - (toCreate.length + toUpdate.length)} unchanged) in ${batchDbTime}ms`,
         );
 
         // --- Per-batch CSV/Import/FaceTemplate ---
