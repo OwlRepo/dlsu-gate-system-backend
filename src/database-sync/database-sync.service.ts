@@ -15,7 +15,6 @@ import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
 import * as FormData from 'form-data';
 import { In } from 'typeorm';
-import * as Table from 'cli-table3';
 import * as sharp from 'sharp';
 import { DatabaseSyncQueueService } from './database-sync-queue.service';
 import * as dayjs from 'dayjs';
@@ -140,15 +139,16 @@ export class DatabaseSyncService {
     return str.replace(/[^a-zA-Z0-9\s]/g, '');
   }
 
-  private sanitizeUserId(userId: string): string {
+  private sanitizeUserId(userId: string): string | null {
     // Remove spaces from the userId first
     const cleanUserId = userId.replace(/\s/g, '');
     // Convert hex to decimal if userId is a valid hex number
     if (/^[0-9A-Fa-f]+$/.test(cleanUserId)) {
       const decimal = parseInt(cleanUserId, 16);
-      if (!isNaN(decimal)) {
-        userId = decimal.toString();
+      if (isNaN(decimal)) {
+        return null;
       }
+      userId = decimal.toString();
     }
     // Ensure the userId has a maximum of 10 characters
     if (userId.length > 10) {
@@ -895,10 +895,6 @@ export class DatabaseSyncService {
       const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 500; // Reduced to avoid timeouts
       let totalProcessed = 0;
       let totalSkipped = 0;
-      let totalEnabled = 0;
-      let totalDisabled = 0;
-      let formattedRecordsAll = [];
-      let skippedRecordsAll = [];
       let failedRecordsAll = [];
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
@@ -914,10 +910,10 @@ export class DatabaseSyncService {
         const batchRecordsWithPhoto = await Promise.all(
           batchRecords.map(async (record) => ({
             ...record,
-            Photo: await this.convertPhotoToBase64(
-              record.Photo,
-              record.ID_Number,
-            ),
+            // Photo: await this.convertPhotoToBase64(
+            //   record.Photo,
+            //   record.ID_Number,
+            // ),
           })),
         );
         // --- Per-batch Postgres sync ---
@@ -961,7 +957,7 @@ export class DatabaseSyncService {
             Name: record.Name,
             Lived_Name: record.Lived_Name,
             Remarks: record.Remarks,
-            Photo: record.Photo,
+            Photo: '',
             Campus_Entry: record.Campus_Entry,
             Unique_ID: uniqueId,
             isArchived: record.isArchived === 'Y',
@@ -974,7 +970,7 @@ export class DatabaseSyncService {
             existing.Name !== record.Name ||
             existing.Lived_Name !== record.Lived_Name ||
             existing.Remarks !== record.Remarks ||
-            existing.Photo !== record.Photo ||
+            existing.Photo !== record?.Photo ||
             existing.Campus_Entry !== record.Campus_Entry ||
             existing.Unique_ID !== uniqueId ||
             existing.isArchived !== (record.isArchived === 'Y')
@@ -1091,8 +1087,27 @@ export class DatabaseSyncService {
               const livedName = record.Lived_Name?.trim() || '';
               const remarks = record.Remarks?.trim() || '';
               const validationErrors = [];
-              if (!userId || userId.length > 10) {
-                validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
+              if (!userId) {
+                validationErrors.push('Invalid hex conversion');
+                failedRecordsAll.push({
+                  ID_Number: record.ID_Number,
+                  userId:
+                    record.Unique_ID?.toString()?.trim() ||
+                    record.ID_Number?.toString()?.trim() ||
+                    '',
+                  name,
+                  livedName,
+                  remarks,
+                  reason: 'Invalid hex conversion',
+                  timestamp: new Date().toISOString(),
+                });
+                this.logger.warn(
+                  `[Batch ${batchNumber}] Skipping record with invalid hex conversion - ID: ${record.ID_Number}`,
+                );
+                return null;
+              }
+              if (userId.length > 10) {
+                validationErrors.push('ID too long');
               }
               if (!name) {
                 validationErrors.push('Empty name');
@@ -1116,29 +1131,29 @@ export class DatabaseSyncService {
 
               // --- BioStar 2 Visual Face CSV Import Extension ---
               // Save face images as files and reference them in CSV
-              const faceImageBase64 = await this.convertPhotoToBase64(
-                record.Photo,
-                record.ID_Number,
-              );
-              let faceImageFile1 = '';
-              let faceImageFile2 = '';
-              if (faceImageBase64) {
-                // Write two image files per user (for demo, use same image for both)
-                const fileName1 = `${userId}_1.jpg`;
-                const fileName2 = `${userId}_2.jpg`;
-                const filePath1 = path.join(tempDir, fileName1);
-                const filePath2 = path.join(tempDir, fileName2);
-                fs.writeFileSync(
-                  filePath1,
-                  Buffer.from(faceImageBase64, 'base64'),
-                );
-                fs.writeFileSync(
-                  filePath2,
-                  Buffer.from(faceImageBase64, 'base64'),
-                );
-                faceImageFile1 = fileName1;
-                faceImageFile2 = fileName2;
-              }
+              // const faceImageBase64 = await this.convertPhotoToBase64(
+              //   record.Photo,
+              //   record.ID_Number,
+              // );
+              // let faceImageFile1 = '';
+              // let faceImageFile2 = '';
+              // if (faceImageBase64) {
+              //   // Write two image files per user (for demo, use same image for both)
+              //   const fileName1 = `${userId}_1.jpg`;
+              //   const fileName2 = `${userId}_2.jpg`;
+              //   const filePath1 = path.join(tempDir, fileName1);
+              //   const filePath2 = path.join(tempDir, fileName2);
+              //   fs.writeFileSync(
+              //     filePath1,
+              //     Buffer.from(faceImageBase64, 'base64'),
+              //   );
+              //   fs.writeFileSync(
+              //     filePath2,
+              //     Buffer.from(faceImageBase64, 'base64'),
+              //   );
+              //   faceImageFile1 = fileName1;
+              //   faceImageFile2 = fileName2;
+              // }
 
               return {
                 user_id: record.ID_Number,
@@ -1151,9 +1166,12 @@ export class DatabaseSyncService {
                 lived_name: livedName,
                 remarks: remarks,
                 csn: userId,
-                photo: faceImageBase64, // retain photo value for API
-                face_image_file1: faceImageFile1, // reference image file
-                face_image_file2: faceImageFile2, // reference image file
+                // photo: faceImageBase64, // retain photo value for API
+                // face_image_file1: faceImageFile1, // reference image file
+                // face_image_file2: faceImageFile2, // reference image file
+                photo: '', // retain photo value for API
+                face_image_file1: '', // reference image file
+                face_image_file2: '', // reference image file
                 start_datetime: formattedStartDate,
                 expiry_datetime:
                   record.Campus_Entry.toString().toUpperCase() === 'N'
@@ -1164,6 +1182,14 @@ export class DatabaseSyncService {
             }),
           )
         ).filter((record) => record !== null);
+
+        if (formattedRecords.length === 0) {
+          this.logger.log(
+            `[Batch ${batchNumber}] No valid records after filtering. Skipping CSV generation and upload for this batch.`,
+          );
+          continue;
+        }
+
         await csvWriter.writeRecords(formattedRecords);
         this.logger.log(
           `[Batch ${batchNumber}] CSV file created at ${csvFilePath}`,
@@ -1255,38 +1281,38 @@ export class DatabaseSyncService {
               .split('\n')[0];
             const headers = firstLine.split(',');
             // Read the CSV file to get face template data
-            const csvData = fs
-              .readFileSync(csvFilePath, 'utf8')
-              .split('\n')
-              .slice(1);
-            const faceTemplateData = new Map();
-            for (const line of csvData) {
-              if (!line.trim()) continue;
-              const values = line.split(',');
-              const userId = values[0];
-              const faceImage1 = values[11];
-              const faceImage2 = values[12];
-              if (faceImage1 && faceImage1.includes('|')) {
-                const [, templateFile] = faceImage1.split('|');
-                const templatePath = path.join(tempDir, templateFile);
-                if (fs.existsSync(templatePath)) {
-                  const templateData = JSON.parse(
-                    fs.readFileSync(templatePath, 'utf8'),
-                  );
-                  faceTemplateData.set(`${userId}_1`, templateData);
-                }
-              }
-              if (faceImage2 && faceImage2.includes('|')) {
-                const [, templateFile] = faceImage2.split('|');
-                const templatePath = path.join(tempDir, templateFile);
-                if (fs.existsSync(templatePath)) {
-                  const templateData = JSON.parse(
-                    fs.readFileSync(templatePath, 'utf8'),
-                  );
-                  faceTemplateData.set(`${userId}_2`, templateData);
-                }
-              }
-            }
+            // const csvData = fs
+            //   .readFileSync(csvFilePath, 'utf8')
+            //   .split('\n')
+            //   .slice(1);
+            // const faceTemplateData = new Map();
+            // for (const line of csvData) {
+            //   if (!line.trim()) continue;
+            //   const values = line.split(',');
+            //   const userId = values[0];
+            //   const faceImage1 = values[11];
+            //   const faceImage2 = values[12];
+            //   if (faceImage1 && faceImage1.includes('|')) {
+            //     const [, templateFile] = faceImage1.split('|');
+            //     const templatePath = path.join(tempDir, templateFile);
+            //     if (fs.existsSync(templatePath)) {
+            //       const templateData = JSON.parse(
+            //         fs.readFileSync(templatePath, 'utf8'),
+            //       );
+            //       faceTemplateData.set(`${userId}_1`, templateData);
+            //     }
+            //   }
+            //   if (faceImage2 && faceImage2.includes('|')) {
+            //     const [, templateFile] = faceImage2.split('|');
+            //     const templatePath = path.join(tempDir, templateFile);
+            //     if (fs.existsSync(templatePath)) {
+            //       const templateData = JSON.parse(
+            //         fs.readFileSync(templatePath, 'utf8'),
+            //       );
+            //       faceTemplateData.set(`${userId}_2`, templateData);
+            //     }
+            //   }
+            // }
             const importPayload = {
               File: {
                 uri: uploadedFileName,
@@ -1511,12 +1537,6 @@ export class DatabaseSyncService {
         // Tally for summary (counters only)
         totalProcessed += formattedRecords.length;
         totalSkipped += skippedRecords.length;
-        totalEnabled += formattedRecords.filter(
-          (r) => r.original_campus_entry.toString().toUpperCase() === 'Y',
-        ).length;
-        totalDisabled += formattedRecords.filter(
-          (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
-        ).length;
         // Explicitly nullify large objects and arrays
         batchRecords.length = 0;
         batchRecordsWithPhoto.length = 0;
