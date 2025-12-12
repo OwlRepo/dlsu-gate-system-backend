@@ -11,10 +11,12 @@ Use this workflow for regular repository maintenance to keep the codebase up-to-
 This command automatically applies the following rules:
 
 ### Core Rules (Always Apply)
+
 - **coding-practice.mdc** - Code style and standards
 - **debugging-practice.mdc** - Error handling
 
 ### Task-Specific Rules (Context-Dependent)
+
 - **dependency-management.mdc** - For package updates
 - **database-migrations.mdc** - For migration checks
 - **documentation-patterns.mdc** - For documentation updates
@@ -24,25 +26,31 @@ This command automatically applies the following rules:
 **Applies Rules:** dependency-management.mdc
 
 1. **Check Outdated Packages**
+
    ```bash
    npm outdated
    ```
+
    - Review outdated packages
    - Identify security vulnerabilities
    - Note packages needing updates
 
 2. **Check Security Vulnerabilities**
+
    ```bash
    npm audit
    ```
+
    - Review security issues
    - Prioritize critical vulnerabilities
    - Plan security updates
 
 3. **Review Dependency Tree**
+
    ```bash
    npm ls --depth=0
    ```
+
    - Check for duplicate packages
    - Identify unused dependencies
    - Review dependency conflicts
@@ -52,9 +60,11 @@ This command automatically applies the following rules:
 **Applies Rules:** database-migrations.mdc
 
 1. **Check Migration Status**
+
    ```bash
    npm run typeorm -- migration:show -d src/config/data-source.ts
    ```
+
    - Verify all migrations are applied
    - Check for pending migrations
    - Review migration history
@@ -69,24 +79,30 @@ This command automatically applies the following rules:
 **Applies Rules:** coding-practice.mdc, debugging-practice.mdc
 
 1. **Run Linter**
+
    ```bash
    npm run lint
    ```
+
    - Fix linting errors
    - Ensure code style consistency
    - Follow coding-practice.mdc
 
 2. **Format Code**
+
    ```bash
    npm run format
    ```
+
    - Ensure consistent formatting
    - Follow project formatting rules
 
 3. **Type Check**
+
    ```bash
    npm run build
    ```
+
    - Verify TypeScript compilation
    - Fix type errors
    - Ensure type safety
@@ -96,35 +112,43 @@ This command automatically applies the following rules:
 **Applies Rules:** debugging-practice.mdc
 
 1. **Run Unit Tests**
+
    ```bash
    npm test
    ```
+
    - Ensure all tests pass
    - Fix failing tests
    - Review test coverage
 
 2. **Run E2E Tests** (if applicable)
+
    ```bash
    npm run test:e2e
    ```
+
    - Verify integration tests
    - Check critical flows
 
 ## Step 5: Update Dependencies (if needed)
 
-**Applies Rules:** dependency-management.mdc, update-packages.mdc
+**Applies Rules:** dependency-management.mdc
 
 1. **Update Security Vulnerabilities**
+
    ```bash
    npm audit fix
    ```
+
    - Fix security issues
    - Test after updates
 
 2. **Update Patch Versions**
+
    ```bash
    npm update
    ```
+
    - Update within version ranges
    - Test after updates
 
@@ -135,16 +159,20 @@ This command automatically applies the following rules:
 **Applies Rules:** debugging-practice.mdc
 
 1. **Build Application**
+
    ```bash
    npm run build
    ```
+
    - Verify build succeeds
    - Check for compilation errors
 
 2. **Start Application**
+
    ```bash
    npm run dev
    ```
+
    - Verify application starts
    - Check for runtime errors
    - Test critical endpoints
@@ -178,18 +206,22 @@ This command automatically applies the following rules:
    - Clean up test files
 
 2. **Remove Unused Dependencies**
+
    ```bash
    npm uninstall unused-package
    ```
+
    - Remove unused packages
    - Clean up imports
    - Update package.json
 
 3. **Clean Build Artifacts**
+
    ```bash
    rm -rf dist
    npm run build
    ```
+
    - Fresh build
    - Verify build artifacts
 
@@ -198,9 +230,11 @@ This command automatically applies the following rules:
 **Applies Rules:** coding-practice.mdc
 
 1. **Review Git Status**
+
    ```bash
    git status
    ```
+
    - Check for uncommitted changes
    - Review modified files
    - Identify untracked files
@@ -234,22 +268,26 @@ This command automatically applies the following rules:
 ## Regular Maintenance Schedule
 
 ### Daily
+
 - Check for critical security updates
 - Verify application is running
 - Review error logs
 
 ### Weekly
+
 - Check outdated packages
 - Run tests
 - Review code quality
 
 ### Monthly
+
 - Update patch versions
 - Review and update dependencies
 - Full maintenance workflow
 - Update documentation
 
 ### Quarterly
+
 - Major package updates
 - Review and refactor code
 - Update architecture docs

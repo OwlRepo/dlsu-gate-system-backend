@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { TokenBlacklistService } from './token-blacklist.service';
+import { Role } from './enums/role.enum';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -31,6 +32,20 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
+
+    // Development mode: bypass authentication if no token provided
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    if (isDevelopment && !token) {
+      // Create mock user with configurable role
+      const defaultRole =
+        (process.env.DEV_DEFAULT_ROLE as Role) || Role.SUPER_ADMIN;
+      request['user'] = {
+        sub: 'dev-user-id',
+        username: 'dev-user',
+        role: defaultRole,
+      };
+      return true;
+    }
 
     if (!token) {
       throw new UnauthorizedException('No token provided');
