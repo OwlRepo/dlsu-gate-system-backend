@@ -108,7 +108,7 @@ export class HealthController {
               poolStats.usedConnections = pool.used || 0;
               poolStats.idleConnections = pool.idle || 0;
             }
-          } catch (_) {
+          } catch {
             // Ignore pool stats errors
           }
 

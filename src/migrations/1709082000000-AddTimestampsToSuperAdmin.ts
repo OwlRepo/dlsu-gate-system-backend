@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddTimestampsToSuperAdmin1709082000000
-  implements MigrationInterface
-{
+export class AddTimestampsToSuperAdmin1709082000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create table if it doesn't exist with all required columns
     await queryRunner.query(`

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateSyncAndStudentTables1710000000000
-  implements MigrationInterface
-{
+export class CreateSyncAndStudentTables1710000000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
             CREATE TABLE IF NOT EXISTS sync_schedule (

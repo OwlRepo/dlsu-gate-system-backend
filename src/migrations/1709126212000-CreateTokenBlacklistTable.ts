@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner, Table } from 'typeorm';
 
-export class CreateTokenBlacklistTable1709126212000
-  implements MigrationInterface
-{
+export class CreateTokenBlacklistTable1709126212000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createTable(
       new Table({

@@ -15,7 +15,6 @@ import { Student } from '../students/entities/student.entity';
 import * as https from 'https';
 import * as FormData from 'form-data';
 import { In } from 'typeorm';
-import * as Table from 'cli-table3';
 import * as sharp from 'sharp';
 import { DatabaseSyncQueueService } from './database-sync-queue.service';
 import * as dayjs from 'dayjs';
@@ -205,7 +204,9 @@ export class DatabaseSyncService {
       'Asia/Manila', // Set timezone to Philippine Time
     );
 
-    this.schedulerRegistry.addCronJob(name, job);
+    // In @nestjs/schedule v6, addCronJob expects CronJob<null, null>
+    // Cast to match the expected type while preserving functionality
+    this.schedulerRegistry.addCronJob(name, job as any);
     job.start();
   }
 
@@ -263,7 +264,7 @@ export class DatabaseSyncService {
       return {
         scheduleNumber: schedule.scheduleNumber,
         time: schedule.time,
-        isActive: job?.running ?? false,
+        isActive: job?.isActive ?? false,
         lastSyncTime: schedule.lastSyncTime
           ? new Date(schedule.lastSyncTime)
           : null,
@@ -383,7 +384,7 @@ export class DatabaseSyncService {
 
       existingLogs.push(logEntry);
       fs.writeFileSync(logFile, JSON.stringify(existingLogs, null, 2));
-    } catch (error) {
+    } catch {
       this.logger.error('Failed to log photo conversion failure');
     }
   }
@@ -897,9 +898,7 @@ export class DatabaseSyncService {
       let totalSkipped = 0;
       let totalEnabled = 0;
       let totalDisabled = 0;
-      let formattedRecordsAll = [];
-      let skippedRecordsAll = [];
-      let failedRecordsAll = [];
+      const failedRecordsAll = [];
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir);
@@ -1182,7 +1181,7 @@ export class DatabaseSyncService {
               csvFileReady = true;
               break;
             }
-          } catch (e) {
+          } catch {
             this.logger.warn(
               `[Batch ${batchNumber}] CSV file not ready yet, retrying...`,
             );
@@ -1358,7 +1357,7 @@ export class DatabaseSyncService {
                     downloadResponse.data.pipe(writer);
 
                     await new Promise((resolve, reject) => {
-                      writer.on('finish', resolve);
+                      writer.on('finish', () => resolve(undefined));
                       writer.on('error', reject);
                     });
 
@@ -1510,13 +1509,15 @@ export class DatabaseSyncService {
         }
         // Tally for summary (counters only)
         totalProcessed += formattedRecords.length;
-        totalSkipped += skippedRecords.length;
-        totalEnabled += formattedRecords.filter(
+        // Note: totalSkipped, totalEnabled, totalDisabled are calculated but not used in summary
+        // Keeping for potential future use
+        void (totalSkipped += skippedRecords.length);
+        void (totalEnabled += formattedRecords.filter(
           (r) => r.original_campus_entry.toString().toUpperCase() === 'Y',
-        ).length;
-        totalDisabled += formattedRecords.filter(
+        ).length);
+        void (totalDisabled += formattedRecords.filter(
           (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
-        ).length;
+        ).length);
         // Explicitly nullify large objects and arrays
         batchRecords.length = 0;
         batchRecordsWithPhoto.length = 0;

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class UpdateStudentColumnTypes1711442847913
-  implements MigrationInterface
-{
+export class UpdateStudentColumnTypes1711442847913 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Update text columns
     await queryRunner.query(`

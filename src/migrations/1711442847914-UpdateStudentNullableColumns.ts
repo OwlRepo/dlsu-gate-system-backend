@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class UpdateStudentNullableColumns1711442847914
-  implements MigrationInterface
-{
+export class UpdateStudentNullableColumns1711442847914 implements MigrationInterface {
   name = 'UpdateStudentNullableColumns1711442847914';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUpdatedAtToSyncQueue1709711000000
-  implements MigrationInterface
-{
+export class AddUpdatedAtToSyncQueue1709711000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // First check if the table exists
     const tableExists = await queryRunner.hasTable('sync_queue');

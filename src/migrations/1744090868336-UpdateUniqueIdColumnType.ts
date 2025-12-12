@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class UpdateUniqueIdColumnType1744090868336
-  implements MigrationInterface
-{
+export class UpdateUniqueIdColumnType1744090868336 implements MigrationInterface {
   name = 'UpdateUniqueIdColumnType1744090868336';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

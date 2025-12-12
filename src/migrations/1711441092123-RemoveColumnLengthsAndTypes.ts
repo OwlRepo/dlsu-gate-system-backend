@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class RemoveColumnLengthsAndTypes1711441092123
-  implements MigrationInterface
-{
+export class RemoveColumnLengthsAndTypes1711441092123 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Update text columns
     await queryRunner.query(`
