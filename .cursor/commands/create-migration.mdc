@@ -6,6 +6,8 @@ alwaysApply: true
 
 Use this workflow when creating database migrations.
 
+**📁 File Navigation:** Reference `.cursor/FILE_INDEX.md` to locate entity files and understand migration file naming patterns.
+
 ## Related Rules
 
 This command automatically applies the following rules:
