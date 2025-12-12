@@ -123,7 +123,18 @@ export class DatabaseSyncService {
         const filePath = path.join(dir, file);
         const stats = fs.statSync(filePath);
         if (stats.mtime < oneMonthAgo) {
-          fs.unlinkSync(filePath);
+          try {
+            if (stats.isDirectory()) {
+              // Remove directory recursively
+              fs.rmSync(filePath, { recursive: true, force: true });
+            } else {
+              // Remove file
+              fs.unlinkSync(filePath);
+            }
+          } catch (error) {
+            // Log error but continue cleanup
+            this.logger.warn(`Failed to delete ${filePath}: ${error.message}`);
+          }
         }
       });
     });
