@@ -2,6 +2,8 @@
 
 A cheat sheet for quickly constructing prompts and selecting the right tools.
 
+**📁 Need to find a file?** Always check `.cursor/FILE_INDEX.md` first - it maps the entire project structure and helps you locate any file quickly.
+
 ## 🎯 Common Scenarios - Copy & Paste Prompts
 
 **Note:** All rules are automatically applied when you reference a command. You don't need to list them!
@@ -75,6 +77,19 @@ Focus: [packages / migrations / code quality / all]
 ```
 
 **Auto-Applied Rules:** coding-practice, debugging-practice, dependency-management, database-migrations, documentation-patterns
+
+## 📁 Finding Files
+
+**Before searching for files, check:** `.cursor/FILE_INDEX.md`
+
+The FILE_INDEX provides:
+- Complete project structure map
+- Module locations and purposes
+- Task-based navigation (e.g., "Need to add an endpoint?")
+- File naming conventions
+- Quick reference for common tasks
+
+Example: "Need to add authentication?" → FILE_INDEX shows `src/auth/` with all auth files explained.
 
 ## 📋 Command + Rule Matrix
 

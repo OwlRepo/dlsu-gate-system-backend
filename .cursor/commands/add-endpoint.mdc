@@ -6,6 +6,8 @@ alwaysApply: true
 
 Use this workflow when adding a new API endpoint to an existing module.
 
+**📁 File Navigation:** Before starting, reference `.cursor/FILE_INDEX.md` to locate the module files (controller, service, DTOs).
+
 ## Related Rules
 
 This command automatically applies the following rules:

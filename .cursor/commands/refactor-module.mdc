@@ -6,6 +6,8 @@ alwaysApply: true
 
 Use this workflow when refactoring existing modules to improve code quality, maintainability, or performance.
 
+**📁 File Navigation:** Reference `.cursor/FILE_INDEX.md` to understand module structure and locate all related files (controller, service, DTOs, entities).
+
 ## Related Rules
 
 This command automatically applies the following rules:

@@ -6,6 +6,8 @@ alwaysApply: false
 
 This file maps tasks to required rules and shows relationships between rules. Use this as a reference to understand which rules automatically apply to each task.
 
+**📁 File Navigation:** Always reference `.cursor/FILE_INDEX.md` to find files and understand project structure before starting any task.
+
 ## Rule Categories
 
 ### Core Rules (Always Apply)

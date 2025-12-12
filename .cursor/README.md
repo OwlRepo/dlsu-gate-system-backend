@@ -20,8 +20,11 @@ The `.cursor/` directory contains:
 - **Rules** (`.cursor/rules/`) - Best practices, patterns, and standards that AI should always follow
 - **Commands** (`.cursor/commands/`) - Step-by-step workflows for specific tasks
 - **Docs** (`.cursor/docs/`) - Auto-generated documentation and context files
+- **FILE_INDEX.md** - Comprehensive file index and project structure map (always reference this to find files)
 
 Rules are automatically applied (`alwaysApply: true`), while commands are invoked when you need to perform specific tasks.
+
+**Important:** Always reference `FILE_INDEX.md` when you need to locate files or understand the project structure. It provides a complete map of all modules, files, and their purposes.
 
 ## Understanding Rules vs Commands
 
@@ -554,6 +557,7 @@ Add all endpoints at once
 - **Commands:** `.cursor/commands/*.mdc`
 - **Documentation:** `.cursor/docs/`
 - **Context:** `.cursor/docs/context/`
+- **File Index:** `.cursor/FILE_INDEX.md` - **Use this to find any file in the project**
 
 ## Troubleshooting
 

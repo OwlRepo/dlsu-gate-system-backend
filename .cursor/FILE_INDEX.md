@@ -2,6 +2,8 @@
 
 This file provides a comprehensive map of the codebase structure to help quickly locate files and understand their purpose.
 
+**This file is cross-referenced in all `.cursor` documentation files** - it's always available in AI context to help navigate the codebase efficiently.
+
 ## Quick Navigation
 
 - [Core Application Files](#core-application-files)

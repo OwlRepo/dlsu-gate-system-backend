@@ -6,6 +6,8 @@ alwaysApply: true
 
 Use this workflow when fixing bugs in the application.
 
+**📁 File Navigation:** Reference `.cursor/FILE_INDEX.md` to quickly locate the files mentioned in the bug report or error stack trace.
+
 ## Related Rules
 
 This command automatically applies the following rules:

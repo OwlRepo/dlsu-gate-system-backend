@@ -48,6 +48,7 @@ Based on the analysis above, create the following structure in the `.cursor/` di
 ## Directory Structure
 - `.cursor/rules/` - Best practices and patterns
 - `.cursor/commands/` - Step-by-step workflows
+- `.cursor/FILE_INDEX.md` - **CRITICAL:** Comprehensive file index and project structure map (must be created to help AI navigate codebase)
 - `.cursor/docs/` - Auto-generated documentation
 
 ## Rules Files to Create (in `.cursor/rules/`)

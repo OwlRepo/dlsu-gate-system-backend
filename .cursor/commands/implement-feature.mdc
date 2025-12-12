@@ -6,6 +6,8 @@ alwaysApply: true
 
 Use this workflow when implementing a new feature in the NestJS application.
 
+**📁 File Navigation:** Reference `.cursor/FILE_INDEX.md` to understand module structure patterns and find similar modules as examples.
+
 ## Related Rules
 
 This command automatically applies the following rules:
