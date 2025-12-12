@@ -1,0 +1,311 @@
+---
+alwaysApply: true
+---
+
+# Create Migration Workflow
+
+Use this workflow when creating database migrations.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Core Rules (Always Apply)
+- **coding-practice.mdc** - Code style, naming conventions
+
+### Task-Specific Rules (Always Apply)
+- **entity-patterns.mdc** - Entity definitions and structure
+- **database-migrations.mdc** - Migration patterns, best practices, safety guidelines
+
+### Documentation
+- **documentation-patterns.mdc** - Applied in Step 8 when documenting the migration
+
+## Step 1: Modify Entity
+
+**Applies Rules:** entity-patterns.mdc, coding-practice.mdc
+
+1. **Update Entity File**
+   - Add/modify/remove columns
+   - Change column types
+   - Add/remove indexes
+   - Modify constraints
+
+2. **Follow Entity Patterns**
+   - Use proper TypeORM decorators
+   - Maintain naming conventions
+   - Follow entity-patterns.mdc guidelines
+
+## Step 2: Generate Migration
+
+1. **Run Migration Generation**
+   ```bash
+   npm run migration:generate -- src/migrations/DescriptiveMigrationName
+   ```
+
+2. **Migration Naming Convention**
+   - Use descriptive names: `AddEmailToEmployee`, `CreateReportsTable`
+   - Use PascalCase
+   - Be specific about what the migration does
+
+3. **Migration File Created**
+   - File created in `src/migrations/`
+   - Named with timestamp prefix
+   - Contains `up()` and `down()` methods
+
+## Step 3: Review Generated Migration
+
+1. **Check the `up()` Method**
+   - Verify SQL operations are correct
+   - Check column types match expectations
+   - Verify constraints are correct
+   - Check indexes are created
+
+2. **Check the `down()` Method**
+   - Verify rollback operations
+   - Ensure `down()` reverses `up()`
+   - Test that rollback works
+
+3. **Review SQL**
+   ```typescript
+   public async up(queryRunner: QueryRunner): Promise<void> {
+     // Review generated SQL
+     await queryRunner.addColumn(
+       'employee',
+       new TableColumn({
+         name: 'email',
+         type: 'varchar',
+         length: '255',
+         isUnique: true,
+       }),
+     );
+   }
+   ```
+
+## Step 4: Customize Migration (if needed)
+
+1. **Add Data Migrations**
+   ```typescript
+   public async up(queryRunner: QueryRunner): Promise<void> {
+     // Schema change
+     await queryRunner.addColumn(/* ... */);
+     
+     // Data migration
+     await queryRunner.query(`
+       UPDATE employee 
+       SET status = 'active' 
+       WHERE status IS NULL
+     `);
+   }
+   ```
+
+2. **Add Indexes**
+   ```typescript
+   public async up(queryRunner: QueryRunner): Promise<void> {
+     await queryRunner.createIndex('employee', new TableIndex({
+       name: 'IDX_EMPLOYEE_EMAIL',
+       columnNames: ['email'],
+     }));
+   }
+   ```
+
+3. **Handle Breaking Changes**
+   - Add comments explaining breaking changes
+   - Document required application updates
+   - Note migration order if dependencies exist
+
+## Step 5: Test Migration Up
+
+1. **Test on Development Database**
+   ```bash
+   npm run migration:run
+   ```
+
+2. **Verify Changes**
+   - Check database schema
+   - Verify data integrity
+   - Test application functionality
+   - Check for errors in logs
+
+3. **Verify Application Works**
+   - Test affected endpoints
+   - Verify entity queries work
+   - Check for type errors
+
+## Step 6: Test Migration Down
+
+1. **Test Rollback**
+   ```bash
+   npm run migration:revert
+   ```
+
+2. **Verify Rollback**
+   - Check database schema reverted
+   - Verify data integrity
+   - Test application still works (or fails gracefully)
+
+3. **Re-run Migration**
+   ```bash
+   npm run migration:run
+   ```
+   - Verify migration can be re-applied
+
+## Step 7: Review Migration Safety
+
+1. **Check for Data Loss**
+   - Verify no data will be lost
+   - Check column removals don't lose data
+   - Verify default values for new columns
+
+2. **Check for Breaking Changes**
+   - Document breaking changes
+   - Note required application updates
+   - Check migration dependencies
+
+3. **Verify Constraints**
+   - Check foreign key constraints
+   - Verify unique constraints
+   - Check NOT NULL constraints
+
+## Step 8: Document Migration
+
+1. **Add Comments**
+   ```typescript
+   /**
+    * Adds email column to employee table
+    * BREAKING CHANGE: Application must handle email field
+    */
+   export class AddEmailToEmployee1234567890 implements MigrationInterface {
+   ```
+
+2. **Document in Changelog**
+   - Run `document-changes` command
+   - Include migration in changelog
+   - Note any breaking changes
+
+3. **Update Entity Documentation**
+   - Update entity comments if needed
+   - Document new fields
+   - Note removed fields
+
+## Step 9: Migration Checklist
+
+- [ ] Entity modified correctly
+- [ ] Migration generated
+- [ ] Migration reviewed (up and down methods)
+- [ ] Data migrations added (if needed)
+- [ ] Migration tested up on development
+- [ ] Migration tested down (rollback)
+- [ ] Application tested with migration
+- [ ] No data loss risk
+- [ ] Breaking changes documented
+- [ ] Migration documented in changelog
+
+## Common Migration Patterns
+
+### Add Column
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.addColumn(
+    'employee',
+    new TableColumn({
+      name: 'phone_number',
+      type: 'varchar',
+      length: '20',
+      isNullable: true,
+    }),
+  );
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.dropColumn('employee', 'phone_number');
+}
+```
+
+### Modify Column
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.changeColumn(
+    'employee',
+    'email',
+    new TableColumn({
+      name: 'email',
+      type: 'varchar',
+      length: '255',
+      isUnique: true,
+      isNullable: false,
+    }),
+  );
+}
+```
+
+### Add Index
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.createIndex('employee', new TableIndex({
+    name: 'IDX_EMPLOYEE_EMAIL',
+    columnNames: ['email'],
+  }));
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.dropIndex('employee', 'IDX_EMPLOYEE_EMAIL');
+}
+```
+
+### Create Table
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.createTable(
+    new Table({
+      name: 'reports',
+      columns: [
+        {
+          name: 'id',
+          type: 'uuid',
+          isPrimary: true,
+          generationStrategy: 'uuid',
+        },
+        {
+          name: 'datetime',
+          type: 'timestamp',
+        },
+      ],
+    }),
+  );
+}
+```
+
+## Migration Safety Rules
+
+1. **Never Use Synchronize in Production**
+   - Always use migrations
+   - `synchronize: false` in production
+
+2. **Always Implement Down Method**
+   - Every migration must be reversible
+   - Test rollback before deploying
+
+3. **Backup Before Migration**
+   - Always backup production database
+   - Test migration on staging first
+
+4. **Test Thoroughly**
+   - Test on development
+   - Test on staging
+   - Verify application works
+
+5. **Document Breaking Changes**
+   - Note any breaking changes
+   - Document required updates
+   - Include in changelog
+
+## Example Migration Workflow
+
+**Change:** Add email column to employee table
+
+1. **Modify Entity:** Add `email` column to `Employee` entity
+2. **Generate:** `npm run migration:generate -- src/migrations/AddEmailToEmployee`
+3. **Review:** Check generated migration SQL
+4. **Test Up:** Run migration, verify column added
+5. **Test Down:** Revert migration, verify column removed
+6. **Document:** Add to changelog, note any breaking changes

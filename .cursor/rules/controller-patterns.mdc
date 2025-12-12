@@ -1,0 +1,313 @@
+---
+alwaysApply: true
+---
+
+# Controller Patterns
+
+## Related Rules
+
+When working with controllers, also consider:
+- **coding-practice.mdc** - Code style for controllers
+- **dto-patterns.mdc** - DTOs are used in controllers
+- **service-patterns.mdc** - Controllers call services
+- **authentication-patterns.mdc** - Guards and authorization
+- **caching-patterns.mdc** - Caching decorators
+- **debugging-practice.mdc** - Error handling
+
+**Related Rules:**
+- **coding-practice.mdc** - Controller code style and naming
+- **dto-patterns.mdc** - DTOs are injected in controller methods
+- **service-patterns.mdc** - Controllers call service methods
+- **authentication-patterns.mdc** - Controllers use guards
+- **caching-patterns.mdc** - Controllers use cache decorators
+- **debugging-practice.mdc** - Controllers handle errors
+
+## When to Use
+
+This rule applies when:
+- Creating or updating controllers
+- Adding endpoints
+- Implementing HTTP handlers
+- Adding Swagger documentation
+- Applying authentication/authorization
+
+# Controller Patterns
+
+## Controller Structure
+
+Controllers handle HTTP requests and should be thin - business logic belongs in services.
+
+```typescript
+import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/enums/role.enum';
+import { EmployeeService } from './employee.service';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+
+@ApiTags('Employees')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('employee')
+export class EmployeeController {
+  constructor(private readonly employeeService: EmployeeService) {}
+  
+  // Endpoints here
+}
+```
+
+## Swagger Documentation
+
+### ApiTags
+Group related endpoints:
+```typescript
+@ApiTags('Employees')
+@Controller('employee')
+export class EmployeeController {}
+```
+
+### ApiOperation
+Document each endpoint:
+```typescript
+@Get()
+@ApiOperation({
+  summary: 'Get all employees',
+  description: 'Retrieve a list of all employees with pagination',
+})
+async findAll(@Query() query: EmployeePaginationDto) {
+  return this.employeeService.findAll(query);
+}
+```
+
+### ApiResponse
+Document response types:
+```typescript
+@Get(':id')
+@ApiOperation({ summary: 'Get employee by ID' })
+@ApiResponse({ status: 200, description: 'Employee found' })
+@ApiResponse({ status: 404, description: 'Employee not found' })
+async findOne(@Param('id') id: string) {
+  return this.employeeService.findOne(id);
+}
+```
+
+### ApiBearerAuth
+Required for authenticated endpoints:
+```typescript
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('employee')
+export class EmployeeController {}
+```
+
+## Authentication & Authorization
+
+### Public Endpoints
+Use `@Public()` decorator for endpoints that don't require authentication:
+```typescript
+import { Public } from '../auth/public.decorator';
+
+@Public()
+@Post('login')
+async login(@Body() loginDto: LoginDto) {
+  return this.loginService.login(loginDto);
+}
+```
+
+### Authenticated Endpoints
+Use `@UseGuards(JwtAuthGuard)` at controller or method level:
+```typescript
+@UseGuards(JwtAuthGuard)
+@Controller('employee')
+export class EmployeeController {}
+```
+
+### Role-Based Authorization
+Use `@Roles()` decorator with `RolesGuard`:
+```typescript
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/enums/role.enum';
+
+@Post()
+@UseGuards(RolesGuard)
+@Roles(Role.ADMIN, Role.SUPER_ADMIN)
+async create(@Body() createDto: CreateEmployeeDto) {
+  return this.employeeService.create(createDto);
+}
+```
+
+## HTTP Methods
+
+### GET - Retrieve Data
+```typescript
+@Get()
+async findAll(@Query() query: PaginationDto) {
+  return this.service.findAll(query);
+}
+
+@Get(':id')
+async findOne(@Param('id') id: string) {
+  return this.service.findOne(id);
+}
+```
+
+### POST - Create Resource
+```typescript
+@Post()
+@ApiOperation({ summary: 'Create new employee' })
+@ApiResponse({ status: 201, description: 'Employee created successfully' })
+@ApiResponse({ status: 409, description: 'Employee already exists' })
+async create(@Body() createDto: CreateEmployeeDto) {
+  return this.service.create(createDto);
+}
+```
+
+### PATCH - Update Resource
+```typescript
+@Patch(':id')
+@ApiOperation({ summary: 'Update employee' })
+async update(
+  @Param('id') id: string,
+  @Body() updateDto: UpdateEmployeeDto,
+) {
+  return this.service.update(id, updateDto);
+}
+```
+
+### DELETE - Remove Resource
+```typescript
+@Delete(':id')
+@ApiOperation({ summary: 'Delete employee' })
+async remove(@Param('id') id: string) {
+  return this.service.remove(id);
+}
+```
+
+## Request Parameters
+
+### Path Parameters
+```typescript
+@Get(':id')
+async findOne(@Param('id') id: string) {
+  return this.service.findOne(id);
+}
+```
+
+### Query Parameters
+```typescript
+@Get()
+async findAll(@Query() query: PaginationDto) {
+  return this.service.findAll(query);
+}
+```
+
+### Request Body
+```typescript
+@Post()
+async create(@Body() createDto: CreateEmployeeDto) {
+  return this.service.create(createDto);
+}
+```
+
+### Response Object (for setting headers, status codes)
+```typescript
+import { Res } from '@nestjs/common';
+import { Response } from 'express';
+
+@Get('export')
+async exportData(@Res() res: Response) {
+  const csv = await this.service.generateCSV();
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="data.csv"');
+  return res.send(csv);
+}
+```
+
+## Controller Best Practices
+
+1. **Keep Controllers Thin**
+   - Controllers should only handle HTTP concerns
+   - Business logic belongs in services
+   - Controllers call service methods
+
+2. **Use DTOs for Validation**
+   - Always use DTOs for request bodies
+   - Use DTOs for query parameters when complex
+   - Let class-validator handle validation
+
+3. **Document Everything**
+   - Use `@ApiOperation` for all endpoints
+   - Use `@ApiResponse` for response types
+   - Use `@ApiTags` to group endpoints
+
+4. **Error Handling**
+   - Let services throw exceptions
+   - NestJS will automatically format exceptions
+   - Don't catch exceptions in controllers unless transforming them
+
+5. **Authentication First**
+   - Apply `@UseGuards(JwtAuthGuard)` at controller level
+   - Use `@Public()` for exceptions
+   - Apply role guards at method level
+
+6. **Consistent Naming**
+   - Use RESTful route names
+   - Use kebab-case for routes: `/employee`, `/admin-users`
+   - Use plural for collections: `/employees`, not `/employee`
+
+## Common Controller Patterns
+
+### CRUD Controller
+```typescript
+@ApiTags('Employees')
+@UseGuards(JwtAuthGuard)
+@Controller('employees')
+export class EmployeeController {
+  constructor(private readonly employeeService: EmployeeService) {}
+
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async create(@Body() createDto: CreateEmployeeDto) {
+    return this.employeeService.create(createDto);
+  }
+
+  @Get()
+  async findAll(@Query() query: PaginationDto) {
+    return this.employeeService.findAll(query);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.employeeService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async update(@Param('id') id: string, @Body() updateDto: UpdateEmployeeDto) {
+    return this.employeeService.update(id, updateDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  async remove(@Param('id') id: string) {
+    return this.employeeService.remove(id);
+  }
+}
+```
+
+### CSV Export Endpoint
+```typescript
+@Get('export')
+@Header('Content-Type', 'text/csv')
+async exportCSV(@Query() query: GenerateCSVDto, @Res() res: Response) {
+  const csv = await this.service.generateCSV(query);
+  res.setHeader('Content-Disposition', `attachment; filename="export-${Date.now()}.csv"`);
+  return res.send(csv);
+}
+```

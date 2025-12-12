@@ -1,0 +1,329 @@
+---
+alwaysApply: true
+---
+
+# Document Changes Workflow
+
+Use this workflow to automatically document features, bugfixes, optimizations, and other changes to keep AI context and project documentation up-to-date.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Task-Specific Rules (Always Apply)
+- **documentation-patterns.mdc** - Documentation templates, formats, and standards
+
+### Context Rules (Referenced for Understanding)
+- All other rules may be referenced to understand what was implemented and needs documentation
+
+## Step 1: Analyze Changes
+
+**Applies Rules:** documentation-patterns.mdc
+
+1. **Identify Change Type**
+   - Feature: New functionality added
+   - Bugfix: Bug fixed
+   - Optimization: Performance improvement
+   - Refactor: Code restructuring
+   - Docs: Documentation update
+
+2. **Analyze Git Diff**
+   - Review changed files
+   - Identify new files created
+   - Note modified files
+   - Check for deleted files
+
+3. **Extract Key Information**
+   - New endpoints added
+   - New entities created
+   - New DTOs added
+   - Services modified
+   - Controllers updated
+
+## Step 2: Generate Feature Documentation
+
+1. **For New Features**
+   - Create feature documentation file
+   - Use feature documentation template
+   - Document all components
+   - List API endpoints
+
+2. **Feature Documentation Location**
+   - File: `.cursor/docs/features/{feature-name}.md`
+   - Follow documentation-patterns.mdc template
+
+3. **Include in Documentation:**
+   - Overview and purpose
+   - Implementation date
+   - Related module
+   - Entities, DTOs, Services, Controllers
+   - API endpoints with details
+   - Database changes
+   - Dependencies
+
+## Step 3: Create Changelog Entry
+
+1. **Changelog Entry Format**
+   - Date: YYYY-MM-DD
+   - Type: feature|bugfix|optimization|refactor|docs
+   - Module: affected module
+   - Description: what changed
+
+2. **Changelog Location**
+   - File: `.cursor/docs/changelog/{YYYY-MM-DD}-{type}-{summary}.md`
+   - Follow changelog template
+
+3. **Changelog Content:**
+   - Description of changes
+   - List of changes made
+   - API changes (if any)
+   - Database changes (if any)
+   - Testing performed
+   - Related issues
+
+## Step 4: Update API Documentation
+
+1. **For New/Modified Endpoints**
+   - Update module API documentation
+   - Add endpoint details
+   - Include request/response examples
+   - Document authentication requirements
+
+2. **API Documentation Location**
+   - File: `.cursor/docs/api/{module}/index.md`
+   - Per-module API documentation
+
+3. **Update API Index**
+   - Add new endpoints to index
+   - Update modified endpoints
+   - Remove deprecated endpoints
+
+## Step 5: Update Context Files
+
+1. **current-state.md**
+   - Update module list
+   - Add new endpoints
+   - Update database schema
+   - Note configuration changes
+
+2. **recent-changes.md**
+   - Add entry for current change
+   - Include date and type
+   - Brief description
+   - Link to detailed docs
+
+3. **architecture-overview.md** (if needed)
+   - Update if architecture changed
+   - Document new patterns
+   - Update module relationships
+
+## Step 6: Generate Documentation Structure
+
+1. **Create Documentation Directory Structure**
+   ```
+   .cursor/docs/
+   ├── features/
+   │   └── {feature-name}.md
+   ├── changelog/
+   │   └── {YYYY-MM-DD}-{type}-{summary}.md
+   ├── api/
+   │   └── {module}/
+   │       └── index.md
+   └── context/
+       ├── current-state.md
+       ├── recent-changes.md
+       └── architecture-overview.md
+   ```
+
+2. **Initialize if First Time**
+   - Create directory structure
+   - Create index files
+   - Initialize context files
+
+## Step 7: Extract Code Information
+
+1. **From Entities**
+   - Extract entity name
+   - Extract table name
+   - Extract columns
+   - Extract relationships
+
+2. **From DTOs**
+   - Extract DTO name
+   - Extract fields
+   - Extract validation rules
+   - Extract Swagger examples
+
+3. **From Controllers**
+   - Extract endpoint paths
+   - Extract HTTP methods
+   - Extract authentication requirements
+   - Extract Swagger documentation
+
+4. **From Services**
+   - Extract service methods
+   - Extract business logic
+   - Extract dependencies
+
+## Step 8: Format Documentation
+
+1. **Use Markdown Formatting**
+   - Headers for sections
+   - Code blocks for examples
+   - Lists for items
+   - Tables for structured data
+
+2. **Include Code Examples**
+   - Show endpoint usage
+   - Include request/response examples
+   - Add code snippets where helpful
+
+3. **Link Related Documentation**
+   - Link between features
+   - Link to API docs
+   - Link to changelog entries
+
+## Step 9: Review Generated Documentation
+
+1. **Verify Accuracy**
+   - Check all information is correct
+   - Verify endpoints are documented
+   - Confirm database changes noted
+
+2. **Check Completeness**
+   - All changes documented
+   - No missing information
+   - Context files updated
+
+3. **Improve if Needed**
+   - Add missing details
+   - Clarify descriptions
+   - Add examples if helpful
+
+## Step 10: Documentation Checklist
+
+- [ ] Change type identified
+- [ ] Git diff analyzed
+- [ ] Feature documentation created (if feature)
+- [ ] Changelog entry created
+- [ ] API documentation updated
+- [ ] Context files updated
+- [ ] Documentation structure created
+- [ ] Code information extracted
+- [ ] Documentation formatted
+- [ ] Documentation reviewed
+
+## Documentation Templates
+
+### Feature Documentation
+```markdown
+# {Feature Name}
+
+## Overview
+{Description}
+
+## Implementation Date
+{YYYY-MM-DD}
+
+## Related Module
+`src/{module}/`
+
+## Components
+- Entities: {list}
+- DTOs: {list}
+- Services: {list}
+- Controllers: {list}
+
+## API Endpoints
+- {Method} {Path} - {Description}
+
+## Database Changes
+- Migration: {name}
+- Tables: {list}
+```
+
+### Changelog Entry
+```markdown
+# {Type}: {Summary}
+
+**Date:** {YYYY-MM-DD}
+**Type:** {type}
+**Module:** {module}
+
+## Description
+{Description}
+
+## Changes Made
+- {Change 1}
+- {Change 2}
+
+## API Changes
+- {Endpoint changes}
+
+## Database Changes
+- {Migration changes}
+```
+
+## Automated Extraction
+
+The document-changes command should:
+
+1. **Parse Git Diff**
+   - Identify file changes
+   - Extract code patterns
+   - Detect new endpoints
+
+2. **Extract Information**
+   - Parse TypeScript files
+   - Extract decorators
+   - Parse entity definitions
+   - Extract DTO structures
+
+3. **Generate Documentation**
+   - Create markdown files
+   - Format content
+   - Link related docs
+
+4. **Update Context**
+   - Update current-state.md
+   - Add to recent-changes.md
+   - Update architecture if needed
+
+## Best Practices
+
+1. **Run After Every Change**
+   - Feature implementation
+   - Bugfix completion
+   - Optimization
+   - Refactoring
+
+2. **Keep Documentation Current**
+   - Update immediately after changes
+   - Don't let documentation drift
+   - Review generated docs
+
+3. **Maintain Context Files**
+   - Keep current-state.md accurate
+   - Update recent-changes.md regularly
+   - Refresh architecture docs on major changes
+
+4. **Link Related Information**
+   - Link features to API docs
+   - Link changelog to features
+   - Cross-reference related changes
+
+5. **Review and Improve**
+   - Review generated documentation
+   - Add details if needed
+   - Improve templates over time
+
+## Example Workflow
+
+**Change:** Added employee export endpoint
+
+1. **Analyze:** New GET endpoint in employee controller
+2. **Feature Doc:** Document export endpoint
+3. **Changelog:** Add entry for new endpoint
+4. **API Docs:** Update employee API documentation
+5. **Context:** Update current-state.md and recent-changes.md
+6. **Review:** Verify all documentation is accurate

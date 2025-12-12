@@ -1,0 +1,287 @@
+---
+alwaysApply: true
+---
+
+# TypeORM Entity Patterns
+
+## Related Rules
+
+When working with entities, also consider:
+- **coding-practice.mdc** - Naming conventions, code style for entities
+- **database-migrations.mdc** - Entity changes require migrations
+- **service-patterns.mdc** - Entities are used in services via repositories
+- **dto-patterns.mdc** - DTOs often map to entities
+
+**Related Rules:**
+- **coding-practice.mdc** - Entity file naming and code style
+- **database-migrations.mdc** - Entity changes must be migrated
+- **service-patterns.mdc** - Services work with entities via repositories
+- **dto-patterns.mdc** - DTOs map to entity structures
+
+## When to Use
+
+This rule applies when:
+- Creating or modifying entities
+- Defining database schema
+- Working with TypeORM decorators
+- Planning database changes
+
+# TypeORM Entity Patterns
+
+## Entity Structure
+
+Entities represent database tables and must follow these patterns:
+
+```typescript
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+@Entity('employees')
+export class Employee {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ unique: true })
+  username: string;
+
+  @Column()
+  password: string;
+
+  @Column({ unique: true })
+  email: string;
+
+  @Column({ default: true })
+  is_active: boolean;
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+```
+
+## Primary Keys
+
+### UUID Primary Key (Recommended for new entities)
+```typescript
+@PrimaryGeneratedColumn('uuid')
+id: string;
+```
+
+### Auto-increment Integer Primary Key
+```typescript
+@PrimaryGeneratedColumn()
+id: number;
+```
+
+## Column Decorators
+
+### Basic Column
+```typescript
+@Column()
+name: string;
+```
+
+### Column with Type
+```typescript
+@Column({ type: 'varchar', length: 255 })
+name: string;
+
+@Column({ type: 'text', nullable: true })
+description: string;
+
+@Column({ type: 'bigint', nullable: true })
+unique_id: string;
+
+@Column({ type: 'boolean', default: false })
+is_archived: boolean;
+```
+
+### Column Constraints
+```typescript
+@Column({ unique: true })
+email: string;
+
+@Column({ nullable: true })
+middle_name: string;
+
+@Column({ default: true })
+is_active: boolean;
+
+@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+created_at: Date;
+```
+
+### JSON Column
+```typescript
+@Column('json', { default: [] })
+device_id: string[];
+```
+
+## Timestamps
+
+Always include created and updated timestamps:
+
+```typescript
+@CreateDateColumn()
+createdAt: Date;
+
+@UpdateDateColumn()
+updatedAt: Date;
+```
+
+Or use custom timestamp columns:
+```typescript
+@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+created_at: Date;
+
+@Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
+updated_at: Date;
+```
+
+## Entity Naming
+
+### Table Name
+Use `@Entity('table_name')` to specify table name:
+```typescript
+@Entity('employees')  // snake_case for table name
+export class Employee {
+  // ...
+}
+```
+
+### Column Names
+- Database columns: Use **snake_case** (e.g., `first_name`, `created_at`)
+- TypeScript properties: Use **camelCase** (e.g., `firstName`, `createdAt`)
+
+If property name differs from column name:
+```typescript
+@Column({ name: 'first_name' })
+firstName: string;
+```
+
+## Entity Decorator
+
+Always specify table name explicitly:
+```typescript
+@Entity('table_name')
+export class EntityName {
+  // ...
+}
+```
+
+## Common Column Types
+
+- `varchar` / `string` - Text fields
+- `text` - Long text fields
+- `int` / `number` - Integers
+- `bigint` / `string` - Large integers (use string in TypeScript)
+- `boolean` - Boolean values
+- `timestamp` / `Date` - Dates and times
+- `json` - JSON data
+- `uuid` - UUID strings
+
+## Entity Relationships
+
+### One-to-Many (if needed)
+```typescript
+import { OneToMany } from 'typeorm';
+
+@OneToMany(() => Report, report => report.employee)
+reports: Report[];
+```
+
+### Many-to-One (if needed)
+```typescript
+import { ManyToOne } from 'typeorm';
+
+@ManyToOne(() => Employee, employee => employee.reports)
+employee: Employee;
+```
+
+## Entity Best Practices
+
+1. **Always Define Table Name**
+   - Use `@Entity('table_name')` explicitly
+   - Use snake_case for table names
+
+2. **Use Appropriate Types**
+   - Match database column types
+   - Use `string` for `bigint` and `uuid` in TypeScript
+
+3. **Set Defaults**
+   - Use `default` for columns with default values
+   - Use `nullable: true` for optional fields
+
+4. **Add Constraints**
+   - Use `unique: true` for unique columns
+   - Use `@Index()` for frequently queried columns
+
+5. **Include Timestamps**
+   - Always include `created_at` and `updated_at`
+   - Use `@CreateDateColumn` and `@UpdateDateColumn`
+
+6. **Naming Consistency**
+   - Database: snake_case
+   - TypeScript: camelCase
+   - Map explicitly if names differ
+
+## Entity Examples
+
+### Simple Entity
+```typescript
+@Entity('students')
+export class Student {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ nullable: true })
+  ID_Number: string;
+
+  @Column({ nullable: true })
+  Name: string;
+
+  @Column({ type: 'boolean', default: false })
+  isArchived: boolean;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+```
+
+### Entity with Unique Constraints
+```typescript
+@Entity('admin')
+export class Admin {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ unique: true })
+  username: string;
+
+  @Column({ unique: true })
+  email: string;
+
+  @Column()
+  password: string;
+
+  @Column({ default: true })
+  is_active: boolean;
+}
+```
+
+## Migration Considerations
+
+- Entity changes require migrations
+- Never use `synchronize: true` in production
+- Generate migrations after entity changes: `npm run migration:generate`
+- Test migrations up and down before deploying

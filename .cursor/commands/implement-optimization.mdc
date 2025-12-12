@@ -1,0 +1,320 @@
+---
+alwaysApply: true
+---
+
+# Implement Optimization Workflow
+
+Use this workflow when optimizing performance in the application.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Core Rules (Always Apply)
+- **coding-practice.mdc** - Code style and best practices
+
+### Task-Specific Rules (Always Apply)
+- **caching-patterns.mdc** - Redis caching strategies and cache optimization
+- **service-patterns.mdc** - Query optimization, service layer performance
+
+### Task-Specific Rules (Conditional)
+- **database-migrations.mdc** - Required when adding indexes or optimizing schema
+- **entity-patterns.mdc** - Required when optimizing entity structure
+- **controller-patterns.mdc** - Required when optimizing controller responses
+
+### Documentation
+- **documentation-patterns.mdc** - Applied in Step 9 when documenting optimizations
+
+## Step 1: Identify Performance Bottlenecks
+
+**Applies Rules:** service-patterns.mdc, controller-patterns.mdc
+
+1. **Profile the Application**
+   - Use performance monitoring tools
+   - Check response times
+   - Monitor database query times
+   - Review application logs
+
+2. **Identify Slow Endpoints**
+   - Check API response times
+   - Identify endpoints taking >1 second
+   - Review database query logs
+   - Check for N+1 query problems
+
+3. **Common Performance Issues**
+   - Slow database queries
+   - Missing database indexes
+   - Lack of caching
+   - Inefficient data loading
+   - Large payload sizes
+   - Unnecessary computations
+
+## Step 2: Analyze the Bottleneck
+
+1. **Database Queries**
+   - Review query execution plans
+   - Check for missing indexes
+   - Identify N+1 query problems
+   - Review query complexity
+
+2. **Service Logic**
+   - Identify expensive operations
+   - Check for unnecessary loops
+   - Review data transformations
+   - Check for redundant computations
+
+3. **API Responses**
+   - Check response payload size
+   - Identify unnecessary data
+   - Review pagination implementation
+   - Check for over-fetching
+
+## Step 3: Plan the Optimization
+
+1. **Set Performance Goals**
+   - Define target response time
+   - Set acceptable query time
+   - Define cache hit ratio goals
+
+2. **Choose Optimization Strategy**
+   - Database indexing
+   - Query optimization
+   - Caching
+   - Data pagination
+   - Response optimization
+
+3. **Consider Trade-offs**
+   - Memory vs speed
+   - Cache invalidation complexity
+   - Code complexity
+   - Maintenance overhead
+
+## Step 4: Implement Database Optimizations
+
+1. **Add Indexes**
+   ```typescript
+   // In migration
+   await queryRunner.createIndex('employee', new TableIndex({
+     name: 'IDX_EMPLOYEE_EMAIL',
+     columnNames: ['email'],
+   }));
+   ```
+   - Index frequently queried columns
+   - Index foreign keys
+   - Index search fields
+
+2. **Optimize Queries**
+   - Use query builder for complex queries
+   - Add `select` to limit fields
+   - Use `relations` carefully
+   - Avoid N+1 queries with joins
+
+3. **Query Optimization Examples**
+
+   **Before (N+1 Problem):**
+   ```typescript
+   const employees = await this.repository.find();
+   for (const employee of employees) {
+     employee.reports = await this.reportRepository.find({
+       where: { employee_id: employee.id }
+     });
+   }
+   ```
+
+   **After (Single Query):**
+   ```typescript
+   const employees = await this.repository.find({
+     relations: ['reports']
+   });
+   ```
+
+   **Before (Loading All Fields):**
+   ```typescript
+   const employees = await this.repository.find();
+   ```
+
+   **After (Select Specific Fields):**
+   ```typescript
+   const employees = await this.repository.find({
+     select: ['id', 'username', 'email']
+   });
+   ```
+
+## Step 5: Implement Caching
+
+1. **Add Cache to GET Endpoints**
+   ```typescript
+   @Get()
+   @CacheTTL(1800000) // 30 minutes
+   async findAll(@Query() query: PaginationDto) {
+     return this.service.findAll(query);
+   }
+   ```
+
+2. **Cache Expensive Operations**
+   ```typescript
+   async findOne(id: string): Promise<Employee> {
+     const cacheKey = `employee:${id}`;
+     const cached = await this.cacheService.get<Employee>(cacheKey);
+     if (cached) {
+       return cached;
+     }
+     
+     const employee = await this.repository.findOne({ where: { id } });
+     await this.cacheService.set(cacheKey, employee, 3600000);
+     return employee;
+   }
+   ```
+
+3. **Invalidate Cache on Mutations**
+   ```typescript
+   @Post()
+   @NoCache()
+   async create(@Body() createDto: CreateDto) {
+     const result = await this.service.create(createDto);
+     await this.cacheService.clearCache('entity:*');
+     return result;
+   }
+   ```
+
+4. **Follow caching-patterns.mdc guidelines**
+
+## Step 6: Optimize Service Logic
+
+1. **Reduce Computations**
+   - Cache expensive calculations
+   - Avoid redundant operations
+   - Use efficient algorithms
+
+2. **Optimize Data Processing**
+   ```typescript
+   // Before: Multiple iterations
+   const active = employees.filter(e => e.is_active);
+   const sorted = active.sort((a, b) => a.name.localeCompare(b.name));
+   
+   // After: Single operation
+   const result = employees
+     .filter(e => e.is_active)
+     .sort((a, b) => a.name.localeCompare(b.name));
+   ```
+
+3. **Use Parallel Operations**
+   ```typescript
+   // Before: Sequential
+   const data1 = await operation1();
+   const data2 = await operation2();
+   
+   // After: Parallel
+   const [data1, data2] = await Promise.all([
+     operation1(),
+     operation2()
+   ]);
+   ```
+
+## Step 7: Optimize API Responses
+
+1. **Implement Pagination**
+   - Always paginate list endpoints
+   - Use reasonable page sizes (10-50 items)
+   - Return total count for UI
+
+2. **Limit Response Data**
+   - Use DTOs to shape responses
+   - Exclude unnecessary fields
+   - Use `select` in queries
+
+3. **Add Response Compression**
+   - Already enabled in `main.ts` via compression middleware
+   - Verify it's working
+
+## Step 8: Measure Improvements
+
+1. **Before Optimization**
+   - Record baseline metrics
+   - Response times
+   - Query execution times
+   - Cache hit ratios
+
+2. **After Optimization**
+   - Measure same metrics
+   - Compare improvements
+   - Verify goals met
+
+3. **Monitoring**
+   - Set up performance monitoring
+   - Track metrics over time
+   - Alert on degradation
+
+## Step 9: Document Optimization
+
+1. **Update Code Comments**
+   - Document optimization decisions
+   - Explain why optimization was needed
+   - Note any trade-offs
+
+2. **Run document-changes Command**
+   - Document optimization in changelog
+   - Include performance metrics
+   - Update architecture docs if needed
+
+3. **Documentation Should Include:**
+   - Problem identified
+   - Optimization implemented
+   - Performance improvements
+   - Trade-offs considered
+
+## Step 10: Optimization Checklist
+
+- [ ] Bottleneck identified and measured
+- [ ] Optimization strategy chosen
+- [ ] Database indexes added (if needed)
+- [ ] Queries optimized
+- [ ] Caching implemented where appropriate
+- [ ] Service logic optimized
+- [ ] API responses optimized
+- [ ] Performance improvements measured
+- [ ] No regressions introduced
+- [ ] Documentation updated
+
+## Common Optimization Patterns
+
+### 1. Database Indexing
+- Index frequently queried columns
+- Index foreign keys
+- Composite indexes for multi-column queries
+
+### 2. Query Optimization
+- Use joins instead of N+1 queries
+- Select only needed fields
+- Use query builder for complex queries
+- Add proper WHERE clauses
+
+### 3. Caching Strategy
+- Cache GET endpoints
+- Cache expensive computations
+- Invalidate on mutations
+- Use appropriate TTL
+
+### 4. Pagination
+- Always paginate large datasets
+- Use cursor-based pagination for very large datasets
+- Return total count for UI
+
+### 5. Response Optimization
+- Limit response payload size
+- Use DTOs to shape responses
+- Exclude unnecessary data
+- Compress responses
+
+## Example Optimization Workflow
+
+**Issue:** Employee list endpoint takes 3 seconds
+
+1. **Identify:** Slow database query, no pagination
+2. **Analyze:** Query loads all employees, no index on search field
+3. **Optimize:**
+   - Add pagination
+   - Add index on searchable fields
+   - Add caching with 30min TTL
+4. **Measure:** Response time reduced to 200ms
+5. **Document:** Update changelog with optimization details

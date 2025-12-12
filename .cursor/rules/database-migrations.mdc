@@ -1,0 +1,319 @@
+---
+alwaysApply: true
+---
+
+# Database Migration Patterns
+
+## Related Rules
+
+When working with migrations, also consider:
+- **entity-patterns.mdc** - Entity changes require migrations
+- **coding-practice.mdc** - Code style for migration files
+- **debugging-practice.mdc** - Migration error handling
+
+**Related Rules:**
+- **entity-patterns.mdc** - Entity changes must be migrated
+- **coding-practice.mdc** - Migration code follows coding standards
+- **debugging-practice.mdc** - Migration errors follow error handling patterns
+
+## When to Use
+
+This rule applies when:
+- Creating database migrations
+- Modifying database schema
+- Adding/removing columns
+- Creating/dropping tables
+- Adding indexes or constraints
+
+# Database Migration Patterns
+
+## Migration Workflow
+
+### 1. Generate Migration
+After modifying entities, generate a migration:
+
+```bash
+npm run migration:generate -- src/migrations/AddNewColumnToEmployee
+```
+
+This will:
+- Compare current entities with database schema
+- Generate SQL migration file
+- Create migration class in `src/migrations/`
+
+### 2. Review Migration
+Always review the generated migration before running:
+
+```typescript
+import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
+
+export class AddNewColumnToEmployee1234567890 implements MigrationInterface {
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.addColumn(
+      'employee',
+      new TableColumn({
+        name: 'new_column',
+        type: 'varchar',
+        length: '255',
+        isNullable: true,
+      }),
+    );
+  }
+
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.dropColumn('employee', 'new_column');
+  }
+}
+```
+
+### 3. Run Migration
+```bash
+npm run migration:run
+```
+
+### 4. Revert Migration (if needed)
+```bash
+npm run migration:revert
+```
+
+## Migration Best Practices
+
+### 1. Never Use Synchronize in Production
+```typescript
+// ❌ NEVER DO THIS IN PRODUCTION
+synchronize: true
+
+// ✅ Always use migrations
+synchronize: false
+```
+
+### 2. Always Implement Down Method
+Every migration must have a `down()` method for rollback:
+
+```typescript
+public async down(queryRunner: QueryRunner): Promise<void> {
+  // Reverse of up() method
+  await queryRunner.dropColumn('employee', 'new_column');
+}
+```
+
+### 3. Test Migrations
+- Test `up()` method on development database
+- Test `down()` method to ensure rollback works
+- Test on staging before production
+
+### 4. Migration Naming
+Use descriptive names:
+- `AddEmailToEmployee`
+- `CreateReportsTable`
+- `AddIndexToEmployeeUsername`
+- `UpdateEmployeeStatusEnum`
+
+### 5. Data Migrations
+For data transformations, add to migration:
+
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  // Schema change
+  await queryRunner.addColumn(/* ... */);
+  
+  // Data migration
+  await queryRunner.query(`
+    UPDATE employee 
+    SET status = 'active' 
+    WHERE status IS NULL
+  `);
+}
+```
+
+## Common Migration Patterns
+
+### Add Column
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.addColumn(
+    'employee',
+    new TableColumn({
+      name: 'phone_number',
+      type: 'varchar',
+      length: '20',
+      isNullable: true,
+    }),
+  );
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.dropColumn('employee', 'phone_number');
+}
+```
+
+### Create Table
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.createTable(
+    new Table({
+      name: 'reports',
+      columns: [
+        {
+          name: 'id',
+          type: 'uuid',
+          isPrimary: true,
+          generationStrategy: 'uuid',
+          default: 'uuid_generate_v4()',
+        },
+        {
+          name: 'datetime',
+          type: 'timestamp',
+        },
+        {
+          name: 'type',
+          type: 'varchar',
+          length: '50',
+        },
+        {
+          name: 'created_at',
+          type: 'timestamp',
+          default: 'CURRENT_TIMESTAMP',
+        },
+      ],
+    }),
+  );
+}
+```
+
+### Add Index
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.createIndex('employee', new TableIndex({
+    name: 'IDX_EMPLOYEE_EMAIL',
+    columnNames: ['email'],
+  }));
+}
+
+public async down(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.dropIndex('employee', 'IDX_EMPLOYEE_EMAIL');
+}
+```
+
+### Add Foreign Key
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.createForeignKey(
+    'reports',
+    new TableForeignKey({
+      columnNames: ['employee_id'],
+      referencedColumnNames: ['id'],
+      referencedTableName: 'employee',
+      onDelete: 'CASCADE',
+    }),
+  );
+}
+```
+
+### Modify Column
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  await queryRunner.changeColumn(
+    'employee',
+    'email',
+    new TableColumn({
+      name: 'email',
+      type: 'varchar',
+      length: '255',
+      isUnique: true,
+      isNullable: false,
+    }),
+  );
+}
+```
+
+## Migration Safety
+
+### 1. Backup Before Migration
+Always backup database before running migrations in production.
+
+### 2. Test on Staging
+Test all migrations on staging environment first.
+
+### 3. Review SQL
+Check the generated SQL matches expectations:
+```typescript
+// Migration generates SQL like:
+// ALTER TABLE "employee" ADD "new_column" varchar(255)
+```
+
+### 4. Handle Errors
+Migrations should handle errors gracefully:
+```typescript
+public async up(queryRunner: QueryRunner): Promise<void> {
+  try {
+    await queryRunner.addColumn(/* ... */);
+  } catch (error) {
+    // Log error, don't fail silently
+    console.error('Migration failed:', error);
+    throw error;
+  }
+}
+```
+
+### 5. Breaking Changes
+Document breaking changes in migration:
+```typescript
+/**
+ * BREAKING CHANGE: Removes 'old_status' column
+ * Update application code before running this migration
+ */
+public async up(queryRunner: QueryRunner): Promise<void> {
+  // Migration code
+}
+```
+
+## Migration Commands
+
+### Generate Migration
+```bash
+npm run migration:generate -- src/migrations/MigrationName
+```
+
+### Run Migrations
+```bash
+npm run migration:run
+```
+
+### Revert Last Migration
+```bash
+npm run migration:revert
+```
+
+### Show Migration Status
+```bash
+npm run typeorm -- migration:show
+```
+
+## Migration File Structure
+
+Migrations are stored in `src/migrations/`:
+```
+src/migrations/
+├── 1234567890-CreateInitialTables.ts
+├── 1234567891-AddEmailToEmployee.ts
+└── 1234567892-UpdateEmployeeStatus.ts
+```
+
+Migration class naming:
+- Timestamp prefix: `1234567890`
+- Descriptive name: `CreateInitialTables`
+- Class name: `CreateInitialTables1234567890`
+
+## Migration Checklist
+
+Before committing a migration:
+
+- [ ] Migration generated from entity changes
+- [ ] Migration reviewed and SQL verified
+- [ ] `down()` method implemented and tested
+- [ ] Migration tested on development database
+- [ ] Rollback tested (`migration:revert`)
+- [ ] Breaking changes documented
+- [ ] Data migrations tested (if applicable)
+- [ ] Migration file follows naming convention

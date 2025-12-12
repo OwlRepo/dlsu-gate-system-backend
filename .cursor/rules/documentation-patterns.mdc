@@ -1,0 +1,360 @@
+---
+alwaysApply: true
+---
+
+# Documentation Patterns
+
+## Related Rules
+
+When documenting changes, reference:
+- All other rules to understand what was implemented
+- **coding-practice.mdc** - Code examples in documentation
+- **feature-implementation.mdc** - Feature documentation structure
+
+**Related Rules:**
+- All other rules are referenced when documenting what was implemented
+- **feature-implementation.mdc** - Features follow documentation structure
+- **coding-practice.mdc** - Code examples follow coding standards
+
+## When to Use
+
+This rule applies when:
+- Documenting new features
+- Creating changelog entries
+- Updating API documentation
+- Maintaining context files
+- Creating ADRs
+
+# Documentation Patterns
+
+## Auto-Documentation System
+
+The project uses an automated documentation system to keep AI context and project documentation up-to-date.
+
+## Documentation Structure
+
+All documentation is stored in `.cursor/docs/`:
+
+```
+.cursor/docs/
+├── features/          # Feature documentation
+│   ├── {feature-name}.md
+│   └── index.md
+├── changelog/         # Change history
+│   ├── {YYYY-MM-DD}-{type}-{summary}.md
+│   └── index.md
+├── api/              # API endpoint documentation
+│   ├── {module}/     # Per-module API docs
+│   └── index.md
+├── architecture/     # ADRs and architecture decisions
+│   └── {decision-id}-{title}.md
+└── context/          # AI context files
+    ├── current-state.md
+    ├── recent-changes.md
+    └── architecture-overview.md
+```
+
+## Feature Documentation Template
+
+When implementing a new feature, document it using this template:
+
+```markdown
+# {Feature Name}
+
+## Overview
+Brief description of the feature and its purpose.
+
+## Implementation Date
+{YYYY-MM-DD}
+
+## Related Module
+`src/{module}/`
+
+## Components
+
+### Entities
+- `{Entity}.entity.ts` - Database entity definition
+
+### DTOs
+- `create-{entity}.dto.ts` - Creation data transfer object
+- `update-{entity}.dto.ts` - Update data transfer object
+- `{entity}-pagination.dto.ts` - Pagination query DTO
+
+### Services
+- `{module}.service.ts` - Business logic implementation
+
+### Controllers
+- `{module}.controller.ts` - HTTP endpoints
+
+## API Endpoints
+
+### POST /{module}
+- Description: Create new {entity}
+- Auth: Required (Admin/Super Admin)
+- Request: `Create{Entity}Dto`
+- Response: `{Entity}`
+
+### GET /{module}
+- Description: List all {entities} with pagination
+- Auth: Required
+- Query: `{Entity}PaginationDto`
+- Response: `{ data: {Entity}[], total: number }`
+
+### GET /{module}/:id
+- Description: Get {entity} by ID
+- Auth: Required
+- Response: `{Entity}`
+
+### PATCH /{module}/:id
+- Description: Update {entity}
+- Auth: Required (Admin/Super Admin)
+- Request: `Update{Entity}Dto`
+- Response: `{Entity}`
+
+### DELETE /{module}/:id
+- Description: Delete {entity}
+- Auth: Required (Super Admin)
+- Response: `{ message: string }`
+
+## Database Changes
+- Migration: `{migration-name}.ts`
+- Tables: `{table_name}`
+- Columns added/modified: List changes
+
+## Dependencies
+- Modules imported: List modules
+- Services used: List services
+
+## Notes
+Any additional notes, considerations, or future improvements.
+```
+
+## Changelog Entry Template
+
+For each change (feature, bugfix, optimization):
+
+```markdown
+# {Type}: {Brief Summary}
+
+**Date:** {YYYY-MM-DD}
+**Type:** {feature|bugfix|optimization|refactor|docs}
+**Module:** {module-name}
+
+## Description
+Detailed description of what changed and why.
+
+## Changes Made
+- List of specific changes
+- Files modified
+- New files created
+
+## API Changes
+- Endpoints added/modified/removed
+- Request/response format changes
+- Breaking changes (if any)
+
+## Database Changes
+- Migrations created
+- Schema changes
+- Data migrations
+
+## Testing
+- Tests added/modified
+- Manual testing performed
+
+## Related Issues
+- Issue numbers or references
+```
+
+## API Documentation Template
+
+Per-module API documentation:
+
+```markdown
+# {Module} API Documentation
+
+## Base Path
+`/{module}`
+
+## Authentication
+All endpoints require JWT authentication unless marked as public.
+
+## Endpoints
+
+### {HTTP Method} {Path}
+**Summary:** {Brief description}
+
+**Authentication:** {Required|Public}
+**Authorization:** {Roles required}
+
+**Request:**
+- Body: `{DTO}`
+- Query: `{QueryDTO}`
+- Params: `{param}: {type}`
+
+**Response:**
+- 200: Success response
+- 400: Bad request
+- 401: Unauthorized
+- 403: Forbidden
+- 404: Not found
+- 409: Conflict
+
+**Example Request:**
+\`\`\`json
+{
+  "field": "value"
+}
+\`\`\`
+
+**Example Response:**
+\`\`\`json
+{
+  "data": {}
+}
+\`\`\`
+```
+
+## Context Files
+
+### current-state.md
+Maintains current system state for AI context:
+
+```markdown
+# Current System State
+
+Last Updated: {YYYY-MM-DD}
+
+## Modules
+- {Module} - {Description}
+- {Module} - {Description}
+
+## Key Endpoints
+- `POST /{module}` - {Description}
+- `GET /{module}` - {Description}
+
+## Database Schema
+- Tables: {list}
+- Recent migrations: {list}
+
+## Configuration
+- Key settings: {list}
+```
+
+### recent-changes.md
+Tracks recent changes for AI context:
+
+```markdown
+# Recent Changes
+
+## {YYYY-MM-DD}
+- {Change description}
+- {Change description}
+
+## {YYYY-MM-DD}
+- {Change description}
+```
+
+### architecture-overview.md
+System architecture documentation:
+
+```markdown
+# Architecture Overview
+
+## System Architecture
+{Description and diagram}
+
+## Module Structure
+{Module relationships}
+
+## Data Flow
+{How data flows through the system}
+
+## Key Patterns
+- {Pattern 1}
+- {Pattern 2}
+```
+
+## ADR (Architecture Decision Record) Template
+
+For significant architectural decisions:
+
+```markdown
+# {Decision ID}: {Title}
+
+**Status:** {proposed|accepted|deprecated|superseded}
+**Date:** {YYYY-MM-DD}
+
+## Context
+What is the issue we're trying to address?
+
+## Decision
+What decision was made?
+
+## Consequences
+- Positive consequences
+- Negative consequences
+- Risks and mitigations
+```
+
+## Documentation Workflow
+
+### On Feature Implementation
+1. Implement feature following feature-implementation.mdc
+2. Run `document-changes` command
+3. Review generated documentation
+4. Update context files if needed
+
+### On Bugfix
+1. Fix bug following implement-bugfix.mdc
+2. Run `document-changes` command
+3. Add changelog entry
+4. Update recent-changes.md
+
+### On Optimization
+1. Implement optimization following implement-optimization.mdc
+2. Run `document-changes` command
+3. Document performance improvements
+4. Update architecture docs if needed
+
+## Documentation Best Practices
+
+1. **Keep Documentation Updated**
+   - Run `document-changes` after every change
+   - Review generated documentation
+   - Update manually if needed
+
+2. **Be Specific**
+   - Include code examples
+   - Reference actual files and classes
+   - Provide clear descriptions
+
+3. **Maintain Context Files**
+   - Keep current-state.md up-to-date
+   - Update recent-changes.md regularly
+   - Refresh architecture-overview.md on major changes
+
+4. **Document Decisions**
+   - Create ADRs for architectural decisions
+   - Document why decisions were made
+   - Include alternatives considered
+
+5. **Link Related Docs**
+   - Link between related features
+   - Reference API docs from features
+   - Connect changelog entries to features
+
+## Auto-Documentation Command
+
+The `document-changes` command automatically:
+- Analyzes git diff for changes
+- Extracts new endpoints, entities, DTOs
+- Generates feature documentation
+- Updates changelog
+- Updates API documentation
+- Refreshes context files
+
+Run after implementing changes:
+```bash
+# Use the document-changes command in Cursor
+```

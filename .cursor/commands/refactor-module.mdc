@@ -1,0 +1,299 @@
+---
+alwaysApply: true
+---
+
+# Refactor Module Workflow
+
+Use this workflow when refactoring existing modules to improve code quality, maintainability, or performance.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Core Rules (Always Apply)
+- **coding-practice.mdc** - Code style, naming conventions, best practices
+- **debugging-practice.mdc** - Error handling patterns
+
+### Task-Specific Rules (Context-Dependent)
+- **service-patterns.mdc** - Required if refactoring services
+- **controller-patterns.mdc** - Required if refactoring controllers
+- **dto-patterns.mdc** - Required if refactoring DTOs
+- **feature-implementation.mdc** - Required if restructuring modules
+- **entity-patterns.mdc** - Required if refactoring entities
+
+### Documentation
+- **documentation-patterns.mdc** - Applied in Step 8 when documenting refactoring
+
+## Step 1: Identify Refactoring Needs
+
+**Applies Rules:** coding-practice.mdc
+
+1. **Code Smells to Look For**
+   - Duplicated code
+   - Long methods (>50 lines)
+   - Large classes (>300 lines)
+   - Complex conditionals
+   - Tight coupling
+   - Poor naming
+
+2. **Common Refactoring Scenarios**
+   - Extract methods/functions
+   - Split large classes
+   - Consolidate duplicate code
+   - Improve error handling
+   - Optimize queries
+   - Improve type safety
+
+3. **Assess Impact**
+   - Identify affected files
+   - Check dependencies
+   - Review test coverage
+   - Assess breaking changes
+
+## Step 2: Plan the Refactoring
+
+1. **Define Goals**
+   - What problem are we solving?
+   - What improvements will be made?
+   - What risks are involved?
+
+2. **Create Refactoring Plan**
+   - List specific changes
+   - Order of changes (small steps)
+   - Dependencies between changes
+   - Rollback strategy
+
+3. **Identify Test Cases**
+   - List existing functionality to preserve
+   - Identify edge cases
+   - Plan test strategy
+
+## Step 3: Ensure Test Coverage
+
+1. **Review Existing Tests**
+   - Check test coverage
+   - Identify missing tests
+   - Verify tests are passing
+
+2. **Add Tests if Needed**
+   - Add tests for uncovered code
+   - Test edge cases
+   - Ensure all tests pass before refactoring
+
+3. **Use Tests as Safety Net**
+   - Tests should pass before refactoring
+   - Tests should pass after refactoring
+   - Tests verify behavior is preserved
+
+## Step 4: Refactor in Small Steps
+
+1. **One Change at a Time**
+   - Make small, incremental changes
+   - Test after each change
+   - Commit working state frequently
+
+2. **Common Refactoring Patterns**
+
+   **Extract Method:**
+   ```typescript
+   // Before
+   async create(createDto: CreateDto) {
+     // validation logic
+     // duplicate check
+     // create logic
+     // save logic
+   }
+   
+   // After
+   async create(createDto: CreateDto) {
+     this.validateInput(createDto);
+     await this.checkDuplicate(createDto);
+     const entity = this.createEntity(createDto);
+     return await this.saveEntity(entity);
+   }
+   ```
+
+   **Extract Service:**
+   ```typescript
+   // Before: All logic in one service
+   class EmployeeService {
+     // employee logic
+     // report logic
+     // notification logic
+   }
+   
+   // After: Split into focused services
+   class EmployeeService {
+     // employee logic only
+   }
+   class ReportService {
+     // report logic
+   }
+   ```
+
+   **Consolidate Duplicate Code:**
+   ```typescript
+   // Before: Duplicated validation
+   async createEmployee(dto: CreateEmployeeDto) {
+     if (!dto.email) throw new BadRequestException('Email required');
+     // ...
+   }
+   async updateEmployee(id: string, dto: UpdateEmployeeDto) {
+     if (!dto.email) throw new BadRequestException('Email required');
+     // ...
+   }
+   
+   // After: Shared validation
+   private validateEmail(email: string) {
+     if (!email) {
+       throw new BadRequestException('Email required');
+     }
+   }
+   ```
+
+3. **Follow Coding Standards**
+   - Maintain code style
+   - Follow naming conventions
+   - Keep methods focused
+   - Follow coding-practice.mdc guidelines
+
+## Step 5: Maintain Backward Compatibility
+
+1. **API Compatibility**
+   - Don't change endpoint signatures
+   - Don't change response formats
+   - Don't remove endpoints without deprecation
+
+2. **Database Compatibility**
+   - Don't change entity structure without migration
+   - Maintain existing column names
+   - Preserve data integrity
+
+3. **Behavior Compatibility**
+   - Maintain same business logic
+   - Preserve error handling behavior
+   - Keep same validation rules
+
+## Step 6: Update Error Handling
+
+1. **Improve Error Messages**
+   - Make messages more descriptive
+   - Add context to errors
+   - Follow error handling patterns
+
+2. **Consolidate Error Handling**
+   ```typescript
+   // Before: Inconsistent error handling
+   if (!entity) throw new Error('Not found');
+   if (!entity) return null;
+   
+   // After: Consistent error handling
+   if (!entity) {
+     throw new NotFoundException('Entity not found');
+   }
+   ```
+
+3. **Follow debugging-practice.mdc guidelines**
+
+## Step 7: Update Tests
+
+1. **Update Existing Tests**
+   - Update tests to match refactored code
+   - Ensure all tests still pass
+   - Fix broken tests
+
+2. **Add New Tests**
+   - Test extracted methods
+   - Test new abstractions
+   - Improve test coverage
+
+3. **Verify Test Coverage**
+   - Check coverage hasn't decreased
+   - Add tests for new code paths
+
+## Step 8: Update Documentation
+
+1. **Update Code Comments**
+   - Update method comments
+   - Document new abstractions
+   - Explain refactoring decisions
+
+2. **Run document-changes Command**
+   - Document refactoring in changelog
+   - Update API documentation if needed
+   - Update architecture docs if structure changed
+
+3. **Document Breaking Changes**
+   - Note any breaking changes
+   - Document migration path
+   - Update deprecation notices
+
+## Step 9: Code Review
+
+1. **Review Checklist**
+   - [ ] Code follows project patterns
+   - [ ] No functionality broken
+   - [ ] Tests updated and passing
+   - [ ] Error handling improved
+   - [ ] Documentation updated
+   - [ ] No breaking changes (or documented)
+   - [ ] Performance maintained/improved
+
+2. **Verify Improvements**
+   - Code is more maintainable
+   - Duplication reduced
+   - Complexity reduced
+   - Type safety improved
+
+## Step 10: Refactoring Checklist
+
+- [ ] Refactoring needs identified
+- [ ] Plan created
+- [ ] Tests reviewed/added
+- [ ] Refactoring implemented in small steps
+- [ ] Backward compatibility maintained
+- [ ] Error handling improved
+- [ ] Tests updated and passing
+- [ ] Documentation updated
+- [ ] Code review completed
+- [ ] No regressions introduced
+
+## Common Refactoring Patterns
+
+### Extract Method
+- Break long methods into smaller methods
+- Improve readability
+- Enable reuse
+
+### Extract Service
+- Split large services
+- Improve separation of concerns
+- Reduce coupling
+
+### Consolidate Duplication
+- Identify repeated code
+- Extract to shared methods
+- Reduce maintenance burden
+
+### Improve Type Safety
+- Replace `any` with proper types
+- Add type guards
+- Use TypeScript features
+
+### Optimize Queries
+- Reduce N+1 queries
+- Add proper indexes
+- Optimize data loading
+
+## Example Refactoring Workflow
+
+**Issue:** EmployeeService is 500 lines, handles too many responsibilities
+
+1. **Identify:** Service handles employees, reports, and notifications
+2. **Plan:** Extract report and notification logic to separate services
+3. **Refactor:** 
+   - Create ReportService
+   - Create NotificationService
+   - Update EmployeeService to use new services
+4. **Test:** Verify all functionality preserved
+5. **Document:** Update documentation, note service split

@@ -1,0 +1,351 @@
+---
+alwaysApply: true
+---
+
+# Add Endpoint Workflow
+
+Use this workflow when adding a new API endpoint to an existing module.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Core Rules (Always Apply)
+- **coding-practice.mdc** - Code style, naming conventions, TypeScript best practices
+- **debugging-practice.mdc** - Error handling patterns, exception handling
+
+### Task-Specific Rules (Always Apply)
+- **controller-patterns.mdc** - Controller structure, decorators, Swagger documentation
+- **service-patterns.mdc** - Service method implementation, business logic, error handling
+- **authentication-patterns.mdc** - JWT authentication, role-based access control, guards
+
+### Task-Specific Rules (Conditional)
+- **dto-patterns.mdc** - Required when creating or updating DTOs for the endpoint
+- **caching-patterns.mdc** - Required when adding caching to GET endpoints or cache invalidation to mutations
+- **entity-patterns.mdc** - Required if the endpoint requires entity changes
+- **database-migrations.mdc** - Required if entity changes need a migration
+
+### Documentation
+- **documentation-patterns.mdc** - Applied in Step 9 when documenting the change
+
+## Step 1: Plan the Endpoint
+
+**Applies Rules:** coding-practice.mdc (for planning and consistency)
+
+1. **Define Requirements**
+   - HTTP method (GET, POST, PATCH, DELETE)
+   - Route path
+   - Request body/query parameters
+   - Response format
+   - Authentication/authorization requirements
+
+2. **Check Existing Endpoints**
+   - Review similar endpoints in the module
+   - Follow existing patterns
+   - Ensure consistency
+
+## Step 2: Create/Update DTOs
+
+**Applies Rules:** dto-patterns.mdc, coding-practice.mdc, debugging-practice.mdc
+
+1. **For POST/PATCH Endpoints**
+   - Create new DTO or update existing following **dto-patterns.mdc**
+   - Add validation decorators following **dto-patterns.mdc**
+   - Add Swagger documentation following **dto-patterns.mdc**
+   - Follow naming conventions from **coding-practice.mdc**
+   - Consider validation error handling from **debugging-practice.mdc**
+
+2. **For GET Endpoints with Query Parameters**
+   - Create query DTO if complex
+   - Extend `BasePaginationDto` if paginated
+   - Add validation for query params
+
+3. **Example DTO Creation**
+   ```typescript
+   export class CreateReportDto {
+     @ApiProperty({ example: '2024-03-15T10:00:00Z' })
+     @IsNotEmpty()
+     @IsDateString()
+     datetime: string;
+     
+     @ApiProperty({ example: '1' })
+     @IsNotEmpty()
+     @IsString()
+     type: string;
+   }
+   ```
+
+## Step 3: Add Service Method
+
+**Applies Rules:** service-patterns.mdc, debugging-practice.mdc, coding-practice.mdc
+
+1. **Implement Business Logic**
+   - Add method to service class following **service-patterns.mdc**
+   - Implement business logic following **service-patterns.mdc**
+   - Handle errors appropriately following **debugging-practice.mdc**
+   - Follow code style from **coding-practice.mdc**
+
+2. **Service Method Pattern**
+   ```typescript
+   async createReport(createDto: CreateReportDto): Promise<Report> {
+     try {
+       const report = this.reportRepository.create(createDto);
+       return await this.reportRepository.save(report);
+     } catch (error) {
+       if (error instanceof ConflictException) {
+         throw error;
+       }
+       throw new BadRequestException(error.message);
+     }
+   }
+   ```
+
+3. **Error Handling**
+   - Use try-catch for database operations
+   - Throw appropriate NestJS exceptions
+   - Provide meaningful error messages
+
+## Step 4: Add Controller Method
+
+**Applies Rules:** controller-patterns.mdc, coding-practice.mdc, debugging-practice.mdc
+
+1. **Add Endpoint to Controller**
+   - Choose appropriate HTTP decorator following **controller-patterns.mdc**
+   - Add route path following **controller-patterns.mdc**
+   - Inject DTOs for validation following **controller-patterns.mdc**
+   - Call service method following **controller-patterns.mdc**
+   - Follow code style from **coding-practice.mdc**
+
+2. **Controller Method Pattern**
+
+   **POST Endpoint:**
+   ```typescript
+   @Post()
+   @ApiOperation({ summary: 'Create new report' })
+   @ApiResponse({ status: 201, description: 'Report created' })
+   @ApiResponse({ status: 400, description: 'Bad request' })
+   @UseGuards(RolesGuard)
+   @Roles(Role.ADMIN)
+   async create(@Body() createDto: CreateReportDto) {
+     return this.reportService.createReport(createDto);
+   }
+   ```
+
+   **GET Endpoint:**
+   ```typescript
+   @Get()
+   @ApiOperation({ summary: 'Get all reports' })
+   @CacheTTL(1800000) // 30 minutes
+   async findAll(@Query() query: ReportPaginationDto) {
+     return this.reportService.findAll(query);
+   }
+   ```
+
+   **GET by ID:**
+   ```typescript
+   @Get(':id')
+   @ApiOperation({ summary: 'Get report by ID' })
+   @ApiResponse({ status: 200, description: 'Report found' })
+   @ApiResponse({ status: 404, description: 'Report not found' })
+   @CacheTTL(3600000) // 1 hour
+   async findOne(@Param('id') id: string) {
+     return this.reportService.findOne(id);
+   }
+   ```
+
+   **PATCH Endpoint:**
+   ```typescript
+   @Patch(':id')
+   @ApiOperation({ summary: 'Update report' })
+   @NoCache()
+   @UseGuards(RolesGuard)
+   @Roles(Role.ADMIN)
+   async update(
+     @Param('id') id: string,
+     @Body() updateDto: UpdateReportDto,
+   ) {
+     const result = await this.reportService.update(id, updateDto);
+     await this.cacheService.clearCache('report:*');
+     return result;
+   }
+   ```
+
+   **DELETE Endpoint:**
+   ```typescript
+   @Delete(':id')
+   @ApiOperation({ summary: 'Delete report' })
+   @NoCache()
+   @UseGuards(RolesGuard)
+   @Roles(Role.SUPER_ADMIN)
+   async remove(@Param('id') id: string) {
+     await this.reportService.remove(id);
+     await this.cacheService.clearCache('report:*');
+     return { message: 'Report deleted successfully' };
+   }
+   ```
+
+## Step 5: Add Swagger Documentation
+
+**Applies Rules:** controller-patterns.mdc
+
+1. **ApiOperation**
+   - Add to every endpoint following **controller-patterns.mdc**
+   - Provide clear summary following **controller-patterns.mdc**
+   - Add description if needed following **controller-patterns.mdc**
+
+2. **ApiResponse**
+   - Document all possible responses
+   - Include status codes
+   - Document response types
+
+3. **ApiParam/ApiQuery**
+   - Document path parameters
+   - Document query parameters
+   - Provide examples
+
+4. **Example:**
+   ```typescript
+   @Get(':id')
+   @ApiOperation({
+     summary: 'Get report by ID',
+     description: 'Retrieves a single report by its unique identifier',
+   })
+   @ApiParam({
+     name: 'id',
+     description: 'Report UUID',
+     example: '123e4567-e89b-12d3-a456-426614174000',
+   })
+   @ApiResponse({
+     status: 200,
+     description: 'Report found',
+     type: Report,
+   })
+   @ApiResponse({
+     status: 404,
+     description: 'Report not found',
+   })
+   async findOne(@Param('id') id: string) {
+     return this.reportService.findOne(id);
+   }
+   ```
+
+## Step 6: Add Authentication/Authorization
+
+**Applies Rules:** authentication-patterns.mdc, debugging-practice.mdc
+
+1. **Apply Guards**
+   - Use `@UseGuards(JwtAuthGuard)` for authentication following **authentication-patterns.mdc**
+   - Use `@UseGuards(RolesGuard)` with `@Roles()` for authorization following **authentication-patterns.mdc**
+   - Use `@Public()` for public endpoints following **authentication-patterns.mdc**
+   - Handle auth errors following **debugging-practice.mdc**
+
+2. **Guard Patterns**
+   ```typescript
+   // Public endpoint
+   @Public()
+   @Get('public-data')
+   async getPublicData() {}
+   
+   // Authenticated only
+   @UseGuards(JwtAuthGuard)
+   @Get('profile')
+   async getProfile() {}
+   
+   // Admin only
+   @UseGuards(JwtAuthGuard, RolesGuard)
+   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+   @Post()
+   async create() {}
+   
+   // Super Admin only
+   @UseGuards(JwtAuthGuard, RolesGuard)
+   @Roles(Role.SUPER_ADMIN)
+   @Delete(':id')
+   async remove() {}
+   ```
+
+## Step 7: Add Caching (if applicable)
+
+**Applies Rules:** caching-patterns.mdc, controller-patterns.mdc
+
+1. **GET Endpoints**
+   - Add `@CacheTTL()` decorator following **caching-patterns.mdc**
+   - Choose appropriate TTL following **caching-patterns.mdc**
+   - Apply caching decorators following **controller-patterns.mdc**
+
+2. **Mutation Endpoints**
+   - Add `@NoCache()` decorator
+   - Clear related caches after mutation
+   - Use `cacheService.clearCache()`
+
+3. **Example:**
+   ```typescript
+   @Get()
+   @CacheTTL(1800000) // 30 minutes
+   async findAll() {}
+   
+   @Post()
+   @NoCache()
+   async create(@Body() createDto: CreateDto) {
+     const result = await this.service.create(createDto);
+     await this.cacheService.clearCache('entity:*');
+     return result;
+   }
+   ```
+
+## Step 8: Test the Endpoint
+
+1. **Manual Testing**
+   - Test with Swagger UI
+   - Test all scenarios (success, errors)
+   - Verify authentication/authorization
+   - Test validation
+
+2. **Test Cases**
+   - Valid request
+   - Invalid request (validation errors)
+   - Unauthorized access
+   - Not found scenarios
+   - Edge cases
+
+3. **Verify**
+   - Response format matches documentation
+   - Error messages are clear
+   - Status codes are correct
+   - Caching works (if applicable)
+
+## Step 9: Document Changes
+
+**Applies Rules:** documentation-patterns.mdc
+
+1. **Run document-changes Command**
+   - Auto-generate API documentation following **documentation-patterns.mdc**
+   - Update changelog following **documentation-patterns.mdc**
+   - Update context files following **documentation-patterns.mdc**
+
+2. **Review Generated Documentation**
+   - Verify endpoint documented correctly
+   - Check API documentation index
+   - Update if needed
+
+## Step 10: Endpoint Checklist
+
+- [ ] DTO created/updated with validation
+- [ ] Service method implemented
+- [ ] Controller method added
+- [ ] Swagger documentation complete
+- [ ] Authentication/authorization configured
+- [ ] Caching added (if applicable)
+- [ ] Error handling implemented
+- [ ] Manual testing completed
+- [ ] Documentation generated
+
+## Example: Adding Export Endpoint
+
+1. **DTO:** Create `GenerateCSVDto` with date range
+2. **Service:** Add `generateCSV(dto: GenerateCSVDto)` method
+3. **Controller:** Add `@Get('export')` endpoint
+4. **Swagger:** Document endpoint with examples
+5. **Auth:** Require authentication
+6. **Test:** Test CSV generation
+7. **Document:** Run `document-changes`

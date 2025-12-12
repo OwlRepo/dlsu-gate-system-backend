@@ -1,0 +1,194 @@
+---
+alwaysApply: true
+---
+
+# Implement Feature Workflow
+
+Use this workflow when implementing a new feature in the NestJS application.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Core Rules (Always Apply)
+- **coding-practice.mdc** - Code style, naming conventions, TypeScript best practices
+- **debugging-practice.mdc** - Error handling patterns, exception handling
+- **feature-implementation.mdc** - Module structure, organization patterns
+
+### Task-Specific Rules (Always Apply)
+- **entity-patterns.mdc** - TypeORM entity definitions and structure
+- **dto-patterns.mdc** - Data transfer objects and validation
+- **service-patterns.mdc** - Service layer implementation and business logic
+- **controller-patterns.mdc** - Controller structure, endpoints, Swagger docs
+- **authentication-patterns.mdc** - JWT authentication and role-based access control
+- **database-migrations.mdc** - Database schema changes and migrations
+- **documentation-patterns.mdc** - Auto-documentation standards
+
+### Task-Specific Rules (Conditional)
+- **caching-patterns.mdc** - Required when adding caching to endpoints
+
+## Step 1: Plan the Feature
+
+**Applies Rules:** feature-implementation.mdc, coding-practice.mdc
+
+1. Identify the feature requirements
+2. Determine which module it belongs to (or if new module needed)
+3. List required entities, DTOs, and endpoints
+4. Identify authentication/authorization requirements
+
+## Step 2: Create Entity
+
+**Applies Rules:** entity-patterns.mdc, coding-practice.mdc, database-migrations.mdc
+
+1. Create entity file: `src/{module}/entities/{entity}.entity.ts` following **entity-patterns.mdc**
+2. Define entity with TypeORM decorators following **entity-patterns.mdc**:
+   - `@Entity('table_name')` - Specify table name
+   - `@PrimaryGeneratedColumn()` or `@PrimaryGeneratedColumn('uuid')`
+   - `@Column()` decorators for all fields
+   - `@CreateDateColumn()` and `@UpdateDateColumn()` for timestamps
+3. Follow naming conventions from **coding-practice.mdc**
+4. Use snake_case for database columns, camelCase for TypeScript properties (from **entity-patterns.mdc**)
+5. Note: Migration will be generated in Step 8 following **database-migrations.mdc**
+
+## Step 3: Create DTOs
+
+**Applies Rules:** dto-patterns.mdc, coding-practice.mdc, debugging-practice.mdc
+
+1. Create `src/{module}/dto/create-{entity}.dto.ts` following **dto-patterns.mdc**:
+   - Add validation decorators (`@IsNotEmpty`, `@IsString`, etc.) following **dto-patterns.mdc**
+   - Add Swagger decorators (`@ApiProperty`, `@ApiPropertyOptional`) following **dto-patterns.mdc**
+   - Include examples and descriptions following **dto-patterns.mdc**
+   - Follow naming conventions from **coding-practice.mdc**
+
+2. Create `src/{module}/dto/update-{entity}.dto.ts` following **dto-patterns.mdc**:
+   - Extend `PartialType(Create{Entity}Dto)` following **dto-patterns.mdc**
+   - Add any update-specific fields
+
+3. Create pagination DTO if needed following **dto-patterns.mdc**:
+   - Extend `BasePaginationDto`
+   - Add module-specific query parameters
+
+4. Consider validation error handling from **debugging-practice.mdc**
+
+## Step 4: Create Service
+
+**Applies Rules:** service-patterns.mdc, debugging-practice.mdc, coding-practice.mdc, entity-patterns.mdc
+
+1. Create `src/{module}/{module}.service.ts` following **service-patterns.mdc**
+2. Inject repository using `@InjectRepository()` following **service-patterns.mdc**
+3. Implement CRUD methods following **service-patterns.mdc**:
+   - `create(createDto: CreateDto): Promise<Entity>`
+   - `findAll(query: PaginationDto): Promise<{ data: Entity[], total: number }>`
+   - `findOne(id: string): Promise<Entity>`
+   - `update(id: string, updateDto: UpdateDto): Promise<Entity>`
+   - `remove(id: string): Promise<void>`
+4. Add business logic methods as needed following **service-patterns.mdc**
+5. Implement error handling with try-catch following **debugging-practice.mdc**
+6. Throw appropriate NestJS exceptions following **debugging-practice.mdc**
+7. Work with entities following **entity-patterns.mdc**
+8. Follow code style from **coding-practice.mdc**
+
+## Step 5: Create Controller
+
+**Applies Rules:** controller-patterns.mdc, authentication-patterns.mdc, debugging-practice.mdc, coding-practice.mdc, dto-patterns.mdc
+
+1. Create `src/{module}/{module}.controller.ts` following **controller-patterns.mdc**
+2. Add controller decorators following **controller-patterns.mdc**:
+   - `@ApiTags('{Module}')` - Swagger grouping
+   - `@ApiBearerAuth()` - Swagger auth
+   - `@UseGuards(JwtAuthGuard)` - Authentication (from **authentication-patterns.mdc**)
+   - `@Controller('{module}')` - Route prefix
+3. Implement endpoints following **controller-patterns.mdc**:
+   - `@Post()` - Create
+   - `@Get()` - List with pagination
+   - `@Get(':id')` - Get by ID
+   - `@Patch(':id')` - Update
+   - `@Delete(':id')` - Delete
+4. Add Swagger documentation following **controller-patterns.mdc**:
+   - `@ApiOperation()` for each endpoint
+   - `@ApiResponse()` for response types
+5. Apply role guards where needed following **authentication-patterns.mdc**:
+   - `@UseGuards(RolesGuard)`
+   - `@Roles(Role.ADMIN, Role.SUPER_ADMIN)`
+6. Use DTOs following **dto-patterns.mdc**
+7. Handle errors following **debugging-practice.mdc**
+8. Follow code style from **coding-practice.mdc**
+
+## Step 6: Create Module
+
+1. Create `src/{module}/{module}.module.ts`
+2. Import `TypeOrmModule.forFeature([{Entity}])`
+3. Register controller and service
+4. Export service if used by other modules
+
+## Step 7: Register in AppModule
+
+1. Open `src/app.module.ts`
+2. Import the new module
+3. Add to `imports` array in `@Module` decorator
+
+## Step 8: Generate Migration
+
+**Applies Rules:** database-migrations.mdc, entity-patterns.mdc, coding-practice.mdc
+
+1. Review entity changes following **entity-patterns.mdc**
+2. Generate migration following **database-migrations.mdc**:
+   ```bash
+   npm run migration:generate -- src/migrations/Add{Entity}Table
+   ```
+3. Review generated migration following **database-migrations.mdc**
+4. Test migration up and down following **database-migrations.mdc**
+5. Follow code style from **coding-practice.mdc**
+
+## Step 9: Add Caching (if applicable)
+
+**Applies Rules:** caching-patterns.mdc, controller-patterns.mdc
+
+1. Add `@CacheTTL()` to GET endpoints following **caching-patterns.mdc**
+2. Add `@NoCache()` to mutation endpoints following **caching-patterns.mdc**
+3. Clear cache after mutations following **caching-patterns.mdc**:
+   ```typescript
+   await this.cacheService.clearCache('{module}:*');
+   ```
+4. Apply caching decorators following **controller-patterns.mdc**
+
+## Step 10: Test the Feature
+
+1. Test all endpoints manually
+2. Verify authentication/authorization
+3. Test error cases (not found, validation errors, etc.)
+4. Verify Swagger documentation
+5. Test pagination if applicable
+
+## Step 11: Document Changes
+
+**Applies Rules:** documentation-patterns.mdc
+
+1. Run `document-changes` command to auto-generate documentation following **documentation-patterns.mdc**
+2. Review generated feature documentation following **documentation-patterns.mdc**
+3. Update context files if needed following **documentation-patterns.mdc**
+
+## Checklist
+
+- [ ] Entity created with proper decorators
+- [ ] DTOs created with validation and Swagger docs
+- [ ] Service implements all CRUD operations
+- [ ] Controller has all endpoints with proper guards
+- [ ] Module created and registered in AppModule
+- [ ] Migration generated and tested
+- [ ] Caching added where appropriate
+- [ ] Authentication/authorization configured
+- [ ] Swagger documentation complete
+- [ ] Manual testing completed
+- [ ] Documentation generated
+
+## Example: Creating Employee Module
+
+1. Entity: `src/employee/entities/employee.entity.ts`
+2. DTOs: `create-employee.dto.ts`, `update-employee.dto.ts`
+3. Service: `src/employee/employee.service.ts`
+4. Controller: `src/employee/employee.controller.ts`
+5. Module: `src/employee/employee.module.ts`
+6. Register in `app.module.ts`
+7. Migration: `AddEmployeeTable`
+8. Document: Run `document-changes`

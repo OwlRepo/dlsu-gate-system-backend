@@ -1,0 +1,90 @@
+---
+alwaysApply: true
+---
+
+# Coding Practice Standards
+
+## Related Rules
+
+This rule applies to all code in the project. When working with any other rule, also follow coding-practice.mdc for:
+- File naming conventions
+- Code formatting standards
+- TypeScript best practices
+- Import organization
+- Code organization patterns
+
+**Related Rules:**
+- All other rules reference this for code style consistency
+- **debugging-practice.mdc** - Error handling follows coding standards
+- **service-patterns.mdc** - Service code follows these conventions
+- **controller-patterns.mdc** - Controller code follows these conventions
+- **dto-patterns.mdc** - DTO code follows these conventions
+- **entity-patterns.mdc** - Entity code follows these conventions
+
+## When to Use
+
+This rule is **always applied** to all code. It defines the foundation for all coding standards in the project.
+
+# Coding Practice Standards
+
+## TypeScript & NestJS Conventions
+
+### File Naming
+- Use **kebab-case** for all file names: `employee.service.ts`, `create-employee.dto.ts`
+- Use **PascalCase** for class names: `EmployeeService`, `CreateEmployeeDto`
+- Entity files: `{entity-name}.entity.ts` (e.g., `employee.entity.ts`)
+- DTO files: `{action}-{entity}.dto.ts` (e.g., `create-employee.dto.ts`, `update-employee.dto.ts`)
+- Module files: `{module-name}.module.ts`
+- Service files: `{module-name}.service.ts`
+- Controller files: `{module-name}.controller.ts`
+
+### Import Organization
+1. External packages (NestJS, third-party)
+2. Internal modules (relative imports from other modules)
+3. Local imports (from same module)
+4. Type imports (use `import type` when appropriate)
+
+Example:
+```typescript
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Employee } from './entities/employee.entity';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+```
+
+### Code Formatting
+- Use 2 spaces for indentation
+- Use single quotes for strings (unless string contains single quotes)
+- Use trailing commas in multi-line objects/arrays
+- Maximum line length: 120 characters
+- Always use semicolons
+- Use `async/await` instead of `.then()/.catch()` chains
+
+### TypeScript Best Practices
+- Always define return types for functions
+- Use `interface` for object shapes, `type` for unions/intersections
+- Avoid `any` - use `unknown` if type is truly unknown
+- Use strict null checks where possible
+- Prefer `const` over `let`, avoid `var`
+- Use optional chaining (`?.`) and nullish coalescing (`??`) appropriately
+
+### NestJS Patterns
+- All services must be decorated with `@Injectable()`
+- Use dependency injection via constructor
+- Prefer async methods for all service methods
+- Use NestJS built-in exceptions (NotFoundException, BadRequestException, etc.)
+- Keep controllers thin - business logic belongs in services
+
+### Code Organization
+- One class per file
+- Group related functionality in modules
+- Keep files focused and under 300 lines when possible
+- Extract complex logic into private methods
+- Use meaningful variable and function names
+
+### Comments
+- Use JSDoc comments for public methods
+- Explain "why" not "what" in comments
+- Keep comments up-to-date with code changes
+- Remove commented-out code before committing

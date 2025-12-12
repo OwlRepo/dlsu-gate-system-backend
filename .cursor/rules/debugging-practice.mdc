@@ -1,0 +1,236 @@
+---
+alwaysApply: true
+---
+
+# Debugging and Error Handling Practices
+
+## Related Rules
+
+When working with error handling, also consider:
+- **coding-practice.mdc** - Code style for error handling code
+- **service-patterns.mdc** - Error handling in services
+- **controller-patterns.mdc** - Error handling in controllers
+- **dto-patterns.mdc** - Validation error handling
+
+**Related Rules:**
+- **service-patterns.mdc** - Services use these error handling patterns
+- **controller-patterns.mdc** - Controllers use these error handling patterns
+- **dto-patterns.mdc** - DTO validation errors follow these patterns
+- **authentication-patterns.mdc** - Auth errors follow these patterns
+
+## When to Use
+
+This rule applies to:
+- All service methods (error handling)
+- All controller methods (error responses)
+- DTO validation (validation errors)
+- Authentication flows (auth errors)
+- Any code that throws exceptions
+
+# Debugging and Error Handling Practices
+
+## Exception Handling
+
+### Use NestJS Built-in Exceptions
+Always use NestJS built-in HTTP exceptions instead of generic Error:
+
+```typescript
+import {
+  NotFoundException,
+  BadRequestException,
+  UnauthorizedException,
+  ForbiddenException,
+  ConflictException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+```
+
+### Exception Usage Patterns
+
+**NotFoundException** - Resource not found:
+```typescript
+if (!employee) {
+  throw new NotFoundException('Employee not found');
+}
+```
+
+**BadRequestException** - Invalid input:
+```typescript
+if (!isValid) {
+  throw new BadRequestException('Invalid input data');
+}
+```
+
+**UnauthorizedException** - Authentication failed:
+```typescript
+if (!isValidToken) {
+  throw new UnauthorizedException('Invalid or expired token');
+}
+```
+
+**ForbiddenException** - Authorization failed:
+```typescript
+if (!hasPermission) {
+  throw new ForbiddenException('Insufficient permissions');
+}
+```
+
+**ConflictException** - Resource conflict (e.g., duplicate):
+```typescript
+if (existingUser) {
+  throw new ConflictException('User with this email already exists');
+}
+```
+
+**UnprocessableEntityException** - Validation failed:
+```typescript
+if (validationErrors.length > 0) {
+  throw new UnprocessableEntityException(validationErrors);
+}
+```
+
+## Error Handling in Services
+
+### Try-Catch Pattern
+Always wrap database operations and external calls in try-catch:
+
+```typescript
+async create(createDto: CreateEmployeeDto) {
+  try {
+    // Check for duplicates
+    const existing = await this.employeeRepository.findOne({
+      where: { email: createDto.email },
+    });
+    
+    if (existing) {
+      throw new ConflictException('Employee with this email already exists');
+    }
+    
+    // Create entity
+    const employee = this.employeeRepository.create(createDto);
+    return await this.employeeRepository.save(employee);
+  } catch (error) {
+    // Re-throw NestJS exceptions
+    if (
+      error instanceof BadRequestException ||
+      error instanceof ConflictException
+    ) {
+      throw error;
+    }
+    // Wrap unexpected errors
+    throw new BadRequestException(error.message);
+  }
+}
+```
+
+### Error Message Guidelines
+- Provide clear, actionable error messages
+- Include relevant context (e.g., which field failed)
+- Avoid exposing sensitive information
+- Use consistent error message format
+
+## Logging Standards
+
+### Use NestJS Logger
+```typescript
+import { Logger } from '@nestjs/common';
+
+export class DatabaseSyncService {
+  private readonly logger = new Logger(DatabaseSyncService.name);
+  
+  async syncData() {
+    this.logger.log('Starting database sync');
+    try {
+      // ... sync logic
+      this.logger.log('Database sync completed successfully');
+    } catch (error) {
+      this.logger.error('Database sync failed', error.stack);
+      throw error;
+    }
+  }
+}
+```
+
+### Log Levels
+- **log()** - General information, successful operations
+- **error()** - Errors that need attention
+- **warn()** - Warnings, non-critical issues
+- **debug()** - Debug information (development only)
+- **verbose()** - Detailed information (development only)
+
+### Logging Best Practices
+- Log at method entry/exit for critical operations
+- Log errors with stack traces: `this.logger.error('Message', error.stack)`
+- Include context in log messages
+- Don't log sensitive data (passwords, tokens, PII)
+- Use structured logging when possible
+
+## Error Response Format
+
+NestJS automatically formats exceptions. Ensure consistent format:
+
+```json
+{
+  "statusCode": 404,
+  "message": "Employee not found",
+  "error": "Not Found"
+}
+```
+
+For validation errors:
+```json
+{
+  "statusCode": 400,
+  "message": ["email must be an email", "password must be longer than 8 characters"],
+  "error": "Bad Request"
+}
+```
+
+## Debugging Workflow
+
+1. **Identify the Error**
+   - Check error message and stack trace
+   - Identify which service/controller method failed
+   - Check request/response data
+
+2. **Check Logs**
+   - Review application logs
+   - Check database query logs (if enabled)
+   - Review error logs in `logs/error.log`
+
+3. **Reproduce**
+   - Create a test case that reproduces the error
+   - Use the same input data
+   - Check if error is consistent
+
+4. **Isolate**
+   - Narrow down to specific code path
+   - Check database state
+   - Verify input data format
+
+5. **Fix and Verify**
+   - Implement fix
+   - Test with same input
+   - Verify fix doesn't break other functionality
+
+## Common Error Scenarios
+
+### Database Connection Errors
+- Check database connection string
+- Verify database is running
+- Check connection pool settings
+
+### Validation Errors
+- Verify DTO validation decorators
+- Check request body format
+- Ensure all required fields are present
+
+### Authentication Errors
+- Verify JWT token format
+- Check token expiration
+- Verify token blacklist status
+
+### TypeORM Errors
+- Check entity definitions
+- Verify column types match database
+- Check relationships are properly defined

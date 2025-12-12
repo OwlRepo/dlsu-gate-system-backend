@@ -1,0 +1,320 @@
+---
+alwaysApply: true
+---
+
+# Service Layer Patterns
+
+## Related Rules
+
+When working with services, also consider:
+- **coding-practice.mdc** - Code style for services
+- **entity-patterns.mdc** - Services work with entities
+- **debugging-practice.mdc** - Error handling in services
+- **caching-patterns.mdc** - Cache operations in services
+- **dto-patterns.mdc** - Services receive DTOs
+
+**Related Rules:**
+- **coding-practice.mdc** - Service code style and naming
+- **entity-patterns.mdc** - Services use entities via repositories
+- **debugging-practice.mdc** - Services handle errors and exceptions
+- **caching-patterns.mdc** - Services perform cache operations
+- **dto-patterns.mdc** - Services receive DTOs as parameters
+- **controller-patterns.mdc** - Services are called from controllers
+
+## When to Use
+
+This rule applies when:
+- Creating or updating services
+- Implementing business logic
+- Working with repositories
+- Handling database operations
+- Implementing error handling
+- Adding cache operations
+
+# Service Layer Patterns
+
+## Service Structure
+
+Services contain business logic and interact with repositories:
+
+```typescript
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Employee } from './entities/employee.entity';
+import { CreateEmployeeDto } from './dto/create-employee.dto';
+import { UpdateEmployeeDto } from './dto/update-employee.dto';
+
+@Injectable()
+export class EmployeeService {
+  constructor(
+    @InjectRepository(Employee)
+    private readonly employeeRepository: Repository<Employee>,
+  ) {}
+
+  // Service methods here
+}
+```
+
+## Repository Injection
+
+### Single Repository
+```typescript
+constructor(
+  @InjectRepository(Employee)
+  private readonly employeeRepository: Repository<Employee>,
+) {}
+```
+
+### Multiple Repositories
+```typescript
+constructor(
+  @InjectRepository(Employee)
+  private readonly employeeRepository: Repository<Employee>,
+  @InjectRepository(Admin)
+  private readonly adminRepository: Repository<Admin>,
+) {}
+```
+
+## CRUD Operations
+
+### Create
+```typescript
+async create(createDto: CreateEmployeeDto): Promise<Employee> {
+  try {
+    // Check for duplicates
+    const existing = await this.employeeRepository.findOne({
+      where: { email: createDto.email },
+    });
+    
+    if (existing) {
+      throw new ConflictException('Employee with this email already exists');
+    }
+    
+    // Create and save
+    const employee = this.employeeRepository.create(createDto);
+    return await this.employeeRepository.save(employee);
+  } catch (error) {
+    if (error instanceof ConflictException) {
+      throw error;
+    }
+    throw new BadRequestException(error.message);
+  }
+}
+```
+
+### Read (Find All)
+```typescript
+async findAll(query: PaginationDto): Promise<{ data: Employee[]; total: number }> {
+  const { page = 1, limit = 10, search } = query;
+  const skip = (page - 1) * limit;
+  
+  const queryBuilder = this.employeeRepository.createQueryBuilder('employee');
+  
+  if (search) {
+    queryBuilder.where(
+      'employee.first_name ILIKE :search OR employee.last_name ILIKE :search',
+      { search: `%${search}%` },
+    );
+  }
+  
+  const [data, total] = await queryBuilder
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
+  
+  return { data, total };
+}
+```
+
+### Read (Find One)
+```typescript
+async findOne(id: string): Promise<Employee> {
+  const employee = await this.employeeRepository.findOne({ where: { id } });
+  
+  if (!employee) {
+    throw new NotFoundException('Employee not found');
+  }
+  
+  return employee;
+}
+```
+
+### Update
+```typescript
+async update(id: string, updateDto: UpdateEmployeeDto): Promise<Employee> {
+  const employee = await this.findOne(id); // Reuse findOne for validation
+  
+  Object.assign(employee, updateDto);
+  return await this.employeeRepository.save(employee);
+}
+```
+
+### Delete
+```typescript
+async remove(id: string): Promise<void> {
+  const employee = await this.findOne(id); // Reuse findOne for validation
+  await this.employeeRepository.remove(employee);
+}
+```
+
+## Error Handling
+
+### Try-Catch Pattern
+Always wrap database operations in try-catch:
+
+```typescript
+async create(createDto: CreateEmployeeDto) {
+  try {
+    // Business logic
+    const employee = this.employeeRepository.create(createDto);
+    return await this.employeeRepository.save(employee);
+  } catch (error) {
+    // Re-throw NestJS exceptions
+    if (
+      error instanceof BadRequestException ||
+      error instanceof ConflictException
+    ) {
+      throw error;
+    }
+    // Wrap unexpected errors
+    throw new BadRequestException(error.message);
+  }
+}
+```
+
+### Exception Types
+- `NotFoundException` - Resource not found
+- `BadRequestException` - Invalid input
+- `ConflictException` - Duplicate resource
+- `UnauthorizedException` - Authentication failed
+- `ForbiddenException` - Authorization failed
+
+## Query Building
+
+### Simple Query
+```typescript
+const employees = await this.employeeRepository.find({
+  where: { is_active: true },
+  order: { created_at: 'DESC' },
+});
+```
+
+### Query Builder (Complex Queries)
+```typescript
+const queryBuilder = this.employeeRepository.createQueryBuilder('employee');
+
+if (search) {
+  queryBuilder.where(
+    'employee.first_name ILIKE :search OR employee.email ILIKE :search',
+    { search: `%${search}%` },
+  );
+}
+
+if (isActive !== undefined) {
+  queryBuilder.andWhere('employee.is_active = :isActive', { isActive });
+}
+
+const results = await queryBuilder
+  .orderBy('employee.created_at', 'DESC')
+  .skip(skip)
+  .take(limit)
+  .getManyAndCount();
+```
+
+## Service Best Practices
+
+1. **Single Responsibility**
+   - Each service should handle one domain/entity
+   - Extract complex logic into private methods
+   - Keep methods focused and small
+
+2. **Reuse Methods**
+   - Use `findOne()` for validation in update/delete
+   - Extract common query logic into private methods
+   - Don't duplicate code
+
+3. **Error Handling**
+   - Always validate input
+   - Check for existence before operations
+   - Provide meaningful error messages
+   - Re-throw NestJS exceptions, wrap others
+
+4. **Async/Await**
+   - Always use async/await, never use .then()
+   - Handle promises properly
+   - Use Promise.all() for parallel operations
+
+5. **Type Safety**
+   - Always define return types
+   - Use DTOs for input validation
+   - Use entities for database operations
+
+6. **Transaction Handling**
+   - Use transactions for multi-step operations
+   - Use query runner for complex transactions
+
+## Advanced Patterns
+
+### Transaction Example
+```typescript
+async transferData(fromId: string, toId: string) {
+  const queryRunner = this.employeeRepository.manager.connection.createQueryRunner();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+  
+  try {
+    // Multiple operations
+    await queryRunner.manager.update(Employee, fromId, { status: 'transferred' });
+    await queryRunner.manager.update(Employee, toId, { status: 'active' });
+    
+    await queryRunner.commitTransaction();
+  } catch (error) {
+    await queryRunner.rollbackTransaction();
+    throw error;
+  } finally {
+    await queryRunner.release();
+  }
+}
+```
+
+### OnModuleInit Pattern
+Implement `OnModuleInit` for initialization logic:
+
+```typescript
+import { Injectable, OnModuleInit } from '@nestjs/common';
+
+@Injectable()
+export class EmployeeService implements OnModuleInit {
+  async onModuleInit() {
+    // Initialization logic (e.g., seed data, setup)
+    await this.initializeDefaultData();
+  }
+  
+  private async initializeDefaultData() {
+    // Setup logic
+  }
+}
+```
+
+### Logger Usage
+```typescript
+import { Injectable, Logger } from '@nestjs/common';
+
+@Injectable()
+export class EmployeeService {
+  private readonly logger = new Logger(EmployeeService.name);
+  
+  async create(createDto: CreateEmployeeDto) {
+    this.logger.log(`Creating employee: ${createDto.email}`);
+    try {
+      // ... create logic
+      this.logger.log(`Employee created successfully: ${employee.id}`);
+      return employee;
+    } catch (error) {
+      this.logger.error(`Failed to create employee: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+}
+```

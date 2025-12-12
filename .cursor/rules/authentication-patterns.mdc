@@ -1,0 +1,340 @@
+---
+alwaysApply: true
+---
+
+# Authentication & Authorization Patterns
+
+## Related Rules
+
+When working with authentication, also consider:
+- **controller-patterns.mdc** - Guards are applied in controllers
+- **debugging-practice.mdc** - Auth error handling
+- **coding-practice.mdc** - Code style for auth code
+
+**Related Rules:**
+- **controller-patterns.mdc** - Guards are used in controllers
+- **debugging-practice.mdc** - Auth errors follow error handling patterns
+- **coding-practice.mdc** - Auth code follows coding standards
+
+## When to Use
+
+This rule applies when:
+- Adding authentication to endpoints
+- Implementing role-based access control
+- Working with JWT tokens
+- Applying guards to controllers
+- Creating public endpoints
+
+# Authentication & Authorization Patterns
+
+## JWT Authentication
+
+### JwtAuthGuard Usage
+Apply `JwtAuthGuard` to protect endpoints:
+
+```typescript
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+
+@UseGuards(JwtAuthGuard)
+@Controller('employee')
+export class EmployeeController {}
+```
+
+### Public Endpoints
+Use `@Public()` decorator to bypass authentication:
+
+```typescript
+import { Public } from '../auth/public.decorator';
+
+@Public()
+@Post('login')
+async login(@Body() loginDto: LoginDto) {
+  return this.loginService.login(loginDto);
+}
+```
+
+## Role-Based Access Control
+
+### Role Enum
+Roles are defined in `src/auth/enums/role.enum.ts`:
+
+```typescript
+export enum Role {
+  EMPLOYEE = 'employee',
+  ADMIN = 'admin',
+  SUPER_ADMIN = 'super-admin',
+}
+```
+
+### Roles Decorator
+Use `@Roles()` decorator to specify required roles:
+
+```typescript
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/enums/role.enum';
+
+@Post()
+@UseGuards(RolesGuard)
+@Roles(Role.ADMIN, Role.SUPER_ADMIN)
+async create(@Body() createDto: CreateEmployeeDto) {
+  return this.service.create(createDto);
+}
+```
+
+### RolesGuard
+Always use `RolesGuard` with `@Roles()` decorator:
+
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN)
+@Delete(':id')
+async remove(@Param('id') id: string) {
+  return this.service.remove(id);
+}
+```
+
+## Authentication Flow
+
+### Login Endpoint Pattern
+```typescript
+@Public()
+@Post('login')
+@ApiOperation({ summary: 'Employee login' })
+@ApiResponse({ status: 200, description: 'Login successful' })
+@ApiResponse({ status: 401, description: 'Invalid credentials' })
+async login(@Body() loginDto: LoginDto) {
+  return this.authService.login(loginDto);
+}
+```
+
+### JWT Token Generation
+Tokens are generated in auth services:
+
+```typescript
+async login(employee: Employee) {
+  const payload = {
+    username: employee.username,
+    sub: employee.id,
+    role: 'employee',
+  };
+  
+  return {
+    access_token: 'Bearer ' + this.jwtService.sign(payload),
+    user: {
+      ...employee,
+      role: 'employee',
+    },
+  };
+}
+```
+
+### Token Validation
+The `JwtAuthGuard` automatically:
+- Extracts token from `Authorization` header
+- Validates token signature
+- Checks token blacklist
+- Attaches user to request object
+
+## Accessing Authenticated User
+
+### In Controllers
+Access user from request:
+
+```typescript
+import { Request } from '@nestjs/common';
+
+@Get('profile')
+async getProfile(@Request() req) {
+  const userId = req.user.sub;
+  const userRole = req.user.role;
+  return this.service.getProfile(userId);
+}
+```
+
+### In Services
+Pass user info from controller:
+
+```typescript
+// Controller
+@Get('profile')
+async getProfile(@Request() req) {
+  return this.service.getProfile(req.user.sub);
+}
+
+// Service
+async getProfile(userId: string) {
+  return this.repository.findOne({ where: { id: userId } });
+}
+```
+
+## Token Blacklist
+
+### Token Blacklist Service
+The system tracks blacklisted tokens:
+
+```typescript
+// Token is automatically checked on each request
+// Blacklisted tokens are rejected with 401
+```
+
+### Logout Pattern
+```typescript
+@Post('logout')
+async logout(@Request() req) {
+  const token = this.extractTokenFromHeader(req);
+  await this.tokenBlacklistService.blacklistToken(token);
+  return { message: 'Logged out successfully' };
+}
+```
+
+## Authorization Patterns
+
+### Admin Only
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.SUPER_ADMIN)
+@Post()
+async create(@Body() createDto: CreateDto) {
+  return this.service.create(createDto);
+}
+```
+
+### Super Admin Only
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.SUPER_ADMIN)
+@Delete(':id')
+async remove(@Param('id') id: string) {
+  return this.service.remove(id);
+}
+```
+
+### Employee Access
+```typescript
+@UseGuards(JwtAuthGuard)
+@Get('profile')
+async getProfile(@Request() req) {
+  // All authenticated users (employee, admin, super-admin) can access
+  return this.service.getProfile(req.user.sub);
+}
+```
+
+## Guard Order
+
+Guards are executed in order:
+1. `JwtAuthGuard` - Validates authentication
+2. `RolesGuard` - Validates authorization
+
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard) // Order matters!
+@Roles(Role.ADMIN)
+```
+
+## Swagger Authentication
+
+### ApiBearerAuth Decorator
+Required for authenticated endpoints in Swagger:
+
+```typescript
+import { ApiBearerAuth } from '@nestjs/swagger';
+
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('employee')
+export class EmployeeController {}
+```
+
+This enables the "Authorize" button in Swagger UI.
+
+## Common Patterns
+
+### Protected Controller
+```typescript
+@ApiTags('Employees')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
+@Controller('employee')
+export class EmployeeController {
+  // All endpoints require authentication
+}
+```
+
+### Mixed Public/Protected
+```typescript
+@ApiTags('Auth')
+@Controller('auth')
+export class AuthController {
+  @Public()
+  @Post('login')
+  async login() {
+    // Public endpoint
+  }
+  
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  async getProfile() {
+    // Protected endpoint
+  }
+}
+```
+
+### Role-Specific Endpoints
+```typescript
+@UseGuards(JwtAuthGuard)
+@Controller('admin')
+export class AdminController {
+  @Get()
+  async findAll() {
+    // All authenticated users
+  }
+  
+  @Post()
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  async create() {
+    // Admin and Super Admin only
+  }
+  
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
+  async remove() {
+    // Super Admin only
+  }
+}
+```
+
+## Error Responses
+
+### 401 Unauthorized
+- No token provided
+- Invalid token
+- Token expired
+- Token blacklisted
+
+### 403 Forbidden
+- Insufficient permissions
+- Role not allowed
+
+## Best Practices
+
+1. **Default to Protected**
+   - Make endpoints protected by default
+   - Use `@Public()` only when necessary
+
+2. **Role Hierarchy**
+   - Super Admin > Admin > Employee
+   - Allow multiple roles when appropriate
+
+3. **Token Security**
+   - Tokens expire after 2 days (configured in JwtModule)
+   - Blacklisted tokens are rejected immediately
+
+4. **User Context**
+   - Always access user from `req.user`
+   - Don't trust client-provided user IDs
+
+5. **Swagger Documentation**
+   - Always use `@ApiBearerAuth()` for protected endpoints
+   - Document authentication requirements

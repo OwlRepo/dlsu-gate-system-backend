@@ -1,0 +1,299 @@
+---
+alwaysApply: true
+---
+
+# Caching Patterns
+
+## Related Rules
+
+When working with caching, also consider:
+- **controller-patterns.mdc** - Caching decorators are used in controllers
+- **service-patterns.mdc** - Cache operations are performed in services
+- **debugging-practice.mdc** - Cache error handling
+
+**Related Rules:**
+- **controller-patterns.mdc** - Cache decorators are applied in controllers
+- **service-patterns.mdc** - Services perform cache operations
+- **debugging-practice.mdc** - Cache errors follow error handling patterns
+- **coding-practice.mdc** - Cache code follows coding standards
+
+## When to Use
+
+This rule applies when:
+- Adding caching to GET endpoints
+- Implementing cache invalidation
+- Working with Redis cache
+- Optimizing endpoint performance
+
+# Caching Patterns
+
+## Cache Decorators
+
+### CacheTTL Decorator
+Use `@CacheTTL()` to specify cache duration for GET endpoints:
+
+```typescript
+import { CacheTTL } from '../decorators/cache-control.decorator';
+
+@Get()
+@CacheTTL(3600000) // Cache for 1 hour (in milliseconds)
+async findAll() {
+  return this.service.findAll();
+}
+```
+
+### NoCache Decorator
+Use `@NoCache()` to explicitly disable caching:
+
+```typescript
+import { NoCache } from '../decorators/cache-control.decorator';
+
+@Post()
+@NoCache()
+async create(@Body() createDto: CreateDto) {
+  return this.service.create(createDto);
+}
+```
+
+## Cache Service
+
+### Inject CacheService
+```typescript
+import { CacheService } from '../services/cache.service';
+
+@Injectable()
+export class EmployeeService {
+  constructor(
+    @InjectRepository(Employee)
+    private readonly employeeRepository: Repository<Employee>,
+    private readonly cacheService: CacheService,
+  ) {}
+}
+```
+
+### Cache Operations
+
+#### Get from Cache
+```typescript
+async findOne(id: string): Promise<Employee> {
+  const cacheKey = `employee:${id}`;
+  const cached = await this.cacheService.get<Employee>(cacheKey);
+  
+  if (cached) {
+    return cached;
+  }
+  
+  const employee = await this.employeeRepository.findOne({ where: { id } });
+  await this.cacheService.set(cacheKey, employee, 3600000); // 1 hour
+  return employee;
+}
+```
+
+#### Set Cache
+```typescript
+await this.cacheService.set('key', value, 3600000); // TTL in milliseconds
+```
+
+#### Delete from Cache
+```typescript
+await this.cacheService.del('employee:123');
+```
+
+#### Clear Cache Pattern
+```typescript
+// Clear all cache matching a pattern
+await this.cacheService.clearCache('employee:*');
+```
+
+## Cache Invalidation
+
+### Invalidate on Create
+```typescript
+@Post()
+@NoCache()
+async create(@Body() createDto: CreateEmployeeDto) {
+  const employee = await this.service.create(createDto);
+  // Clear related caches
+  await this.cacheService.clearCache('employee:*');
+  return employee;
+}
+```
+
+### Invalidate on Update
+```typescript
+@Patch(':id')
+@NoCache()
+async update(@Param('id') id: string, @Body() updateDto: UpdateDto) {
+  const employee = await this.service.update(id, updateDto);
+  // Clear specific and related caches
+  await this.cacheService.del(`employee:${id}`);
+  await this.cacheService.clearCache('employee:list:*');
+  return employee;
+}
+```
+
+### Invalidate on Delete
+```typescript
+@Delete(':id')
+@NoCache()
+async remove(@Param('id') id: string) {
+  await this.service.remove(id);
+  // Clear all related caches
+  await this.cacheService.del(`employee:${id}`);
+  await this.cacheService.clearCache('employee:*');
+}
+```
+
+## Cache Key Patterns
+
+### Single Entity
+```typescript
+const cacheKey = `employee:${id}`;
+```
+
+### List with Pagination
+```typescript
+const cacheKey = `employee:list:${page}:${limit}:${search}`;
+```
+
+### Query-based Cache
+```typescript
+const cacheKey = `employee:query:${JSON.stringify(query)}`;
+```
+
+## Cache TTL Guidelines
+
+### Short TTL (5-15 minutes)
+- Frequently changing data
+- User-specific data
+- Real-time data
+
+```typescript
+@CacheTTL(300000) // 5 minutes
+```
+
+### Medium TTL (30-60 minutes)
+- Moderately changing data
+- List endpoints
+- Search results
+
+```typescript
+@CacheTTL(1800000) // 30 minutes
+```
+
+### Long TTL (1-24 hours)
+- Rarely changing data
+- Reference data
+- Configuration data
+
+```typescript
+@CacheTTL(3600000) // 1 hour
+```
+
+## Automatic Caching
+
+### HttpCacheInterceptor
+The `HttpCacheInterceptor` automatically caches GET requests:
+
+- Only caches GET requests
+- Respects `@NoCache()` decorator
+- Uses URL and query params as cache key
+- Configured globally in `app.module.ts`
+
+### Cache Key Generation
+Cache keys are automatically generated from:
+- Request URL
+- Query parameters
+
+Example: `/employee?page=1&limit=10` → cache key includes URL and query
+
+## Cache Best Practices
+
+1. **Cache GET Requests Only**
+   - Never cache POST, PATCH, DELETE
+   - Use `@NoCache()` on mutation endpoints
+
+2. **Invalidate on Mutations**
+   - Always clear related caches after create/update/delete
+   - Use pattern matching for related caches
+
+3. **Appropriate TTL**
+   - Use shorter TTL for frequently changing data
+   - Use longer TTL for static data
+
+4. **Cache Key Design**
+   - Include all relevant parameters in cache key
+   - Use consistent naming patterns
+   - Avoid collisions
+
+5. **Error Handling**
+   - Don't fail if cache operations fail
+   - Log cache errors but continue execution
+
+6. **Cache Warming**
+   - Pre-populate cache for frequently accessed data
+   - Consider cache warming on application startup
+
+## Common Patterns
+
+### Cached List Endpoint
+```typescript
+@Get()
+@CacheTTL(1800000) // 30 minutes
+async findAll(@Query() query: PaginationDto) {
+  return this.service.findAll(query);
+}
+```
+
+### Cached Detail Endpoint
+```typescript
+@Get(':id')
+@CacheTTL(3600000) // 1 hour
+async findOne(@Param('id') id: string) {
+  return this.service.findOne(id);
+}
+```
+
+### Mutation with Cache Invalidation
+```typescript
+@Post()
+@NoCache()
+async create(@Body() createDto: CreateDto) {
+  const result = await this.service.create(createDto);
+  await this.cacheService.clearCache('entity:*');
+  return result;
+}
+```
+
+### Manual Cache Management
+```typescript
+async findOne(id: string): Promise<Employee> {
+  const cacheKey = `employee:${id}`;
+  
+  // Try cache first
+  const cached = await this.cacheService.get<Employee>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  // Fetch from database
+  const employee = await this.employeeRepository.findOne({ where: { id } });
+  if (!employee) {
+    throw new NotFoundException('Employee not found');
+  }
+  
+  // Store in cache
+  await this.cacheService.set(cacheKey, employee, 3600000);
+  return employee;
+}
+```
+
+## Redis Configuration
+
+Cache is configured in `src/config/redis.config.ts` and registered in `app.module.ts`:
+
+```typescript
+CacheModule.register(redisConfig)
+```
+
+The cache uses Redis for distributed caching across multiple API nodes.

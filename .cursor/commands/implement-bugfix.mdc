@@ -1,0 +1,257 @@
+---
+alwaysApply: true
+---
+
+# Implement Bugfix Workflow
+
+Use this workflow when fixing bugs in the application.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Core Rules (Always Apply)
+- **coding-practice.mdc** - Code style, naming conventions, TypeScript best practices
+- **debugging-practice.mdc** - Error handling patterns, exception handling, logging
+
+### Task-Specific Rules (Context-Dependent)
+- **service-patterns.mdc** - Required if bug is in service layer
+- **controller-patterns.mdc** - Required if bug is in controller layer
+- **dto-patterns.mdc** - Required if bug is in validation or DTOs
+- **authentication-patterns.mdc** - Required if bug is in authentication/authorization
+- **entity-patterns.mdc** - Required if bug is in entity definitions
+- **database-migrations.mdc** - Required if bug requires schema fix
+- **caching-patterns.mdc** - Required if bug is cache-related
+
+### Documentation
+- **documentation-patterns.mdc** - Applied in Step 7 when documenting the fix
+
+## Step 1: Identify the Bug
+
+**Applies Rules:** debugging-practice.mdc
+
+1. **Reproduce the Issue**
+   - Understand the exact steps to reproduce
+   - Note the expected vs actual behavior
+   - Check error messages and stack traces
+   - Review application logs in `logs/error.log`
+
+2. **Gather Information**
+   - Error message and stack trace
+   - Request/response data (if applicable)
+   - Database state (if applicable)
+   - User actions leading to the bug
+   - Environment (dev/staging/prod)
+
+3. **Check Related Code**
+   - Identify affected files
+   - Review recent changes (git history)
+   - Check related modules/services
+   - Review error handling in affected code
+
+## Step 2: Isolate the Root Cause
+
+1. **Trace the Code Path**
+   - Follow the execution flow
+   - Identify where the bug occurs
+   - Check data transformations
+   - Verify database queries
+
+2. **Check Common Issues**
+   - Null/undefined checks
+   - Type mismatches
+   - Validation errors
+   - Database constraint violations
+   - Authentication/authorization issues
+   - Cache inconsistencies
+
+3. **Use Debugging Tools**
+   - Add console.log/logger statements
+   - Use debugger breakpoints
+   - Check database queries
+   - Review network requests
+
+## Step 3: Write a Test (if possible)
+
+1. **Create Test Case**
+   - Write test that reproduces the bug
+   - Test should fail initially
+   - Place in appropriate test file
+
+2. **Test Structure**
+   ```typescript
+   it('should handle null values correctly', async () => {
+     // Arrange
+     const invalidInput = null;
+     
+     // Act & Assert
+     await expect(service.method(invalidInput))
+       .rejects.toThrow(BadRequestException);
+   });
+   ```
+
+## Step 4: Implement the Fix
+
+1. **Fix the Root Cause**
+   - Address the actual issue, not just symptoms
+   - Follow coding-practice.mdc guidelines
+   - Maintain code style consistency
+   - Add proper error handling
+
+2. **Common Fix Patterns**
+
+   **Null/Undefined Check:**
+   ```typescript
+   // Before
+   const result = data.property.value;
+   
+   // After
+   if (!data || !data.property) {
+     throw new NotFoundException('Data not found');
+   }
+   const result = data.property.value;
+   ```
+
+   **Type Validation:**
+   ```typescript
+   // Before
+   const id = req.params.id;
+   
+   // After
+   const id = req.params.id;
+   if (!id || typeof id !== 'string') {
+     throw new BadRequestException('Invalid ID');
+   }
+   ```
+
+   **Error Handling:**
+   ```typescript
+   // Before
+   const result = await repository.find();
+   
+   // After
+   try {
+     const result = await repository.find();
+     if (!result) {
+       throw new NotFoundException('Not found');
+     }
+     return result;
+   } catch (error) {
+     if (error instanceof NotFoundException) {
+       throw error;
+     }
+     throw new BadRequestException(error.message);
+   }
+   ```
+
+3. **Follow Error Handling Patterns**
+   - Use appropriate NestJS exceptions
+   - Provide meaningful error messages
+   - Log errors appropriately
+   - Follow debugging-practice.mdc guidelines
+
+## Step 5: Verify the Fix
+
+1. **Run the Test**
+   - Test should now pass
+   - Verify fix doesn't break existing functionality
+
+2. **Manual Testing**
+   - Reproduce original bug scenario
+   - Verify bug is fixed
+   - Test edge cases
+   - Test related functionality
+
+3. **Check Side Effects**
+   - Verify no regressions
+   - Check related endpoints
+   - Verify database state
+   - Check cache consistency
+
+## Step 6: Update Error Handling (if needed)
+
+1. **Improve Error Messages**
+   - Make error messages more descriptive
+   - Include relevant context
+   - Follow error message guidelines
+
+2. **Add Logging**
+   - Log errors with context
+   - Use appropriate log levels
+   - Include stack traces for errors
+
+3. **Add Validation**
+   - Add input validation if missing
+   - Validate at DTO level
+   - Add business logic validation
+
+## Step 7: Document the Fix
+
+1. **Update Code Comments**
+   - Add comments explaining the fix
+   - Document why the fix was needed
+   - Note any edge cases handled
+
+2. **Run document-changes Command**
+   - Generate changelog entry
+   - Document the bug and fix
+   - Update recent-changes.md
+
+3. **Changelog Entry Should Include:**
+   - Bug description
+   - Root cause
+   - Fix implemented
+   - Testing performed
+
+## Step 8: Code Review Checklist
+
+- [ ] Root cause identified and fixed
+- [ ] Fix doesn't introduce new bugs
+- [ ] Error handling improved
+- [ ] Tests added/updated (if applicable)
+- [ ] Code follows project patterns
+- [ ] Error messages are clear
+- [ ] Logging added where appropriate
+- [ ] Documentation updated
+
+## Common Bug Categories
+
+### 1. Null/Undefined Errors
+- **Symptom:** "Cannot read property of undefined"
+- **Fix:** Add null checks and validation
+- **Prevention:** Use optional chaining, validate inputs
+
+### 2. Type Errors
+- **Symptom:** Type mismatches, wrong data types
+- **Fix:** Add type validation, use proper types
+- **Prevention:** Use TypeScript strictly, validate DTOs
+
+### 3. Database Errors
+- **Symptom:** Query failures, constraint violations
+- **Fix:** Check entity definitions, validate data
+- **Prevention:** Use migrations, validate before save
+
+### 4. Authentication Errors
+- **Symptom:** Unauthorized access, token issues
+- **Fix:** Check guards, verify token validation
+- **Prevention:** Test auth flows, verify guards
+
+### 5. Validation Errors
+- **Symptom:** Invalid data accepted, validation fails
+- **Fix:** Update DTOs, add validators
+- **Prevention:** Comprehensive DTO validation
+
+### 6. Cache Inconsistencies
+- **Symptom:** Stale data, cache not invalidated
+- **Fix:** Clear cache after mutations
+- **Prevention:** Follow caching patterns
+
+## Example Bugfix Workflow
+
+**Bug:** Employee creation fails when email is null
+
+1. **Identify:** Error occurs in `employee.service.ts` create method
+2. **Root Cause:** No validation for required email field
+3. **Fix:** Add `@IsNotEmpty()` and `@IsEmail()` to DTO
+4. **Verify:** Test with null email, should return 400 error
+5. **Document:** Update changelog with bugfix entry

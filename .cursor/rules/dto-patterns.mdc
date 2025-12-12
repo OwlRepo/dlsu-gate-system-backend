@@ -1,0 +1,259 @@
+---
+alwaysApply: true
+---
+
+# DTO (Data Transfer Object) Patterns
+
+## Related Rules
+
+When working with DTOs, also consider:
+- **coding-practice.mdc** - Naming conventions, code style for DTOs
+- **debugging-practice.mdc** - Validation error handling
+- **controller-patterns.mdc** - How DTOs are used in controllers
+- **service-patterns.mdc** - How DTOs are used in services
+
+**Related Rules:**
+- **coding-practice.mdc** - DTO file naming and code style
+- **debugging-practice.mdc** - Validation error messages and handling
+- **controller-patterns.mdc** - DTOs are injected in controllers
+- **service-patterns.mdc** - DTOs are passed to service methods
+- **entity-patterns.mdc** - DTOs often map to entities
+
+## When to Use
+
+This rule applies when:
+- Creating or updating DTOs
+- Adding validation to DTOs
+- Documenting DTOs with Swagger
+- Working with request/response data
+
+# DTO (Data Transfer Object) Patterns
+
+## DTO Structure
+
+DTOs are used for:
+- Request validation
+- API documentation (Swagger)
+- Type safety
+- Data transformation
+
+## Create DTO Pattern
+
+```typescript
+import { IsNotEmpty, IsString, IsEmail, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class CreateEmployeeDto {
+  @ApiProperty({ example: 'johndoe', description: 'The username of the employee' })
+  @IsNotEmpty()
+  @IsString()
+  username: string;
+
+  @ApiProperty({ example: 'john.doe@example.com' })
+  @IsNotEmpty()
+  @IsEmail()
+  email: string;
+
+  @ApiProperty({ example: 'password123' })
+  @IsNotEmpty()
+  @IsString()
+  password: string;
+
+  @ApiPropertyOptional({ example: 'John', default: 'Unknown' })
+  @IsOptional()
+  @IsString()
+  first_name?: string;
+}
+```
+
+## Update DTO Pattern
+
+Always extend `PartialType` from `@nestjs/mapped-types`:
+
+```typescript
+import { PartialType } from '@nestjs/mapped-types';
+import { CreateEmployeeDto } from './create-employee.dto';
+
+export class UpdateEmployeeDto extends PartialType(CreateEmployeeDto) {
+  // Add update-specific fields here if needed
+  // Password updates might be handled separately
+  @IsOptional()
+  @IsString()
+  password?: string;
+}
+```
+
+## Validation Decorators
+
+### Common Validators
+- `@IsNotEmpty()` - Field is required and not empty
+- `@IsString()` - Must be a string
+- `@IsEmail()` - Must be a valid email
+- `@IsNumber()` - Must be a number
+- `@IsBoolean()` - Must be a boolean
+- `@IsOptional()` - Field is optional
+- `@IsArray()` - Must be an array
+- `@IsDateString()` - Must be a valid date string
+- `@IsEnum()` - Must be one of the enum values
+- `@Min()`, `@Max()` - Number range validation
+- `@Length()` - String length validation
+
+### Validation Examples
+
+```typescript
+@IsNotEmpty()
+@IsString()
+@Length(3, 50)
+username: string;
+
+@IsNotEmpty()
+@IsEmail()
+email: string;
+
+@IsOptional()
+@IsString()
+@Length(0, 500)
+remarks?: string;
+
+@IsNotEmpty()
+@IsEnum(UserRole)
+role: UserRole;
+
+@IsOptional()
+@IsBoolean()
+is_active?: boolean;
+```
+
+## Swagger Documentation
+
+### ApiProperty Decorator
+Always use `@ApiProperty` for required fields:
+
+```typescript
+@ApiProperty({
+  example: 'johndoe',
+  description: 'The username of the employee',
+  required: true,
+})
+@IsNotEmpty()
+@IsString()
+username: string;
+```
+
+### ApiPropertyOptional Decorator
+Use `@ApiPropertyOptional` for optional fields:
+
+```typescript
+@ApiPropertyOptional({
+  example: 'John',
+  description: 'First name of the employee',
+  default: 'Unknown',
+})
+@IsOptional()
+@IsString()
+first_name?: string;
+```
+
+### Swagger Examples
+- Provide realistic examples
+- Include description when field purpose isn't obvious
+- Set `required: true` for required fields
+- Use `default` for optional fields with defaults
+
+## Pagination DTO Pattern
+
+Extend `BasePaginationDto` for paginated endpoints:
+
+```typescript
+import { BasePaginationDto } from '../../common/dto/base-pagination.dto';
+import { IsOptional, IsString } from 'class-validator';
+
+export class EmployeePaginationDto extends BasePaginationDto {
+  @ApiPropertyOptional({ example: 'john', description: 'Search term' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+```
+
+## DTO Naming Conventions
+
+- Create DTO: `Create{Entity}Dto` (e.g., `CreateEmployeeDto`)
+- Update DTO: `Update{Entity}Dto` (e.g., `UpdateEmployeeDto`)
+- Pagination DTO: `{Entity}PaginationDto` (e.g., `EmployeePaginationDto`)
+- Query DTO: `{Entity}QueryDto` (e.g., `ReportQueryDto`)
+- Response DTO: `{Entity}ResponseDto` (e.g., `BulkDeactivateResponseDto`)
+
+## DTO Best Practices
+
+1. **One DTO per Operation**
+   - Separate DTOs for create, update, query operations
+   - Don't reuse DTOs for different purposes
+
+2. **Validation First**
+   - Add validation decorators before Swagger decorators
+   - Validate at the DTO level, not in services
+
+3. **Document Everything**
+   - All fields should have `@ApiProperty` or `@ApiPropertyOptional`
+   - Provide examples that match real data formats
+
+4. **Type Safety**
+   - Use TypeScript types, not `any`
+   - Use enums for fixed sets of values
+
+5. **Optional Fields**
+   - Use `?` for optional properties
+   - Always use `@IsOptional()` decorator
+   - Use `@ApiPropertyOptional` for Swagger
+
+6. **Transform Data**
+   - Use `class-transformer` decorators if needed
+   - Transform in DTOs, not in services
+
+## Common DTO Patterns
+
+### Login DTO
+```typescript
+export class AdminLoginDto {
+  @ApiProperty({ example: 'admin' })
+  @IsNotEmpty()
+  @IsString()
+  username: string;
+
+  @ApiProperty({ example: 'password123' })
+  @IsNotEmpty()
+  @IsString()
+  password: string;
+}
+```
+
+### Bulk Operation DTO
+```typescript
+export class BulkDeactivateDto {
+  @ApiProperty({ 
+    example: ['id1', 'id2', 'id3'],
+    description: 'Array of user IDs to deactivate',
+    type: [String],
+  })
+  @IsNotEmpty()
+  @IsArray()
+  @IsString({ each: true })
+  userIds: string[];
+}
+```
+
+### Date Range DTO
+```typescript
+export class GenerateCSVDto {
+  @ApiProperty({ example: '2024-01-01' })
+  @IsNotEmpty()
+  @IsDateString()
+  startDate: string;
+
+  @ApiProperty({ example: '2024-12-31' })
+  @IsNotEmpty()
+  @IsDateString()
+  endDate: string;
+}
+```

@@ -1,0 +1,178 @@
+---
+alwaysApply: true
+---
+
+# Feature Implementation Guidelines
+
+## Related Rules
+
+When implementing features, also consider:
+- **entity-patterns.mdc** - Features include entities
+- **dto-patterns.mdc** - Features include DTOs
+- **service-patterns.mdc** - Features include services
+- **controller-patterns.mdc** - Features include controllers
+- **authentication-patterns.mdc** - Features include auth
+- **database-migrations.mdc** - Features require migrations
+- **documentation-patterns.mdc** - Features must be documented
+- **coding-practice.mdc** - All code follows coding standards
+- **debugging-practice.mdc** - All code includes error handling
+
+**Related Rules:**
+- All pattern rules apply when implementing features
+- **entity-patterns.mdc** - For entity creation
+- **dto-patterns.mdc** - For DTO creation
+- **service-patterns.mdc** - For service creation
+- **controller-patterns.mdc** - For controller creation
+- **authentication-patterns.mdc** - For auth setup
+- **database-migrations.mdc** - For migrations
+- **documentation-patterns.mdc** - For documentation
+- **coding-practice.mdc** - For all code
+- **debugging-practice.mdc** - For error handling
+
+## When to Use
+
+This rule applies when:
+- Creating new feature modules
+- Implementing complete features
+- Setting up module structure
+- Organizing feature code
+
+# Feature Implementation Guidelines
+
+## Module Structure
+
+Every feature module must follow this structure:
+
+```
+src/{module-name}/
+├── {module-name}.module.ts      # Module definition
+├── {module-name}.controller.ts   # HTTP endpoints
+├── {module-name}.service.ts     # Business logic
+├── dto/
+│   ├── create-{entity}.dto.ts
+│   ├── update-{entity}.dto.ts
+│   └── {entity}-pagination.dto.ts (if needed)
+└── entities/
+    └── {entity}.entity.ts
+```
+
+## Module Definition Pattern
+
+```typescript
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { {Module}Controller } from './{module}.controller';
+import { {Module}Service } from './{module}.service';
+import { {Entity} } from './entities/{entity}.entity';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([{Entity}])],
+  controllers: [{Module}Controller],
+  providers: [{Module}Service],
+  exports: [{Module}Service], // Export if used by other modules
+})
+export class {Module}Module {}
+```
+
+## Module Registration
+
+After creating a new module, register it in `app.module.ts`:
+
+```typescript
+import { {Module}Module } from './{module}/{module}.module';
+
+@Module({
+  imports: [
+    // ... other modules
+    {Module}Module,
+  ],
+  // ...
+})
+export class AppModule {}
+```
+
+## Dependency Injection Patterns
+
+### Service Constructor Injection
+```typescript
+@Injectable()
+export class EmployeeService {
+  constructor(
+    @InjectRepository(Employee)
+    private readonly employeeRepository: Repository<Employee>,
+    private readonly cacheService: CacheService,
+  ) {}
+}
+```
+
+### Multiple Repository Injection
+```typescript
+constructor(
+  @InjectRepository(Employee)
+  private readonly employeeRepository: Repository<Employee>,
+  @InjectRepository(Admin)
+  private readonly adminRepository: Repository<Admin>,
+) {}
+```
+
+## Feature Implementation Checklist
+
+1. **Create Entity**
+   - Define TypeORM entity with proper decorators
+   - Add columns with appropriate types and constraints
+   - Include timestamps (@CreateDateColumn, @UpdateDateColumn)
+
+2. **Create DTOs**
+   - Create DTO for entity creation
+   - Create DTO for entity updates (extend PartialType)
+   - Add validation decorators
+   - Add Swagger documentation decorators
+
+3. **Create Service**
+   - Implement CRUD operations
+   - Add business logic methods
+   - Handle errors appropriately
+   - Use try-catch for error handling
+
+4. **Create Controller**
+   - Define routes with appropriate HTTP methods
+   - Add Swagger documentation
+   - Apply authentication guards
+   - Apply role-based guards if needed
+   - Use DTOs for request/response validation
+
+5. **Create Module**
+   - Import TypeOrmModule.forFeature with entity
+   - Register controller and service
+   - Export service if needed by other modules
+
+6. **Register in AppModule**
+   - Add module to imports array
+
+7. **Document Changes**
+   - Run document-changes command to auto-generate documentation
+
+## Common Patterns
+
+### Pagination Pattern
+Extend `BasePaginationDto` for paginated endpoints:
+```typescript
+import { BasePaginationDto } from '../../common/dto/base-pagination.dto';
+
+export class EmployeePaginationDto extends BasePaginationDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+```
+
+### Update DTO Pattern
+Use `PartialType` for update DTOs:
+```typescript
+import { PartialType } from '@nestjs/mapped-types';
+import { CreateEmployeeDto } from './create-employee.dto';
+
+export class UpdateEmployeeDto extends PartialType(CreateEmployeeDto) {
+  // Add any update-specific fields here
+}
+```
