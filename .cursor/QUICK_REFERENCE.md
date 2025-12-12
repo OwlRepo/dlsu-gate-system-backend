@@ -58,6 +58,24 @@ Change: [description]
 
 **Auto-Applied Rules:** coding-practice, entity-patterns, database-migrations
 
+### Update Packages (Simplified)
+```
+Update packages following update-packages.mdc.
+
+Focus: [security updates / patch updates / specific package]
+```
+
+**Auto-Applied Rules:** coding-practice, debugging-practice, dependency-management
+
+### Maintain Repository (Simplified)
+```
+Run repository maintenance following maintain-repository.mdc.
+
+Focus: [packages / migrations / code quality / all]
+```
+
+**Auto-Applied Rules:** coding-practice, debugging-practice, dependency-management, database-migrations, documentation-patterns
+
 ## 📋 Command + Rule Matrix
 
 | What You're Doing | Command | Key Rules |
@@ -69,6 +87,8 @@ Change: [description]
 | Migration | `create-migration.mdc` | `entity-patterns`, `database-migrations` |
 | Refactoring | `refactor-module.mdc` | `coding-practice`, `service-patterns` |
 | Documenting | `document-changes.mdc` | `documentation-patterns` |
+| Update packages | `update-packages.mdc` | `dependency-management` |
+| Maintain repository | `maintain-repository.mdc` | `dependency-management`, `database-migrations` |
 
 ## 🔧 Model Selection
 
@@ -103,6 +123,7 @@ The endpoint should require authentication and export CSV data.
 | `debugging-practice.mdc` | Error handling |
 | `feature-implementation.mdc` | Module structure |
 | `documentation-patterns.mdc` | Documenting changes |
+| `dependency-management.mdc` | Managing packages |
 
 ## ✅ Checklist: Adding an Endpoint
 
@@ -155,6 +176,14 @@ Root cause: Missing validation in CreateEmployeeDto.
 Create Notifications module following implement-feature.mdc.
 All CRUD operations, requires auth, admin can create/update/delete.
 Cache GET endpoints 30min.
+```
+
+**All rules auto-applied!**
+
+### Example 4: Update packages (Simplified)
+```
+Update packages following update-packages.mdc.
+Focus: Security updates and patch versions.
 ```
 
 **All rules auto-applied!**

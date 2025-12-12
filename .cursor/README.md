@@ -260,7 +260,34 @@ The column should be:
 
 ---
 
-### Scenario 6: Refactoring Code
+### Scenario 6: Update Packages
+
+**Task:** Update all packages to latest versions, focusing on security updates
+
+**Prompt Construction (Simplified - Rules Auto-Applied):**
+```
+Update packages following update-packages.mdc.
+
+Focus: Security updates and patch versions
+```
+
+**What Happens Automatically:**
+The AI automatically applies:
+- coding-practice.mdc
+- debugging-practice.mdc
+- dependency-management.mdc
+- documentation-patterns.mdc (for documenting updates)
+
+**Expected Output:**
+- Security vulnerabilities fixed
+- Packages updated within version ranges
+- Tests run and verified
+- Lock file updated
+- Changes documented
+
+---
+
+### Scenario 7: Refactoring Code
 
 **Task:** Refactor large EmployeeService (500+ lines) by extracting report logic
 
@@ -518,6 +545,8 @@ Add all endpoints at once
 | Optimize | `implement-optimization.mdc` | `caching-patterns.mdc`, `service-patterns.mdc` |
 | Create migration | `create-migration.mdc` | `entity-patterns.mdc`, `database-migrations.mdc` |
 | Refactor | `refactor-module.mdc` | `coding-practice.mdc`, `service-patterns.mdc` |
+| Update packages | `update-packages.mdc` | `dependency-management.mdc` |
+| Maintain repository | `maintain-repository.mdc` | `dependency-management.mdc`, `database-migrations.mdc` |
 
 ### File Locations
 

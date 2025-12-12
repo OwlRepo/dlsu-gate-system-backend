@@ -39,7 +39,15 @@
     "pm2:delete": "pm2 delete ecosystem.config.js",
     "pm2:logs": "pm2 logs",
     "pm2:monit": "pm2 monit",
-    "pm2:status": "pm2 status"
+    "pm2:status": "pm2 status",
+    "check:outdated": "npm outdated",
+    "check:security": "npm audit",
+    "check:security:fix": "npm audit fix",
+    "check:deps": "npm ls --depth=0",
+    "maintain:check": "npm audit && npm outdated && npm run lint && npm test",
+    "maintain:full": "npm audit fix && npm update && npm run lint --fix && npm test && npm run build",
+    "clean:install": "rm -rf node_modules package-lock.json && npm install",
+    "clean:build": "rm -rf dist && npm run build"
   },
   "dependencies": {
     "@faker-js/faker": "^9.5.0",

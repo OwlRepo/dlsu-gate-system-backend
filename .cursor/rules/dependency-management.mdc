@@ -1,0 +1,365 @@
+---
+alwaysApply: true
+---
+
+# Dependency Management Patterns
+
+## Related Rules
+
+When working with dependencies, also consider:
+
+- **coding-practice.mdc** - Code style for package.json and lock files
+- **debugging-practice.mdc** - Handling dependency-related errors
+
+**Related Rules:**
+
+- **coding-practice.mdc** - Package.json follows coding standards
+- **debugging-practice.mdc** - Dependency errors follow error handling patterns
+
+**Related Commands:**
+
+- **update-packages.mdc** - Use this command for updating packages (automatically applies this rule)
+- **maintain-repository.mdc** - Use this command for regular maintenance (includes dependency checks)
+
+## When to Use
+
+This rule applies when:
+
+- Updating packages (use update-packages.mdc command)
+- Adding new dependencies
+- Removing dependencies
+- Managing package versions
+- Handling dependency conflicts
+- Maintaining package.json
+- Running repository maintenance (use maintain-repository.mdc command)
+
+# Dependency Management Patterns
+
+## Package Manager
+
+This project uses:
+
+- **npm** (primary) - `package-lock.json` exists
+- **bun** (alternative) - `bun.lockb` exists
+
+Use npm for consistency unless specifically using bun.
+
+## Package.json Structure
+
+### Version Ranges
+
+Use semantic versioning ranges appropriately:
+
+```json
+{
+  "dependencies": {
+    "@nestjs/common": "^11.0.4",  // Caret: allows minor and patch updates
+    "@nestjs/core": "~10.0.0",    // Tilde: allows patch updates only
+    "uuid": "^9.0.0",              // Caret: allows updates within major version
+    "@nestjs/mapped-types": "*"    // Wildcard: use latest (use sparingly)
+  }
+}
+```
+
+### Version Range Guidelines
+
+- **Caret (^)** - Default for most packages (allows minor and patch)
+- **Tilde (~)** - Use for critical packages needing stability (patch only)
+- **Exact version** - Use for packages with breaking changes or critical dependencies
+- **Wildcard (*)** - Avoid except for internal packages or when explicitly needed
+
+## Adding Dependencies
+
+### Production Dependencies
+
+```bash
+npm install package-name
+# or
+npm install package-name@version
+```
+
+### Development Dependencies
+
+```bash
+npm install --save-dev package-name
+# or
+npm install -D package-name
+```
+
+### Best Practices
+
+1. **Check Compatibility**
+   - Verify package is compatible with NestJS version
+   - Check TypeScript compatibility
+   - Review peer dependencies
+
+2. **Use Specific Versions for Critical Packages**
+
+   ```json
+   "@nestjs/core": "^10.0.0",  // NestJS core - use caret
+   "typeorm": "^0.3.20",        // TypeORM - use caret
+   ```
+
+3. **Group Related Packages**
+   - Keep NestJS packages together
+   - Group type definitions together
+   - Organize by functionality
+
+4. **Document Why**
+   - Add comments in package.json if needed
+   - Document in commit message why package was added
+
+## Updating Dependencies
+
+### Check Outdated Packages
+
+```bash
+npm outdated
+```
+
+### Update Strategy
+
+1. **Patch Updates** (safe)
+
+   ```bash
+   npm update
+   ```
+
+2. **Minor Updates** (usually safe)
+
+   ```bash
+   npm install package-name@latest
+   ```
+
+3. **Major Updates** (requires testing)
+   - Review changelog
+   - Check breaking changes
+   - Test thoroughly
+   - Update code if needed
+
+### Update Workflow
+
+1. Check what's outdated: `npm outdated`
+2. Review changelogs for breaking changes
+3. Update packages one at a time (or by category)
+4. Test after each update
+5. Fix breaking changes
+6. Commit with clear message
+
+## Removing Dependencies
+
+### Remove Package
+
+```bash
+npm uninstall package-name
+```
+
+### Clean Up
+
+- Remove unused imports from code
+- Remove from package.json (automatic with npm uninstall)
+- Update lock file (automatic)
+
+## Dependency Categories
+
+### Core Framework
+
+- `@nestjs/common`, `@nestjs/core` - Core NestJS
+- `@nestjs/platform-express` - Express platform
+- `reflect-metadata` - Required for decorators
+- `rxjs` - Reactive extensions
+
+### Database
+
+- `@nestjs/typeorm`, `typeorm` - TypeORM integration
+- `pg` - PostgreSQL driver
+- `@types/pg` - TypeScript types
+
+### Authentication
+
+- `@nestjs/jwt`, `@nestjs/passport` - JWT auth
+- `passport-jwt` - Passport JWT strategy
+- `bcryptjs` - Password hashing
+
+### Caching
+
+- `@nestjs/cache-manager` - Cache manager
+- `cache-manager-redis-store` - Redis store
+- `ioredis`, `redis` - Redis clients
+
+### Validation & Transformation
+
+- `class-validator` - Validation decorators
+- `class-transformer` - Object transformation
+
+### API Documentation
+
+- `@nestjs/swagger` - Swagger/OpenAPI
+
+### Utilities
+
+- `dayjs`, `date-fns` - Date handling
+- `uuid` - UUID generation
+- `axios` - HTTP client
+
+## Security Updates
+
+### Check for Vulnerabilities
+
+```bash
+npm audit
+```
+
+### Fix Vulnerabilities
+
+```bash
+npm audit fix
+# or for breaking changes
+npm audit fix --force
+```
+
+### Review Security Advisories
+
+- Check npm security advisories
+- Review GitHub security alerts
+- Update vulnerable packages promptly
+
+## Lock Files
+
+### package-lock.json
+
+- **Always commit** package-lock.json
+- Ensures consistent installs across environments
+- Generated automatically by npm
+
+### bun.lockb
+
+- Binary lock file for bun
+- Commit if using bun as primary package manager
+- Keep in sync with package-lock.json if using both
+
+## Version Conflicts
+
+### Resolving Conflicts
+
+1. **Check Dependency Tree**
+
+   ```bash
+   npm ls package-name
+   ```
+
+2. **Use npm dedupe**
+
+   ```bash
+   npm dedupe
+   ```
+
+3. **Force Resolution (if needed)**
+
+   ```json
+   "overrides": {
+     "package-name": "version"
+   }
+   ```
+
+## Best Practices
+
+1. **Regular Updates**
+   - Review outdated packages monthly
+   - Update patch versions regularly
+   - Plan major updates carefully
+
+2. **Test After Updates**
+   - Run tests: `npm test`
+   - Test manually
+   - Check for breaking changes
+
+3. **Document Updates**
+   - Commit with clear messages
+   - Document breaking changes
+   - Update changelog
+
+4. **Keep Lock Files Updated**
+   - Commit lock file changes
+   - Don't ignore lock files
+   - Keep lock files in sync
+
+5. **Security First**
+   - Run `npm audit` regularly
+   - Fix vulnerabilities promptly
+   - Review security advisories
+
+6. **Version Pinning**
+   - Pin critical packages to specific versions
+   - Use ranges for flexibility
+   - Document why versions are pinned
+
+## Common Commands
+
+```bash
+# Check outdated packages
+npm outdated
+
+# Update all packages (within ranges)
+npm update
+
+# Update specific package
+npm install package-name@latest
+
+# Check for vulnerabilities
+npm audit
+
+# Fix vulnerabilities
+npm audit fix
+
+# View dependency tree
+npm ls
+
+# Clean install
+rm -rf node_modules package-lock.json
+npm install
+```
+
+## Migration Considerations
+
+When updating major versions:
+
+1. **Review Changelog**
+   - Check breaking changes
+   - Review migration guides
+   - Note deprecated features
+
+2. **Update Code**
+   - Fix breaking changes
+   - Update imports if needed
+   - Update configuration
+
+3. **Test Thoroughly**
+   - Run all tests
+   - Test critical features
+   - Check for runtime errors
+
+4. **Update Documentation**
+   - Update README if needed
+   - Document breaking changes
+   - Update examples
+
+## NestJS-Specific Dependencies
+
+### Core NestJS Packages
+
+Keep these in sync:
+
+- `@nestjs/common` and `@nestjs/core` should match major versions
+- `@nestjs/platform-express` should match `@nestjs/core`
+- `@nestjs/typeorm` should be compatible with TypeORM version
+
+### TypeORM Compatibility
+
+- `typeorm` version must be compatible with `@nestjs/typeorm`
+- Check compatibility matrix before updating
+
+### TypeScript Compatibility
+
+- Ensure TypeScript version supports NestJS version
+- Check `@types/*` packages match runtime versions

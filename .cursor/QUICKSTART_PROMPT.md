@@ -63,7 +63,8 @@ Based on the analysis above, create the following structure in the `.cursor/` di
 9. **debugging-practice.mdc** - Error handling, exception patterns, logging standards, error response formats
 10. **feature-implementation.mdc** - Module structure, NestJS patterns, dependency injection, feature checklist
 11. **documentation-patterns.mdc** - Auto-documentation standards, templates, context file maintenance
-12. **RULE_DEPENDENCIES.md** - Central mapping of tasks to rules, rule relationships, quick reference
+12. **dependency-management.mdc** - Package management, version strategies, dependency patterns
+13. **RULE_DEPENDENCIES.md** - Central mapping of tasks to rules, rule relationships, quick reference
 
 Each rule file should:
 - Have `alwaysApply: true` in frontmatter (except RULE_DEPENDENCIES.md)
@@ -82,6 +83,8 @@ Each rule file should:
 5. **create-migration.mdc** - Database migration workflow (modify entity, generate, review, test)
 6. **refactor-module.mdc** - Module refactoring workflow (identify needs, plan, refactor, test, document)
 7. **document-changes.mdc** - Auto-documentation workflow (analyze changes, generate docs, update context)
+8. **update-packages.mdc** - Package update workflow (check outdated, update safely, test, document)
+9. **maintain-repository.mdc** - Repository maintenance workflow (health checks, updates, cleanup)
 
 Each command file should:
 - Have `alwaysApply: true` in frontmatter
@@ -158,11 +161,12 @@ The system should be intelligent enough that when a user says "add an endpoint",
 
 ## What Gets Created
 
-- ✅ 12 rule files with cross-references
-- ✅ 7 command files with comprehensive rule lists
+- ✅ 13 rule files with cross-references (including dependency-management.mdc)
+- ✅ 9 command files with comprehensive rule lists (including update-packages.mdc and maintain-repository.mdc)
 - ✅ Documentation structure
 - ✅ Smart rule application system
 - ✅ Quick reference guides
+- ✅ Package update workflows
 
 ## After Generation
 

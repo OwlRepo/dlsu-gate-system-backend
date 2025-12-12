@@ -1,0 +1,400 @@
+---
+alwaysApply: true
+---
+
+# Update Packages Workflow
+
+Use this workflow when updating npm packages to keep dependencies current and secure.
+
+## Related Rules
+
+This command automatically applies the following rules:
+
+### Core Rules (Always Apply)
+- **coding-practice.mdc** - Code style, commit messages
+- **debugging-practice.mdc** - Error handling for update issues
+
+### Task-Specific Rules (Always Apply)
+- **dependency-management.mdc** - Package management patterns, version strategies
+
+### Documentation
+- **documentation-patterns.mdc** - Applied when documenting package updates
+
+## Step 1: Check Current Status
+
+**Applies Rules:** dependency-management.mdc
+
+1. **Check Outdated Packages**
+   ```bash
+   npm outdated
+   ```
+   - Review list of outdated packages
+   - Note current vs wanted vs latest versions
+   - Identify packages with major version updates
+
+2. **Check for Vulnerabilities**
+   ```bash
+   npm audit
+   ```
+   - Review security vulnerabilities
+   - Note severity levels
+   - Identify packages needing security updates
+
+3. **Review Current Dependencies**
+   - Check `package.json` for version ranges
+   - Review critical packages (NestJS, TypeORM, etc.)
+   - Note any pinned versions
+
+## Step 2: Plan Updates
+
+**Applies Rules:** dependency-management.mdc
+
+1. **Categorize Updates**
+   - **Security updates** - High priority, update immediately
+   - **Patch updates** - Low risk, safe to update
+   - **Minor updates** - Usually safe, test after update
+   - **Major updates** - Requires careful planning and testing
+
+2. **Check Compatibility**
+   - Review NestJS compatibility matrix
+   - Check TypeORM compatibility
+   - Verify TypeScript compatibility
+   - Review peer dependency requirements
+
+3. **Review Changelogs**
+   - Check breaking changes for major updates
+   - Review migration guides
+   - Note deprecated features
+
+4. **Create Update Plan**
+   - List packages to update
+   - Order updates (security first, then patches, then minor, then major)
+   - Identify potential breaking changes
+   - Plan testing strategy
+
+## Step 3: Backup Current State
+
+**Applies Rules:** coding-practice.mdc
+
+1. **Commit Current State**
+   ```bash
+   git add package.json package-lock.json
+   git commit -m "chore: backup before package updates"
+   ```
+
+2. **Create Backup Branch** (optional but recommended for major updates)
+   ```bash
+   git checkout -b backup/before-package-updates
+   git checkout main  # or your working branch
+   ```
+
+## Step 4: Update Security Vulnerabilities
+
+**Applies Rules:** dependency-management.mdc, debugging-practice.mdc
+
+1. **Fix Security Issues**
+   ```bash
+   npm audit fix
+   ```
+   - Automatically updates vulnerable packages
+   - Reviews changes before applying
+
+2. **For Breaking Security Fixes**
+   ```bash
+   npm audit fix --force
+   ```
+   - Use with caution
+   - Test thoroughly after
+   - May require code changes
+
+3. **Verify Security Fixes**
+   ```bash
+   npm audit
+   ```
+   - Ensure vulnerabilities are resolved
+   - Check for new vulnerabilities introduced
+
+## Step 5: Update Patch Versions
+
+**Applies Rules:** dependency-management.mdc
+
+1. **Update All Patch Versions**
+   ```bash
+   npm update
+   ```
+   - Updates packages within version ranges
+   - Safe for patch updates
+
+2. **Verify Updates**
+   - Check `package-lock.json` changes
+   - Review updated versions
+   - Ensure no unexpected updates
+
+## Step 6: Update Minor Versions (Selective)
+
+**Applies Rules:** dependency-management.mdc, debugging-practice.mdc
+
+1. **Update Non-Critical Packages First**
+   ```bash
+   npm install package-name@latest
+   ```
+   - Update utility packages first
+   - Update dev dependencies
+   - Test after each update
+
+2. **Update Critical Packages Carefully**
+   - Update one at a time
+   - Test after each update
+   - Check for breaking changes
+
+3. **Update NestJS Packages Together**
+   ```bash
+   npm install @nestjs/common@latest @nestjs/core@latest
+   ```
+   - Keep NestJS packages in sync
+   - Check compatibility
+
+## Step 7: Handle Major Updates
+
+**Applies Rules:** dependency-management.mdc, debugging-practice.mdc, coding-practice.mdc
+
+1. **Review Breaking Changes**
+   - Read changelog thoroughly
+   - Review migration guide
+   - Identify required code changes
+
+2. **Update One Major Version at a Time**
+   ```bash
+   npm install package-name@major-version
+   ```
+   - Don't update multiple major versions simultaneously
+   - Test after each major update
+
+3. **Update Code for Breaking Changes**
+   - Fix deprecated API usage
+   - Update imports if needed
+   - Update configuration
+   - Follow coding-practice.mdc for code changes
+
+4. **Test Thoroughly**
+   - Run all tests: `npm test`
+   - Test manually
+   - Check for runtime errors
+
+## Step 8: Resolve Conflicts
+
+**Applies Rules:** dependency-management.mdc, debugging-practice.mdc
+
+1. **Check for Conflicts**
+   ```bash
+   npm ls
+   ```
+   - Review dependency tree
+   - Identify conflicts
+
+2. **Resolve Conflicts**
+   ```bash
+   npm dedupe
+   ```
+   - Deduplicate dependencies
+   - Resolve version conflicts
+
+3. **Force Resolution (if needed)**
+   - Add to `package.json`:
+   ```json
+   "overrides": {
+     "conflicting-package": "version"
+   }
+   ```
+   - Use sparingly
+   - Document why override is needed
+
+## Step 9: Test Updates
+
+**Applies Rules:** debugging-practice.mdc
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+   - Fresh install with updated packages
+   - Verify no installation errors
+
+2. **Run Tests**
+   ```bash
+   npm test
+   ```
+   - Ensure all tests pass
+   - Fix any test failures
+
+3. **Build Project**
+   ```bash
+   npm run build
+   ```
+   - Verify build succeeds
+   - Check for TypeScript errors
+   - Fix compilation errors
+
+4. **Manual Testing**
+   - Test critical features
+   - Test authentication flows
+   - Test database operations
+   - Test API endpoints
+
+5. **Check Runtime**
+   ```bash
+   npm run dev
+   ```
+   - Start development server
+   - Verify application starts
+   - Check for runtime errors
+
+## Step 10: Update Lock File
+
+**Applies Rules:** dependency-management.mdc, coding-practice.mdc
+
+1. **Review package-lock.json Changes**
+   - Check git diff
+   - Verify expected updates
+   - Review any unexpected changes
+
+2. **Commit Lock File**
+   ```bash
+   git add package-lock.json
+   git commit -m "chore: update package-lock.json"
+   ```
+
+3. **If Using Bun**
+   - Update bun.lockb if applicable
+   - Keep in sync with package-lock.json
+
+## Step 11: Document Updates
+
+**Applies Rules:** documentation-patterns.mdc, coding-practice.mdc
+
+1. **Update Changelog**
+   - Document package updates
+   - Note breaking changes
+   - List updated packages
+
+2. **Commit with Clear Message**
+   ```bash
+   git commit -m "chore(deps): update packages
+
+   - Updated @nestjs/common to v11.0.4
+   - Updated typeorm to v0.3.20
+   - Fixed security vulnerabilities
+   - Breaking changes: [list if any]"
+   ```
+
+3. **Run document-changes Command**
+   - Document package updates
+   - Update context files if needed
+
+## Step 12: Update Checklist
+
+- [ ] Checked outdated packages
+- [ ] Checked for vulnerabilities
+- [ ] Created update plan
+- [ ] Backed up current state
+- [ ] Fixed security vulnerabilities
+- [ ] Updated patch versions
+- [ ] Updated minor versions (selective)
+- [ ] Handled major updates (if any)
+- [ ] Resolved conflicts
+- [ ] All tests passing
+- [ ] Build successful
+- [ ] Manual testing completed
+- [ ] Lock file updated and committed
+- [ ] Changes documented
+- [ ] Commit message clear
+
+## Common Update Scenarios
+
+### Scenario 1: Security Update
+```
+1. Run: npm audit
+2. Fix: npm audit fix
+3. Test: npm test && npm run build
+4. Commit: "chore(deps): fix security vulnerabilities"
+```
+
+### Scenario 2: Patch Updates
+```
+1. Run: npm update
+2. Test: npm test
+3. Commit: "chore(deps): update patch versions"
+```
+
+### Scenario 3: NestJS Major Update
+```
+1. Review: NestJS migration guide
+2. Update: npm install @nestjs/common@latest @nestjs/core@latest
+3. Fix: Update code for breaking changes
+4. Test: Comprehensive testing
+5. Commit: "chore(deps): update NestJS to v11 (breaking changes)"
+```
+
+### Scenario 4: TypeORM Update
+```
+1. Review: TypeORM changelog
+2. Check: Compatibility with @nestjs/typeorm
+3. Update: npm install typeorm@latest @nestjs/typeorm@latest
+4. Test: Database operations
+5. Commit: "chore(deps): update TypeORM"
+```
+
+## Best Practices
+
+1. **Update Regularly**
+   - Check monthly for updates
+   - Fix security issues immediately
+   - Plan major updates quarterly
+
+2. **Update Incrementally**
+   - Don't update everything at once
+   - Update by category (security, patches, minor, major)
+   - Test after each category
+
+3. **Test Thoroughly**
+   - Always run tests after updates
+   - Test critical features manually
+   - Check for runtime errors
+
+4. **Document Changes**
+   - Clear commit messages
+   - Document breaking changes
+   - Update changelog
+
+5. **Keep Lock Files Updated**
+   - Always commit lock file changes
+   - Don't ignore lock files
+   - Review lock file diffs
+
+6. **Monitor Dependencies**
+   - Set up dependency alerts (GitHub, npm)
+   - Review security advisories
+   - Stay informed about updates
+
+## Troubleshooting
+
+### Installation Fails
+- Clear cache: `npm cache clean --force`
+- Delete node_modules and package-lock.json
+- Fresh install: `npm install`
+
+### Version Conflicts
+- Use `npm ls` to identify conflicts
+- Use `npm dedupe` to resolve
+- Use overrides if necessary
+
+### Breaking Changes
+- Review changelog
+- Check migration guide
+- Update code incrementally
+- Test after each change
+
+### Build Errors After Update
+- Check TypeScript version compatibility
+- Review type definition updates
+- Update code for API changes

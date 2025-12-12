@@ -34,6 +34,7 @@ Rules for optimization:
 Rules for development workflows:
 - **feature-implementation.mdc** - Module structure and organization
 - **documentation-patterns.mdc** - Auto-documentation standards
+- **dependency-management.mdc** - Package management and versioning
 
 ## Task → Rules Mapping
 
@@ -128,6 +129,29 @@ Rules for development workflows:
 
 **Task-Specific (Context-Dependent):**
 - All other rules (to understand what to document)
+
+### Task: Update Packages (`update-packages.mdc`)
+
+**Always Applies:**
+- coding-practice.mdc
+- debugging-practice.mdc
+
+**Task-Specific (Always Apply):**
+- dependency-management.mdc
+
+**Task-Specific (Conditional):**
+- documentation-patterns.mdc (when documenting updates)
+
+### Task: Maintain Repository (`maintain-repository.mdc`)
+
+**Always Applies:**
+- coding-practice.mdc
+- debugging-practice.mdc
+
+**Task-Specific (Context-Dependent):**
+- dependency-management.mdc (for package checks)
+- database-migrations.mdc (for migration checks)
+- documentation-patterns.mdc (for documentation updates)
 
 ## Rule → Related Rules Mapping
 
@@ -259,6 +283,17 @@ Rules for development workflows:
 - Bug fixes
 - Optimizations
 
+### dependency-management.mdc
+**Related Rules:**
+- coding-practice.mdc (package.json formatting)
+- debugging-practice.mdc (handling dependency errors)
+
+**When Used With:**
+- Updating packages
+- Adding dependencies
+- Removing dependencies
+- Managing versions
+
 ## Quick Reference Matrix
 
 | Task | Core Rules | Data Layer | API Layer | Performance | Workflow |
@@ -270,6 +305,8 @@ Rules for development workflows:
 | Create Migration | ✅ | ✅ | - | - | - |
 | Refactor | ✅ | ⚠️ | ⚠️ | - | ⚠️ |
 | Document | - | - | - | - | ✅ |
+| Update Packages | ✅ | - | - | - | ⚠️ |
+| Maintain Repository | ✅ | ⚠️ | - | - | ⚠️ |
 
 **Legend:**
 - ✅ Always applies
