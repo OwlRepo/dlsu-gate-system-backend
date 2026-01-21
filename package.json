@@ -47,7 +47,15 @@
     "maintain:check": "npm audit && npm outdated && npm run lint && npm test",
     "maintain:full": "npm audit fix && npm update && npm run lint --fix && npm test && npm run build",
     "clean:install": "rm -rf node_modules package-lock.json && npm install",
-    "clean:build": "rm -rf dist && npm run build"
+    "clean:build": "rm -rf dist && npm run build",
+    "check:windows": "deployment_docs\\check-prerequisites.bat",
+    "deploy:windows": "deployment_docs\\deploy-windows-server.bat",
+    "update:windows": "deployment_docs\\update-windows.bat",
+    "install:service": "deployment_docs\\install-windows-service.bat",
+    "start:windows": "pm2 start deployment_docs\\ecosystem.windows.config.js --env production",
+    "stop:windows": "pm2 stop dlsu-portal-be",
+    "restart:windows": "pm2 restart dlsu-portal-be",
+    "logs:windows": "pm2 logs dlsu-portal-be"
   },
   "dependencies": {
     "@faker-js/faker": "^9.5.0",
