@@ -20,6 +20,7 @@ import { HttpCacheInterceptor } from './interceptors/cache.interceptor';
 import { CacheService } from './services/cache.service';
 import { AuthModule } from './auth/auth.module';
 import { StudentsModule } from './students/students.module';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { StudentsModule } from './students/students.module';
     CacheModule.register(redisConfig),
     AuthModule,
     StudentsModule,
+    SyncModule,
   ],
   controllers: [AppController],
   providers: [

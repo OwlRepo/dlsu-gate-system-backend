@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, Like, FindManyOptions } from 'typeorm';
 import { Report } from './entities/report.entity';
@@ -30,6 +30,40 @@ export class ReportsService {
       datetime: new Date(createReportDto.datetime),
     });
     return await this.reportRepository.save(report);
+  }
+
+  async createBulk(createReportDtos: CreateReportDto[]): Promise<Report[]> {
+    if (!Array.isArray(createReportDtos) || createReportDtos.length === 0) {
+      throw new BadRequestException(
+        'Array of reports is required and cannot be empty',
+      );
+    }
+
+    const queryRunner =
+      this.reportRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const reports = createReportDtos.map((dto) =>
+        this.reportRepository.create({
+          ...dto,
+          datetime: new Date(dto.datetime),
+        }),
+      );
+
+      const savedReports = await queryRunner.manager.save(Report, reports);
+
+      await queryRunner.commitTransaction();
+      return savedReports;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException(
+        `Failed to create reports: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAll(query: EnhancedReportQueryDto) {

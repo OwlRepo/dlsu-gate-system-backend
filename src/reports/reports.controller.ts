@@ -7,6 +7,7 @@ import {
   Body,
   Res,
   UnprocessableEntityException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import {
@@ -15,6 +16,7 @@ import {
   ApiQuery,
   ApiResponse,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Response } from 'express';
@@ -134,14 +136,176 @@ export class ReportsController {
 
   @Post()
   @ApiOperation({
-    summary: 'Create new report',
-    description: 'Creates a new report with the provided data',
+    summary: 'Create new report(s)',
+    description:
+      'Creates a new report or multiple reports. Accepts either a single report object or an array of report objects for bulk creation.\n\n' +
+      '**Report Types:**\n' +
+      '- `"1"` = Entry (person entering the gate)\n' +
+      '- `"2"` = Exit (person leaving the gate)\n\n' +
+      '**Status Format:**\n' +
+      '- `"GREEN;allowed"` = Access granted\n' +
+      '- `"RED;cannot enter with or without remarks"` = Access denied\n' +
+      '- `"YELLOW;pending"` = Access pending review\n\n' +
+      '**DateTime Format:** ISO 8601 format (e.g., "2024-03-15T10:00:00Z" or "2024-03-15T10:00:00+08:00")',
+  })
+  @ApiBody({
+    schema: {
+      oneOf: [
+        {
+          $ref: '#/components/schemas/CreateReportDto',
+        },
+        {
+          type: 'array',
+          items: {
+            $ref: '#/components/schemas/CreateReportDto',
+          },
+        },
+      ],
+    },
+    examples: {
+      singleEntry: {
+        summary: 'Single Entry Report',
+        description: 'Create a single entry report when a person enters the gate',
+        value: {
+          datetime: '2024-03-15T10:30:00Z',
+          type: '1',
+          user_id: '2021-12345',
+          name: 'Juan Dela Cruz',
+          remarks: 'Student entering campus',
+          status: 'GREEN;allowed',
+          device: 'Mobile App',
+        },
+      },
+      singleExit: {
+        summary: 'Single Exit Report',
+        description: 'Create a single exit report when a person leaves the gate',
+        value: {
+          datetime: '2024-03-15T18:45:00Z',
+          type: '2',
+          user_id: '2021-12345',
+          name: 'Juan Dela Cruz',
+          remarks: 'Student leaving campus',
+          status: 'GREEN;allowed',
+          device: 'Mobile App',
+        },
+      },
+      singleEntryDenied: {
+        summary: 'Single Entry Report - Access Denied',
+        description: 'Create an entry report when access is denied',
+        value: {
+          datetime: '2024-03-15T10:30:00Z',
+          type: '1',
+          user_id: '2021-12345',
+          name: 'Juan Dela Cruz',
+          remarks: 'No valid ID presented',
+          status: 'RED;cannot enter with or without remarks',
+          device: 'Mobile App',
+        },
+      },
+      bulkEntry: {
+        summary: 'Bulk Entry Reports',
+        description: 'Create multiple entry reports at once (useful for offline sync)',
+        value: [
+          {
+            datetime: '2024-03-15T08:00:00Z',
+            type: '1',
+            user_id: '2021-12345',
+            name: 'Juan Dela Cruz',
+            remarks: 'Morning entry',
+            status: 'GREEN;allowed',
+            device: 'Mobile App',
+          },
+          {
+            datetime: '2024-03-15T08:05:00Z',
+            type: '1',
+            user_id: '2021-67890',
+            name: 'Maria Santos',
+            remarks: 'Morning entry',
+            status: 'GREEN;allowed',
+            device: 'Mobile App',
+          },
+          {
+            datetime: '2024-03-15T08:10:00Z',
+            type: '1',
+            user_id: '2021-11111',
+            name: 'Pedro Garcia',
+            remarks: 'Morning entry',
+            status: 'RED;cannot enter with or without remarks',
+            device: 'Mobile App',
+          },
+        ],
+      },
+      bulkMixed: {
+        summary: 'Bulk Mixed Reports (Entry and Exit)',
+        description: 'Create multiple reports with both entry and exit types',
+        value: [
+          {
+            datetime: '2024-03-15T08:00:00Z',
+            type: '1',
+            user_id: '2021-12345',
+            name: 'Juan Dela Cruz',
+            remarks: 'Morning entry',
+            status: 'GREEN;allowed',
+            device: 'Mobile App',
+          },
+          {
+            datetime: '2024-03-15T12:00:00Z',
+            type: '2',
+            user_id: '2021-12345',
+            name: 'Juan Dela Cruz',
+            remarks: 'Lunch break exit',
+            status: 'GREEN;allowed',
+            device: 'Mobile App',
+          },
+          {
+            datetime: '2024-03-15T13:00:00Z',
+            type: '1',
+            user_id: '2021-12345',
+            name: 'Juan Dela Cruz',
+            remarks: 'Return from lunch',
+            status: 'GREEN;allowed',
+            device: 'Mobile App',
+          },
+          {
+            datetime: '2024-03-15T17:00:00Z',
+            type: '2',
+            user_id: '2021-12345',
+            name: 'Juan Dela Cruz',
+            remarks: 'End of day exit',
+            status: 'GREEN;allowed',
+            device: 'Mobile App',
+          },
+        ],
+      },
+      minimalRequired: {
+        summary: 'Minimal Required Fields',
+        description: 'Example with only required fields (device is optional)',
+        value: {
+          datetime: '2024-03-15T10:30:00Z',
+          type: '1',
+          user_id: '2021-12345',
+          name: 'Juan Dela Cruz',
+          remarks: 'Entry report',
+          status: 'GREEN;allowed',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 201,
-    description: 'Report created successfully',
+    description: 'Report(s) created successfully',
   })
-  create(@Body() createReportDto: CreateReportDto) {
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid data or empty array',
+  })
+  create(@Body() createReportDto: CreateReportDto | CreateReportDto[]) {
+    if (Array.isArray(createReportDto)) {
+      if (createReportDto.length === 0) {
+        throw new BadRequestException('Array cannot be empty');
+      }
+      return this.reportsService.createBulk(createReportDto);
+    }
     return this.reportsService.create(createReportDto);
   }
 
