@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "postinstall": "patch-package",
     "docker-fresh-build": "docker compose down -v && docker compose up --build -d",
     "docker-build": "docker compose up --build -d",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -110,6 +111,10 @@
     "socket.io": "^4.8.1",
     "typeorm": "^0.3.20",
     "uuid": "^9.0.0"
+  },
+  "overrides": {
+    "jwa": "^2.0.0",
+    "buffer-equal-constant-time": "^1.0.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.14",

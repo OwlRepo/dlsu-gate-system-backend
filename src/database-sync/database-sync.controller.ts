@@ -146,6 +146,120 @@ export class DatabaseSyncController {
     return this.databaseSyncService.getAllSchedules();
   }
 
+  @Post('biostar/sync')
+  @ApiOperation({
+    summary: 'Trigger manual Biostar sync',
+    description: `
+      Starts an immediate Biostar sync without waiting for schedule.
+      
+      The sync process:
+      1. Authenticates with Biostar API
+      2. Fetches all users from Biostar API (with pagination)
+      3. For each user:
+         - Matches user_id from Biostar with ID_Number in PostgreSQL
+         - If student exists: Updates only the Photo field
+         - If student doesn't exist: Creates new student with ID_Number and Photo
+      
+      - Only admins can trigger manual Biostar sync
+      - Syncs photos from Biostar to PostgreSQL database
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Biostar sync completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          example: true,
+        },
+        message: {
+          type: 'string',
+          example: 'Biostar sync completed successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Biostar sync failed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async triggerBiostarSync() {
+    return this.databaseSyncService.triggerBiostarSync();
+  }
+
+  @Get('biostar/schedules')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Get all Biostar sync schedules',
+    description: `
+      Returns information about all configured Biostar sync schedules.
+      
+      Returns for each schedule:
+      - Schedule number (1 or 2)
+      - Configured time
+      - Whether it's currently active
+      - Last successful sync time
+      - Next scheduled run time
+      
+      Only admins can view Biostar schedules.
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all Biostar sync schedules',
+    type: [ScheduledSyncDto],
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Insufficient permissions',
+  })
+  async getBiostarSchedules() {
+    return this.databaseSyncService.getAllBiostarSchedules();
+  }
+
+  @Post('biostar/schedule')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Update Biostar sync schedule',
+    description: `
+      Updates when the automatic Biostar sync should run.
+      
+      - Allows setting two daily Biostar sync schedules (schedule 1 and 2)
+      - Time must be in 24-hour format (HH:mm)
+      - Example: "09:00" for 9 AM, "21:00" for 9 PM
+      - Only admins can update Biostar schedules
+      
+      This sync process:
+      1. Authenticates with Biostar API
+      2. Fetches all users from Biostar API
+      3. Syncs photos to PostgreSQL database
+    `,
+  })
+  @ApiBody({ type: UpdateScheduleDto })
+  @ApiResponse({ status: 200, description: 'Biostar schedule successfully updated' })
+  @ApiResponse({ status: 400, description: 'Invalid military time format' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Insufficient permissions',
+  })
+  async updateBiostarSchedule(@Body() payload: UpdateScheduleDto) {
+    const { scheduleNumber, time } = payload;
+
+    // Validate military time format
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (!timeRegex.test(time)) {
+      throw new BadRequestException(
+        'Invalid military time format. Use HH:mm (00:00-23:59)',
+      );
+    }
+
+    return this.databaseSyncService.updateBiostarSchedule(scheduleNumber, time);
+  }
+
   @Get('test-connection')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)

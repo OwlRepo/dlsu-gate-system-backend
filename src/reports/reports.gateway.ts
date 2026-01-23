@@ -12,6 +12,7 @@ import { Report } from './entities/report.entity';
 import { Interval } from '@nestjs/schedule';
 import { startOfDay, endOfDay } from 'date-fns';
 import { Between } from 'typeorm';
+import dayjs from '../config/dayjs.config';
 
 interface GateStats {
   onPremise: number;
@@ -47,6 +48,7 @@ export class ReportsGateway
   private connectedClients = 0;
   private lastSuccessfulUpdate: Date = new Date();
   private readonly FALLBACK_THRESHOLD = 10000; // 10 seconds in milliseconds
+  private currentStatsDate: string = '';
 
   private currentStats: GateStats = {
     onPremise: 0,
@@ -68,6 +70,8 @@ export class ReportsGateway
 
   async onModuleInit() {
     try {
+      // Initialize current date tracking
+      this.currentStatsDate = this.getCurrentDateString();
       await this.initializeStats();
       this.logger.log('Initial stats calculated successfully');
     } catch (error) {
@@ -117,6 +121,15 @@ export class ReportsGateway
     }
 
     try {
+      // Check for date change first
+      const currentDate = this.getCurrentDateString();
+      if (currentDate !== this.currentStatsDate) {
+        this.logger.log(
+          `Date changed from ${this.currentStatsDate} to ${currentDate}. Resetting stats.`,
+        );
+        await this.resetStatsForNewDay(currentDate);
+      }
+
       const newStats = await this.calculateTodayStats();
 
       if (this.hasStatsChanged(newStats)) {
@@ -170,14 +183,52 @@ export class ReportsGateway
     );
   }
 
+  /**
+   * Get current date string in Asia/Manila timezone (YYYY-MM-DD format)
+   */
+  private getCurrentDateString(): string {
+    return dayjs().tz('Asia/Manila').format('YYYY-MM-DD');
+  }
+
+  /**
+   * Reset stats to zero when date changes (crosses midnight)
+   */
+  private async resetStatsForNewDay(newDate: string): Promise<void> {
+    this.currentStatsDate = newDate;
+    this.currentStats = {
+      onPremise: 0,
+      entry: 0,
+      exit: 0,
+      gateAccessStats: {
+        allowed: 0,
+        allowedWithRemarks: 0,
+        notAllowed: 0,
+      },
+      lastUpdated: new Date(),
+    };
+
+    // Broadcast reset stats to all connected clients
+    if (this.server?.sockets?.sockets?.size > 0) {
+      this.server.emit('stats-update', this.currentStats);
+      this.logger.log(
+        `Stats reset for new day (${newDate}) and broadcast to clients`,
+      );
+    } else {
+      this.logger.log(`Stats reset for new day (${newDate})`);
+    }
+  }
+
   private async calculateTodayStats(): Promise<GateStats> {
-    const today = new Date();
+    // Use Asia/Manila timezone for date calculations
+    const todayManila = dayjs().tz('Asia/Manila').toDate();
+    const startOfToday = startOfDay(todayManila);
+    const endOfToday = endOfDay(todayManila);
     let todayReports: Report[] = [];
 
     try {
       todayReports = await this.reportsService.find({
         where: {
-          datetime: Between(startOfDay(today), endOfDay(today)),
+          datetime: Between(startOfToday, endOfToday),
         },
         order: {
           datetime: 'DESC',

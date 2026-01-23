@@ -8,7 +8,6 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SyncService } from './sync.service';
 import { CacheTTL } from '../decorators/cache-control.decorator';
-import { Student } from '../students/entities/student.entity';
 
 @ApiTags('Sync')
 @ApiBearerAuth()

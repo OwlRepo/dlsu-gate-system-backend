@@ -97,6 +97,50 @@ export class DatabaseSyncService {
 
     this.ensureLogDirectory();
     this.ensureFaceImagesDirectory();
+    this.initializeBiostarSchedules();
+  }
+
+  private async initializeBiostarSchedules() {
+    const defaultBiostarSchedules = [
+      { scheduleNumber: 3, displayNumber: 1, time: '09:00' },
+      { scheduleNumber: 4, displayNumber: 2, time: '21:00' },
+    ];
+
+    for (const schedule of defaultBiostarSchedules) {
+      try {
+        const existing = await this.syncScheduleRepository.findOne({
+          where: { scheduleNumber: schedule.scheduleNumber },
+        });
+
+        if (!existing) {
+          const cronExpression = this.convertMilitaryTimeToCron(schedule.time);
+          const newSchedule = this.syncScheduleRepository.create({
+            scheduleNumber: schedule.scheduleNumber,
+            time: schedule.time,
+            cronExpression,
+          });
+          await this.syncScheduleRepository.save(newSchedule);
+          this.addBiostarCronJob(
+            `biostar-sync-${schedule.displayNumber}`,
+            cronExpression,
+            schedule.displayNumber,
+          );
+        } else {
+          this.addBiostarCronJob(
+            `biostar-sync-${schedule.displayNumber}`,
+            existing.cronExpression,
+            schedule.displayNumber,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `Failed to initialize biostar schedule ${schedule.scheduleNumber}:`,
+          error,
+        );
+        // Continue with next schedule even if one fails
+        continue;
+      }
+    }
   }
 
   private ensureLogDirectory() {
@@ -221,6 +265,27 @@ export class DatabaseSyncService {
     job.start();
   }
 
+  private addBiostarCronJob(
+    name: string,
+    cronExpression: string,
+    scheduleNumber: number,
+  ) {
+    const job = new CronJob(
+      cronExpression,
+      () => {
+        this.syncFromBiostar(name);
+      },
+      null,
+      true,
+      'Asia/Manila', // Set timezone to Philippine Time
+    );
+
+    // In @nestjs/schedule v6, addCronJob expects CronJob<null, null>
+    // Cast to match the expected type while preserving functionality
+    this.schedulerRegistry.addCronJob(name, job as any);
+    job.start();
+  }
+
   private convertMilitaryTimeToCron(time: string): string {
     const [hours, minutes] = time.split(':');
     // No need to convert to UTC since we're using Asia/Manila timezone in CronJob
@@ -267,7 +332,9 @@ export class DatabaseSyncService {
   }
 
   async getAllSchedules(): Promise<ScheduledSyncDto[]> {
-    const schedules = await this.syncScheduleRepository.find();
+    const schedules = await this.syncScheduleRepository.find({
+      where: { scheduleNumber: In([1, 2]) },
+    });
     return schedules.map((schedule) => {
       const job = this.schedulerRegistry.getCronJob(
         `sync-${schedule.scheduleNumber}`,
@@ -285,6 +352,244 @@ export class DatabaseSyncService {
         timezone: 'Asia/Manila',
       };
     });
+  }
+
+  async getAllBiostarSchedules(): Promise<ScheduledSyncDto[]> {
+    const schedules = await this.syncScheduleRepository.find({
+      where: { scheduleNumber: In([3, 4]) },
+    });
+    return schedules.map((schedule) => {
+      // Map database scheduleNumber (3, 4) to display number (1, 2)
+      const displayNumber = schedule.scheduleNumber === 3 ? 1 : 2;
+      const jobName = `biostar-sync-${displayNumber}`;
+      const job = this.schedulerRegistry.getCronJob(jobName);
+      return {
+        scheduleNumber: displayNumber,
+        time: schedule.time,
+        isActive: job?.isActive ?? false,
+        lastSyncTime: schedule.lastSyncTime
+          ? new Date(schedule.lastSyncTime)
+          : null,
+        nextRun: job?.nextDate()?.toJSDate()
+          ? new Date(job.nextDate().toJSDate())
+          : null,
+        timezone: 'Asia/Manila',
+      };
+    });
+  }
+
+  async updateBiostarSchedule(scheduleNumber: number, time: string) {
+    if (scheduleNumber !== 1 && scheduleNumber !== 2) {
+      throw new BadRequestException('Schedule number must be 1 or 2');
+    }
+
+    // Map display scheduleNumber (1, 2) to database scheduleNumber (3, 4)
+    const dbScheduleNumber = scheduleNumber === 1 ? 3 : 4;
+    const existingSchedule = await this.syncScheduleRepository.findOne({
+      where: { scheduleNumber: dbScheduleNumber },
+    });
+
+    if (!existingSchedule) {
+      throw new BadRequestException(
+        `Biostar schedule ${scheduleNumber} does not exist`,
+      );
+    }
+
+    const cronExpression = this.convertMilitaryTimeToCron(time);
+    const jobName = `biostar-sync-${scheduleNumber}`;
+
+    // Update database
+    existingSchedule.time = time;
+    existingSchedule.cronExpression = cronExpression;
+    await this.syncScheduleRepository.save(existingSchedule);
+
+    // Update cron job
+    const existingJob = this.schedulerRegistry.getCronJob(jobName);
+    if (existingJob) {
+      existingJob.stop();
+      this.schedulerRegistry.deleteCronJob(jobName);
+    }
+    this.addBiostarCronJob(jobName, cronExpression, scheduleNumber);
+
+    return {
+      message: 'Biostar schedule updated successfully',
+      scheduleNumber,
+      time,
+      timezone: 'Asia/Manila',
+    };
+  }
+
+  async triggerBiostarSync() {
+    try {
+      await this.syncFromBiostar();
+      return {
+        success: true,
+        message: 'Biostar sync completed successfully',
+      };
+    } catch (error) {
+      this.logger.error('Failed to trigger Biostar sync:', error);
+      throw new BadRequestException({
+        message: 'Failed to trigger Biostar sync',
+        details: error.message,
+      });
+    }
+  }
+
+  async syncFromBiostar(jobName?: string): Promise<void> {
+    const jobKey = jobName || 'biostar-manual-sync';
+    
+    if (this.activeJobs.get(jobKey)) {
+      this.logger.warn(`Biostar sync ${jobKey} is already running`);
+      return;
+    }
+
+    try {
+      this.activeJobs.set(jobKey, true);
+      this.jobStartTimes.set(jobKey, new Date());
+      this.logger.log(`Starting Biostar sync for ${jobKey}`);
+
+      // Authenticate with Biostar API
+      const { token, sessionId } = await this.getApiToken();
+
+      // Fetch all users with pagination
+      const limit = 50;
+      let offset = 0;
+      let total = 0;
+      let fetchedCount = 0;
+      let totalUpdated = 0;
+      let totalCreated = 0;
+      let totalSkipped = 0;
+
+      do {
+        this.logger.log(
+          `Fetching Biostar users: offset=${offset}, limit=${limit}`,
+        );
+
+        const response = await axios.get(`${this.apiBaseUrl}/api/users`, {
+          params: {
+            limit,
+            offset,
+            group_id: 1,
+            order_by: 'name:true',
+          },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'bs-session-id': sessionId,
+            accept: 'application/json',
+          },
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+          timeout: 120000,
+        });
+
+        const userCollection = response.data?.UserCollection;
+        if (!userCollection) {
+          throw new BadRequestException(
+            'Invalid response format from Biostar API',
+          );
+        }
+
+        total = userCollection.total || 0;
+        const users = userCollection.rows || [];
+
+        this.logger.log(
+          `Fetched ${users.length} users (${fetchedCount + users.length}/${total})`,
+        );
+
+        // Process each user
+        for (const user of users) {
+          try {
+            const userId = user.user_id;
+            const photo = user.photo || null;
+            const name = user.name || null;
+
+            if (!userId) {
+              this.logger.warn('Skipping user with no user_id');
+              totalSkipped++;
+              continue;
+            }
+
+            // Find student by ID_Number
+            const existingStudent = await this.studentRepository.findOne({
+              where: { ID_Number: userId },
+            });
+
+            if (existingStudent) {
+              // Update photo if it exists and is different
+              if (photo && photo !== existingStudent.Photo) {
+                await this.studentRepository.update(
+                  { ID_Number: userId },
+                  { Photo: photo, updatedAt: new Date() },
+                );
+                totalUpdated++;
+                this.logger.debug(`Updated photo for student ${userId}`);
+              } else if (!photo) {
+                this.logger.debug(`No photo for user ${userId}, skipping update`);
+                totalSkipped++;
+              } else {
+                this.logger.debug(`Photo unchanged for student ${userId}`);
+                totalSkipped++;
+              }
+            } else {
+              // Create new student
+              const newStudent = this.studentRepository.create({
+                ID_Number: userId,
+                Photo: photo,
+                Name: name,
+                isArchived: false,
+              });
+              await this.studentRepository.save(newStudent);
+              totalCreated++;
+              this.logger.debug(`Created new student ${userId}`);
+            }
+          } catch (error) {
+            this.logger.error(
+              `Error processing user ${user.user_id}:`,
+              error.message,
+            );
+            totalSkipped++;
+          }
+        }
+
+        fetchedCount += users.length;
+        offset += limit;
+
+        // Break if we've fetched all users
+        if (fetchedCount >= total || users.length === 0) {
+          break;
+        }
+      } while (fetchedCount < total);
+
+      this.logger.log(
+        `Biostar sync completed: ${totalCreated} created, ${totalUpdated} updated, ${totalSkipped} skipped`,
+      );
+
+      // Update lastSyncTime if this is a scheduled sync
+      if (jobName && jobName.startsWith('biostar-sync-')) {
+        const scheduleNumberStr = jobName.replace('biostar-sync-', '');
+        const displayNumber = parseInt(scheduleNumberStr, 10);
+        const dbScheduleNumber = displayNumber === 1 ? 3 : 4;
+
+        const schedule = await this.syncScheduleRepository.findOne({
+          where: { scheduleNumber: dbScheduleNumber },
+        });
+
+        if (schedule) {
+          schedule.lastSyncTime = new Date();
+          await this.syncScheduleRepository.save(schedule);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Biostar sync failed:`, error);
+      throw new BadRequestException({
+        message: 'Biostar sync failed',
+        details: error.message,
+      });
+    } finally {
+      this.activeJobs.set(jobKey, false);
+      this.jobStartTimes.delete(jobKey);
+    }
   }
 
   private async getApiToken(): Promise<{ token: string; sessionId: string }> {
