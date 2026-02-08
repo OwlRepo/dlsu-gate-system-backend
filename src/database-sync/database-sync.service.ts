@@ -29,7 +29,7 @@ export class DatabaseSyncService {
   private sqlConfig: sql.config;
   private apiBaseUrl: string;
   private apiCredentials: { login_id: string; password: string };
-  private readonly useNewSchema: boolean;
+  private readonly schemaEnv: string;
   private readonly logDir = path.join(process.cwd(), 'logs', 'skipped-records');
   private readonly syncedDir = path.join(
     process.cwd(),
@@ -70,9 +70,10 @@ export class DatabaseSyncService {
   ) {
     this.initializeSchedules();
 
-    // Feature flag for new SQL Server schema (Entrant-style)
-    this.useNewSchema =
-      this.configService.get('SOURCE_DB_NEW_SCHEMA_ENABLED') === 'true';
+    // Schema selector: 'main' (old schema) or 'dasma' (new Entrant-style schema)
+    // Defaults to 'main' if not set or invalid value
+    const envValue = this.configService.get('SOURCE_DB_SCHEMA_ENV') || 'main';
+    this.schemaEnv = envValue === 'dasma' ? 'dasma' : 'main';
 
     this.sqlConfig = {
       user: this.configService.get('SOURCE_DB_USERNAME'),
@@ -1099,8 +1100,8 @@ export class DatabaseSyncService {
       batchNumber++;
       let query: string;
       
-      if (this.useNewSchema) {
-        // New Entrant-style schema: explicit columns
+      if (this.schemaEnv === 'dasma') {
+        // New Entrant-style schema (dasma): explicit columns
         const columns = 'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
         if (hasIsArchivedColumn) {
           query = `
@@ -1119,7 +1120,7 @@ export class DatabaseSyncService {
           `;
         }
       } else {
-        // Old schema: keep existing behavior
+        // Old schema (main): keep existing behavior
         if (hasIsArchivedColumn) {
           query = `
             SELECT * FROM ${tableName}
@@ -1151,8 +1152,8 @@ export class DatabaseSyncService {
    * @returns Normalized record with standard field names
    */
   private normalizeRecord(record: any): any {
-    if (this.useNewSchema) {
-      // New Entrant-style schema mapping
+    if (this.schemaEnv === 'dasma') {
+      // New Entrant-style schema (dasma) mapping
       // Build Name from LastName, FirstName, MiddleName, Suffix
       const nameParts: string[] = [];
       if (record.LastName) nameParts.push(record.LastName.trim());
@@ -1302,7 +1303,7 @@ export class DatabaseSyncService {
       }
 
       // 2. Check if isArchived/IsArchived column exists
-      const archivedColumnName = this.useNewSchema ? 'IsArchived' : 'isArchived';
+      const archivedColumnName = this.schemaEnv === 'dasma' ? 'IsArchived' : 'isArchived';
       const hasIsArchivedColumn = await this.checkColumnExists(
         pool,
         archivedColumnName,
@@ -1364,7 +1365,7 @@ export class DatabaseSyncService {
           // Handle Unique_ID conversion for old schema (hex to decimal)
           let uniqueId = record.Unique_ID;
           if (
-            !this.useNewSchema &&
+            this.schemaEnv === 'main' &&
             uniqueId != null &&
             typeof uniqueId === 'string' &&
             /^[0-9A-Fa-f\s]+$/.test(uniqueId)
@@ -2106,8 +2107,8 @@ export class DatabaseSyncService {
       let query: string;
       let hasIsArchivedColumn: boolean;
       
-      if (this.useNewSchema) {
-        // New schema: check for IsArchived (capital I)
+      if (this.schemaEnv === 'dasma') {
+        // New schema (dasma): check for IsArchived (capital I)
         hasIsArchivedColumn = await this.checkColumnExists(
           pool,
           'IsArchived',
@@ -2119,7 +2120,7 @@ export class DatabaseSyncService {
           query = `SELECT TOP 1 ${columns} FROM ${tableName} ORDER BY ID`;
         }
       } else {
-        // Old schema: check for isArchived (lowercase i)
+        // Old schema (main): check for isArchived (lowercase i)
         hasIsArchivedColumn = await this.checkColumnExists(
           pool,
           'isArchived',
