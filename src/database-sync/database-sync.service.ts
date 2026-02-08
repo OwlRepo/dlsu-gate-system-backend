@@ -29,6 +29,7 @@ export class DatabaseSyncService {
   private sqlConfig: sql.config;
   private apiBaseUrl: string;
   private apiCredentials: { login_id: string; password: string };
+  private readonly useNewSchema: boolean;
   private readonly logDir = path.join(process.cwd(), 'logs', 'skipped-records');
   private readonly syncedDir = path.join(
     process.cwd(),
@@ -68,6 +69,10 @@ export class DatabaseSyncService {
     private databaseSyncQueueService: DatabaseSyncQueueService,
   ) {
     this.initializeSchedules();
+
+    // Feature flag for new SQL Server schema (Entrant-style)
+    this.useNewSchema =
+      this.configService.get('SOURCE_DB_NEW_SCHEMA_ENABLED') === 'true';
 
     this.sqlConfig = {
       user: this.configService.get('SOURCE_DB_USERNAME'),
@@ -1088,15 +1093,110 @@ export class DatabaseSyncService {
   ) {
     let offset = 0;
     let batchNumber = 0;
+    const tableName = this.configService.get('SOURCE_DB_TABLE');
+    
     while (true) {
       batchNumber++;
-      const query = hasIsArchivedColumn
-        ? `\n            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} \n            WHERE isArchived = 'N' OR isArchived IS NULL\n            ORDER BY ID_Number \n            OFFSET ${offset} ROWS \n            FETCH NEXT ${batchSize} ROWS ONLY\n          `
-        : `\n            SELECT * FROM ${this.configService.get('SOURCE_DB_TABLE')} \n            ORDER BY ID_Number \n            OFFSET ${offset} ROWS \n            FETCH NEXT ${batchSize} ROWS ONLY\n          `;
+      let query: string;
+      
+      if (this.useNewSchema) {
+        // New Entrant-style schema: explicit columns
+        const columns = 'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
+        if (hasIsArchivedColumn) {
+          query = `
+            SELECT ${columns} FROM ${tableName}
+            WHERE IsArchived = 0 OR IsArchived IS NULL
+            ORDER BY ID
+            OFFSET ${offset} ROWS
+            FETCH NEXT ${batchSize} ROWS ONLY
+          `;
+        } else {
+          query = `
+            SELECT ${columns} FROM ${tableName}
+            ORDER BY ID
+            OFFSET ${offset} ROWS
+            FETCH NEXT ${batchSize} ROWS ONLY
+          `;
+        }
+      } else {
+        // Old schema: keep existing behavior
+        if (hasIsArchivedColumn) {
+          query = `
+            SELECT * FROM ${tableName}
+            WHERE isArchived = 'N' OR isArchived IS NULL
+            ORDER BY ID_Number
+            OFFSET ${offset} ROWS
+            FETCH NEXT ${batchSize} ROWS ONLY
+          `;
+        } else {
+          query = `
+            SELECT * FROM ${tableName}
+            ORDER BY ID_Number
+            OFFSET ${offset} ROWS
+            FETCH NEXT ${batchSize} ROWS ONLY
+          `;
+        }
+      }
+      
       const result = await pool.request().query(query);
       if (result.recordset.length === 0) break;
       yield { batchRecords: result.recordset, batchNumber };
       offset += batchSize;
+    }
+  }
+
+  /**
+   * Normalizes records from SQL Server to a consistent format based on schema
+   * @param record Raw record from SQL Server
+   * @returns Normalized record with standard field names
+   */
+  private normalizeRecord(record: any): any {
+    if (this.useNewSchema) {
+      // New Entrant-style schema mapping
+      // Build Name from LastName, FirstName, MiddleName, Suffix
+      const nameParts: string[] = [];
+      if (record.LastName) nameParts.push(record.LastName.trim());
+      if (record.FirstName) nameParts.push(record.FirstName.trim());
+      if (record.MiddleName) nameParts.push(record.MiddleName.trim());
+      if (record.Suffix) nameParts.push(record.Suffix.trim());
+      
+      // Format: "LastName, FirstName MiddleName Suffix"
+      let fullName = '';
+      if (nameParts.length > 0) {
+        fullName = nameParts[0]; // LastName
+        if (nameParts.length > 1) {
+          fullName += ', ' + nameParts.slice(1).join(' ');
+        }
+      }
+      
+      // Map Status (bit: 1=ALLOWED, 0=NOT ALLOWED) to Campus_Entry (Y/N)
+      const campusEntry = record.Status === 1 ? 'Y' : 'N';
+      
+      // Map IsArchived (bit: 1=TRUE, 0=FALSE) to isArchived (boolean)
+      const isArchived = record.IsArchived === 1;
+      
+      return {
+        ID_Number: record.ID?.toString() || '',
+        Name: fullName,
+        Lived_Name: null, // Not available in new schema
+        Remarks: record.Remarks || null,
+        Photo: null, // Not available in new schema
+        Campus_Entry: campusEntry,
+        Unique_ID: null, // Not available in new schema
+        isArchived: isArchived,
+      };
+    } else {
+      // Old schema: return as-is (already has correct field names)
+      return {
+        ID_Number: record.ID_Number || '',
+        Name: record.Name || null,
+        Lived_Name: record.Lived_Name || null,
+        Remarks: record.Remarks || null,
+        Photo: record.Photo || null,
+        Campus_Entry: record.Campus_Entry || null,
+        Unique_ID: record.Unique_ID || null,
+        isArchived: record.isArchived === 'Y' || record.isArchived === true,
+      };
     }
   }
 
@@ -1201,13 +1301,14 @@ export class DatabaseSyncService {
         });
       }
 
-      // 2. Check if isArchived column exists
+      // 2. Check if isArchived/IsArchived column exists
+      const archivedColumnName = this.useNewSchema ? 'IsArchived' : 'isArchived';
       const hasIsArchivedColumn = await this.checkColumnExists(
         pool,
-        'isArchived',
+        archivedColumnName,
       );
       this.logger.log(
-        `Table ${hasIsArchivedColumn ? 'has' : 'does not have'} isArchived column`,
+        `Table ${hasIsArchivedColumn ? 'has' : 'does not have'} ${archivedColumnName} column`,
       );
       const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 500; // Reduced to avoid timeouts
       let totalProcessed = 0;
@@ -1225,14 +1326,18 @@ export class DatabaseSyncService {
         hasIsArchivedColumn,
         batchSize,
       )) {
+        // Normalize records based on schema (old vs new)
+        const normalizedRecords = batchRecords.map((record) =>
+          this.normalizeRecord(record),
+        );
+        
         // Convert photos to base64 before adding to batchRecords
         const batchRecordsWithPhoto = await Promise.all(
-          batchRecords.map(async (record) => ({
+          normalizedRecords.map(async (record) => ({
             ...record,
-            Photo: await this.convertPhotoToBase64(
-              record.Photo,
-              record.ID_Number,
-            ),
+            Photo: record.Photo
+              ? await this.convertPhotoToBase64(record.Photo, record.ID_Number)
+              : null,
           })),
         );
         // --- Per-batch Postgres sync ---
@@ -1256,8 +1361,11 @@ export class DatabaseSyncService {
         const toCreate = [];
         const toUpdate = [];
         for (const record of batchRecordsWithPhoto) {
+          // Handle Unique_ID conversion for old schema (hex to decimal)
           let uniqueId = record.Unique_ID;
           if (
+            !this.useNewSchema &&
+            uniqueId != null &&
             typeof uniqueId === 'string' &&
             /^[0-9A-Fa-f\s]+$/.test(uniqueId)
           ) {
@@ -1271,6 +1379,7 @@ export class DatabaseSyncService {
             }
             uniqueId = parsedId;
           }
+          
           const data = {
             ID_Number: record.ID_Number,
             Name: record.Name,
@@ -1279,7 +1388,7 @@ export class DatabaseSyncService {
             Photo: record.Photo,
             Campus_Entry: record.Campus_Entry,
             Unique_ID: uniqueId,
-            isArchived: record.isArchived === 'Y',
+            isArchived: record.isArchived,
             updatedAt: new Date(),
           };
           const existing = existingMap.get(record.ID_Number);
@@ -1292,7 +1401,7 @@ export class DatabaseSyncService {
             existing.Photo !== record.Photo ||
             existing.Campus_Entry !== record.Campus_Entry ||
             existing.Unique_ID !== uniqueId ||
-            existing.isArchived !== (record.isArchived === 'Y')
+            existing.isArchived !== record.isArchived
           ) {
             toUpdate.push({ ...data, id: existing.id });
           }
@@ -1992,13 +2101,36 @@ export class DatabaseSyncService {
       // Test 1: SQL Server Connection
       this.logger.log('1. Testing SQL Server connection...');
       pool = await sql.connect(this.sqlConfig);
-      const hasIsArchivedColumn = await this.checkColumnExists(
-        pool,
-        'isArchived',
-      );
-      const query = hasIsArchivedColumn
-        ? `SELECT TOP 1 * FROM ${this.configService.get('SOURCE_DB_TABLE')} WHERE isArchived = 0 ORDER BY ID_Number`
-        : `SELECT TOP 1 * FROM ${this.configService.get('SOURCE_DB_TABLE')} ORDER BY ID_Number`;
+      const tableName = this.configService.get('SOURCE_DB_TABLE');
+      
+      let query: string;
+      let hasIsArchivedColumn: boolean;
+      
+      if (this.useNewSchema) {
+        // New schema: check for IsArchived (capital I)
+        hasIsArchivedColumn = await this.checkColumnExists(
+          pool,
+          'IsArchived',
+        );
+        const columns = 'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
+        if (hasIsArchivedColumn) {
+          query = `SELECT TOP 1 ${columns} FROM ${tableName} WHERE IsArchived = 0 ORDER BY ID`;
+        } else {
+          query = `SELECT TOP 1 ${columns} FROM ${tableName} ORDER BY ID`;
+        }
+      } else {
+        // Old schema: check for isArchived (lowercase i)
+        hasIsArchivedColumn = await this.checkColumnExists(
+          pool,
+          'isArchived',
+        );
+        if (hasIsArchivedColumn) {
+          query = `SELECT TOP 1 * FROM ${tableName} WHERE isArchived = 'N' OR isArchived IS NULL ORDER BY ID_Number`;
+        } else {
+          query = `SELECT TOP 1 * FROM ${tableName} ORDER BY ID_Number`;
+        }
+      }
+      
       const sqlResult = await pool.request().query(query);
       sqlServerConnected = true;
       this.logger.log('SQL Server connection successful');
