@@ -17,6 +17,7 @@ describe('AdminService', () => {
       where: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
       getManyAndCount: jest.fn().mockResolvedValue([
         [
           { id: 1, username: 'admin1', password: 'pass1' },

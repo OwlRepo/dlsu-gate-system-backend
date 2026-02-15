@@ -4,6 +4,7 @@ import { EmployeeService } from './employee.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Employee } from './entities/employee.entity';
 import { DataSource } from 'typeorm';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 describe('EmployeeController', () => {
   let controller: EmployeeController;
@@ -34,7 +35,10 @@ describe('EmployeeController', () => {
           },
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<EmployeeController>(EmployeeController);
   });

@@ -2,6 +2,8 @@
 /dist
 /node_modules
 /build
+# Cursor AI integration (local only, do not push)
+.cursor/
 
 # Logs
 logs
