@@ -93,16 +93,29 @@ echo.
 
 ::: ========== STEP 2: Install Dependencies (Bun) ==========
 echo [2/8] Installing dependencies with Bun...
-call bun install
+echo [INFO] Using --ignore-scripts to avoid postinstall PATH issues on Bun.
+call bun install --ignore-scripts
 if %errorLevel% neq 0 (
     echo [WARNING] bun install had issues, retrying...
-    call bun install
+    call bun install --ignore-scripts
     if %errorLevel% neq 0 (
         echo [ERROR] bun install failed. Check the output above.
         pause
         exit /b 1
     )
 )
+
+if exist "%PROJECT_ROOT%\patches\*" (
+    echo [INFO] Applying patch-package patches...
+    call bunx patch-package
+    if %errorLevel% neq 0 (
+        echo [ERROR] Failed to apply patch-package patches.
+        echo Run manually: bunx patch-package
+        pause
+        exit /b 1
+    )
+)
+
 echo [OK] Dependencies installed
 echo.
 
