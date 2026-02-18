@@ -16,9 +16,7 @@ echo.
 echo [1/8] Checking prerequisites...
 echo.
 
-set MISSING_PREREQS=0
-
-::: Check Node.js
+::: Check Node.js (required for PM2 and runtime)
 where node >nul 2>&1
 if %errorLevel% neq 0 (
     echo [ERROR] Node.js is not installed!
@@ -29,17 +27,20 @@ if %errorLevel% neq 0 (
 for /f "tokens=*" %%i in ('node --version 2^>nul') do set NODE_VERSION=%%i
 echo [OK] Node.js: !NODE_VERSION!
 
-::: Check npm
-where npm >nul 2>&1
+::: Check Bun (required for install and build)
+where bun >nul 2>&1
 if %errorLevel% neq 0 (
-    echo [ERROR] npm is not installed!
+    echo [ERROR] Bun is not installed!
+    echo Install from: https://bun.sh/
+    echo   curl -fsSL https://bun.sh/install ^| bash
+    echo   Or: npm install -g bun
     pause
     exit /b 1
 )
-for /f "tokens=*" %%i in ('npm --version 2^>nul') do set NPM_VERSION=%%i
-echo [OK] npm: !NPM_VERSION!
+for /f "tokens=*" %%i in ('bun --version 2^>nul') do set BUN_VERSION=%%i
+echo [OK] Bun: !BUN_VERSION!
 
-::: Check PM2 (install if missing)
+::: Check PM2 (install if missing via npm)
 where pm2 >nul 2>&1
 if %errorLevel% neq 0 (
     echo Installing PM2 globally...
@@ -78,20 +79,24 @@ if not exist "%PROJECT_ROOT%\logs" mkdir "%PROJECT_ROOT%\logs"
 echo [OK] Logs directory ready
 echo.
 
-::: ========== STEP 2: Install Dependencies ==========
-echo [2/8] Installing dependencies...
-call npm install --loglevel=error
+::: ========== STEP 2: Install Dependencies (Bun) ==========
+echo [2/8] Installing dependencies with Bun...
+call bun install
 if %errorLevel% neq 0 (
-    echo [ERROR] npm install failed
-    pause
-    exit /b 1
+    echo [WARNING] bun install had issues, retrying...
+    call bun install
+    if %errorLevel% neq 0 (
+        echo [ERROR] bun install failed. Check the output above.
+        pause
+        exit /b 1
+    )
 )
 echo [OK] Dependencies installed
 echo.
 
-::: ========== STEP 3: Build Application ==========
-echo [3/8] Building application...
-call npm run build
+::: ========== STEP 3: Build Application (Bun) ==========
+echo [3/8] Building application with Bun...
+call bun run build
 if %errorLevel% neq 0 (
     echo [ERROR] Build failed. Check the output above.
     pause
