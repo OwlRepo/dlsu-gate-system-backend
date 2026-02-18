@@ -54,7 +54,7 @@
     "clean:install": "rm -rf node_modules package-lock.json && npm install",
     "clean:build": "rm -rf dist && npm run build",
     "check:windows": "deployment_docs\\check-prerequisites.bat",
-    "deploy:windows": "deployment_docs\\deploy-windows-server.bat",
+    "deploy:windows": "deployment_docs\\deploy-windows-pm2.bat",
     "update:windows": "deployment_docs\\update-windows.bat",
     "install:service": "deployment_docs\\install-windows-service.bat",
     "start:windows": "pm2 start deployment_docs\\ecosystem.windows.config.js --env production",
