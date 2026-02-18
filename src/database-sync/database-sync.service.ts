@@ -458,7 +458,7 @@ export class DatabaseSyncService {
       const { token, sessionId } = await this.getApiToken();
 
       // Fetch all users with pagination
-      const limit = 50;
+      const limit = 500;
       let offset = 0;
       let total = 0;
       let fetchedCount = 0;
