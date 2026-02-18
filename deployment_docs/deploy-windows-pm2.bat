@@ -1,5 +1,12 @@
 @echo off
 setlocal enabledelayedexpansion
+
+::: When double-clicked (no args), re-run in a persistent window so output is visible
+if "%~1"=="" (
+    cmd /k "%~f0" _deploy
+    exit /b
+)
+
 title DLSU Gate System - PM2 Deploy (Windows)
 
 ::: Change to project root directory
