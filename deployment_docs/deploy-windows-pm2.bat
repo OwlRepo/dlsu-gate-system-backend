@@ -72,12 +72,17 @@ echo [OK] package.json found
 
 if exist "%PROJECT_ROOT%\deployment_docs\ecosystem.windows.config.js" (
     set ECOSYSTEM=deployment_docs\ecosystem.windows.config.js
-) else if exist "%PROJECT_ROOT%\ecosystem.config.js" (
-    set ECOSYSTEM=ecosystem.config.js
 ) else (
-    echo [ERROR] No ecosystem config found (ecosystem.windows.config.js or ecosystem.config.js)
-    pause
-    exit /b 1
+    if exist "%PROJECT_ROOT%\ecosystem.config.js" (
+        set ECOSYSTEM=ecosystem.config.js
+    ) else (
+        echo [ERROR] No ecosystem config found.
+        echo Looked for:
+        echo   - %PROJECT_ROOT%\deployment_docs\ecosystem.windows.config.js
+        echo   - %PROJECT_ROOT%\ecosystem.config.js
+        pause
+        exit /b 1
+    )
 )
 echo [OK] Using ecosystem: !ECOSYSTEM!
 
