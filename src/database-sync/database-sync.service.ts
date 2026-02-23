@@ -1170,11 +1170,11 @@ export class DatabaseSyncService {
         }
       }
       
-      // Map Status (bit: 1=ALLOWED, 0=NOT ALLOWED) to Campus_Entry (Y/N)
-      const campusEntry = record.Status === 1 ? 'Y' : 'N';
+      // Map Status (bit: 1/true=ALLOWED, 0/false=NOT ALLOWED) to Campus_Entry (Y/N)
+      const campusEntry = Boolean(record.Status) ? 'Y' : 'N';
       
-      // Map IsArchived (bit: 1=TRUE, 0=FALSE) to isArchived (boolean)
-      const isArchived = record.IsArchived === 1;
+      // Map IsArchived (bit: 1/true=TRUE, 0/false=FALSE) to isArchived (boolean)
+      const isArchived = Boolean(record.IsArchived);
       
       return {
         ID_Number: record.ID?.toString() || '',
