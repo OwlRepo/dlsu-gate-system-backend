@@ -82,7 +82,23 @@ function main(): void {
   console.log('\nCreating .mdc stubs...');
 
   // Core files (do not overwrite CURSOR_INTEGRATION.mdc)
-  writeStub('entry-point.mdc', 'Entry Point', 'Primary entry point. Load @.cursor/entry-point.mdc first (Hard Rule B). Intent detection, file discovery, rule routing, planning gate.');
+  const entryPointPath = path.join(ROOT, '.cursor', 'rules', 'entry-point.mdc');
+  ensureDir(path.dirname(entryPointPath));
+  fs.writeFileSync(
+    entryPointPath,
+    `---
+alwaysApply: true
+---
+
+# Entry Point
+
+Last updated: ${TODAY}
+
+Primary entry point. Load @.cursor/rules/entry-point.mdc first (Hard Rule B). Intent detection, file discovery, rule routing, planning gate.
+`,
+    'utf-8'
+  );
+  console.log('  Created: rules/entry-point.mdc');
   writeStub('README.mdc', 'Cursor Integration Overview', 'System overview and usage. See CURSOR_INTEGRATION.mdc for full spec.');
   writeStub('CURSOR_USAGE_GUIDE.mdc', 'Cursor Usage Guide', 'Project-tailored handbook. Regenerate with: "Analyze the codebase and regenerate all .cursor/ files according to @.cursor/CURSOR_INTEGRATION.mdc"');
 
@@ -127,6 +143,11 @@ function main(): void {
   writeStub('maintenance/update-workflow.mdc', 'Update Workflow', 'When and how to update .cursor files.');
   writeStub('maintenance/update-checklist.mdc', 'Update Checklist', 'Maintenance checklist.');
   writeStub('maintenance/auto-update-guide.mdc', 'Auto-Update Guide', 'AI auto-update instructions.');
+
+  // AGENTS.md (Cursor built-in trigger)
+  const agentsPath = path.join(ROOT, 'AGENTS.md');
+  fs.writeFileSync(agentsPath, 'For any task, load @.cursor/rules/entry-point.mdc first and follow its workflow.\n', 'utf-8');
+  console.log('  Created: AGENTS.md');
 
   console.log('\nDone. Run "bun run scripts/update-cursor-indexes.ts --dry-run" to verify indexer.');
 }

@@ -1494,9 +1494,9 @@ export class DatabaseSyncService {
         dayjs.extend(utc);
         dayjs.extend(timezone);
         const currentDate = dayjs().tz('Asia/Manila').startOf('day');
-        const startDate = currentDate.subtract(10, 'year');
+        const startDate = currentDate; // Start when sync runs
         const formattedStartDate = startDate.format('YYYY-MM-DD HH:mm:ss.SSS');
-        const expiryDateEnabled = currentDate.add(1, 'year');
+        const expiryDateEnabled = currentDate.add(10, 'year'); // Expire +10 years
         const formattedExpiryDateEnabled = expiryDateEnabled.format(
           'YYYY-MM-DD HH:mm:ss.SSS',
         );
