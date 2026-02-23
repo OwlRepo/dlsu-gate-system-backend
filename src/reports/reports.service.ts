@@ -99,9 +99,12 @@ export class ReportsService {
       );
     }
 
-    // Add pagination
+    // Add ordering (newest first) and pagination
     const skip = (page - 1) * limit;
-    queryBuilder.skip(skip).take(limit);
+    queryBuilder
+      .orderBy('report.datetime', 'DESC')
+      .skip(skip)
+      .take(limit);
 
     const [items, total] = await queryBuilder.getManyAndCount();
 

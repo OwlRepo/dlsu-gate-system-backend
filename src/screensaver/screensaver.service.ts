@@ -1,5 +1,6 @@
 import {
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -92,7 +93,18 @@ export class ScreensaverService {
       // Rename temporary file to final name
       await fs.rename(tempFilePath, filePath);
 
-      return { message: 'Screensaver uploaded successfully' };
+      const baseUrl =
+        this.configService.get<string>('BASE_URL') +
+        (this.isRunningInDocker()
+          ? ':10580'
+          : `:${this.configService.get<number>('PORT')}`);
+      const url = `${baseUrl}/persistent_uploads/${fileName}`;
+
+      return {
+        message: 'Screensaver uploaded successfully',
+        url,
+        filename: fileName,
+      };
     } catch (error) {
       // Clean up temporary file if it exists
       try {
@@ -101,7 +113,7 @@ export class ScreensaverService {
         // Ignore error if temp file doesn't exist
       }
       console.error('Error saving screensaver:', error);
-      throw new Error('Failed to save screensaver');
+      throw new InternalServerErrorException('Failed to save screensaver');
     }
   }
 
