@@ -71,8 +71,9 @@ export class DatabaseSyncService {
     this.initializeSchedules();
 
     // Schema selector: 'main' (old schema) or 'dasma' (new Entrant-style schema)
-    // Defaults to 'main' if not set or invalid value
-    const envValue = this.configService.get('SOURCE_DB_SCHEMA_ENV') || 'main';
+    // Reads SOURCE_DB_SCHEMA_ENV from .env; defaults to 'main' if not set
+    const rawEnv = this.configService.get('SOURCE_DB_SCHEMA_ENV') ?? 'main';
+    const envValue = String(rawEnv).trim().toLowerCase();
     this.schemaEnv = envValue === 'dasma' ? 'dasma' : 'main';
 
     this.sqlConfig = {
