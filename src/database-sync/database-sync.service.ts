@@ -1494,10 +1494,18 @@ export class DatabaseSyncService {
         dayjs.extend(utc);
         dayjs.extend(timezone);
         const currentDate = dayjs().tz('Asia/Manila').startOf('day');
-        const startDate = currentDate; // Start when sync runs
-        const formattedStartDate = startDate.format('YYYY-MM-DD HH:mm:ss.SSS');
-        const expiryDateEnabled = currentDate.add(10, 'year'); // Expire +10 years
+        // Enabled: start = sync date, expiry = +10 years
+        const startDateEnabled = currentDate;
+        const formattedStartDateEnabled = startDateEnabled.format(
+          'YYYY-MM-DD HH:mm:ss.SSS',
+        );
+        const expiryDateEnabled = currentDate.add(10, 'year');
         const formattedExpiryDateEnabled = expiryDateEnabled.format(
+          'YYYY-MM-DD HH:mm:ss.SSS',
+        );
+        // Disabled: start in past, expiry yesterday (start < expiry required by Biostar)
+        const startDateDisabled = currentDate.subtract(10, 'year');
+        const formattedStartDateDisabled = startDateDisabled.format(
           'YYYY-MM-DD HH:mm:ss.SSS',
         );
         const expiryDateDisabled = currentDate.subtract(1, 'day');
@@ -1565,6 +1573,8 @@ export class DatabaseSyncService {
                 faceImageFile2 = fileName2;
               }
 
+              const isDisabled =
+                record.Campus_Entry.toString().toUpperCase() === 'N';
               return {
                 user_id: record.ID_Number,
                 name: name,
@@ -1579,11 +1589,12 @@ export class DatabaseSyncService {
                 photo: faceImageBase64, // retain photo value for API
                 face_image_file1: faceImageFile1, // reference image file
                 face_image_file2: faceImageFile2, // reference image file
-                start_datetime: formattedStartDate,
-                expiry_datetime:
-                  record.Campus_Entry.toString().toUpperCase() === 'N'
-                    ? formattedExpiryDateDisabled
-                    : formattedExpiryDateEnabled,
+                start_datetime: isDisabled
+                  ? formattedStartDateDisabled
+                  : formattedStartDateEnabled,
+                expiry_datetime: isDisabled
+                  ? formattedExpiryDateDisabled
+                  : formattedExpiryDateEnabled,
                 original_campus_entry: record.Campus_Entry,
               };
             }),
