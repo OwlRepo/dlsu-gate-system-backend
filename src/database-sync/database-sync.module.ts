@@ -7,10 +7,16 @@ import { SyncSchedule } from './entities/sync-schedule.entity';
 import { Student } from '../students/entities/student.entity';
 import { DatabaseSyncQueueService } from './database-sync-queue.service';
 import { SyncQueue } from './entities/sync-queue.entity';
+import { BiostarSyncState } from './entities/biostar-sync-state.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SyncSchedule, Student, SyncQueue]),
+    TypeOrmModule.forFeature([
+      SyncSchedule,
+      Student,
+      SyncQueue,
+      BiostarSyncState,
+    ]),
     ScheduleModule.forRoot(),
   ],
   controllers: [DatabaseSyncController],

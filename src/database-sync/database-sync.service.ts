@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SyncSchedule } from './entities/sync-schedule.entity';
+import { BiostarSyncState } from './entities/biostar-sync-state.entity';
 import { ConfigService } from '@nestjs/config';
 import { ScheduledSyncDto } from './dto/scheduled-sync.dto';
 import { SchedulerRegistry } from '@nestjs/schedule';
@@ -64,6 +65,8 @@ export class DatabaseSyncService {
     private syncScheduleRepository: Repository<SyncSchedule>,
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
+    @InjectRepository(BiostarSyncState)
+    private biostarSyncStateRepository: Repository<BiostarSyncState>,
     private configService: ConfigService,
     private schedulerRegistry: SchedulerRegistry,
     private databaseSyncQueueService: DatabaseSyncQueueService,
@@ -506,127 +509,18 @@ export class DatabaseSyncService {
       this.jobStartTimes.set(jobKey, new Date());
       this.logger.log(`Starting Biostar sync for ${jobKey}`);
 
-      // Authenticate with Biostar API
-      const { token, sessionId } = await this.getApiToken();
+      if (this.schemaEnv === 'dasma') {
+        await this.syncFromBiostarDasma(jobKey, jobName);
+      } else {
+        await this.syncFromBiostarLegacy(jobKey, jobName);
+      }
 
-      // Fetch all users with pagination
-      const limit = 500;
-      let offset = 0;
-      let total = 0;
-      let fetchedCount = 0;
-      let totalUpdated = 0;
-      let totalCreated = 0;
-      let totalSkipped = 0;
-
-      do {
-        this.logger.log(
-          `Fetching Biostar users: offset=${offset}, limit=${limit}`,
-        );
-
-        const response = await axios.get(`${this.apiBaseUrl}/api/users`, {
-          params: {
-            limit,
-            offset,
-            group_id: 1,
-            order_by: 'name:true',
-          },
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'bs-session-id': sessionId,
-            accept: 'application/json',
-          },
-          httpsAgent: new https.Agent({
-            rejectUnauthorized: false,
-          }),
-          timeout: 120000,
-        });
-
-        const userCollection = response.data?.UserCollection;
-        if (!userCollection) {
-          throw new BadRequestException(
-            'Invalid response format from Biostar API',
-          );
-        }
-
-        total = userCollection.total || 0;
-        const users = userCollection.rows || [];
-
-        this.logger.log(
-          `Fetched ${users.length} users (${fetchedCount + users.length}/${total})`,
-        );
-
-        // Process each user
-        for (const user of users) {
-          try {
-            const userId = user.user_id;
-            const photo = user.photo || null;
-            const name = user.name || null;
-
-            if (!userId) {
-              this.logger.warn('Skipping user with no user_id');
-              totalSkipped++;
-              continue;
-            }
-
-            // Find student by ID_Number
-            const existingStudent = await this.studentRepository.findOne({
-              where: { ID_Number: userId },
-            });
-
-            if (existingStudent) {
-              // Update photo if it exists and is different
-              if (photo && photo !== existingStudent.Photo) {
-                await this.studentRepository.update(
-                  { ID_Number: userId },
-                  { Photo: photo, updatedAt: new Date() },
-                );
-                totalUpdated++;
-                this.logger.debug(`Updated photo for student ${userId}`);
-              } else if (!photo) {
-                this.logger.debug(
-                  `No photo for user ${userId}, skipping update`,
-                );
-                totalSkipped++;
-              } else {
-                this.logger.debug(`Photo unchanged for student ${userId}`);
-                totalSkipped++;
-              }
-            } else {
-              // Create new student
-              const newStudent = this.studentRepository.create({
-                ID_Number: userId,
-                Photo: photo,
-                Name: name,
-                isArchived: false,
-              });
-              await this.studentRepository.save(newStudent);
-              totalCreated++;
-              this.logger.debug(`Created new student ${userId}`);
-            }
-          } catch (error) {
-            this.logger.error(
-              `Error processing user ${user.user_id}:`,
-              error.message,
-            );
-            totalSkipped++;
-          }
-        }
-
-        fetchedCount += users.length;
-        offset += limit;
-
-        // Break if we've fetched all users
-        if (fetchedCount >= total || users.length === 0) {
-          break;
-        }
-      } while (fetchedCount < total);
-
-      this.logger.log(
-        `Biostar sync completed: ${totalCreated} created, ${totalUpdated} updated, ${totalSkipped} skipped`,
-      );
-
-      // Update lastSyncTime if this is a scheduled sync
-      if (jobName && jobName.startsWith('biostar-sync-')) {
+      // Update lastSyncTime if this is a scheduled biostar-only sync (non-dasma)
+      if (
+        this.schemaEnv !== 'dasma' &&
+        jobName &&
+        jobName.startsWith('biostar-sync-')
+      ) {
         const scheduleNumberStr = jobName.replace('biostar-sync-', '');
         const displayNumber = parseInt(scheduleNumberStr, 10);
         const dbScheduleNumber = displayNumber === 1 ? 3 : 4;
@@ -650,6 +544,407 @@ export class DatabaseSyncService {
       this.activeJobs.set(jobKey, false);
       this.jobStartTimes.delete(jobKey);
     }
+  }
+
+  /**
+   * Legacy Biostar sync: list users, use photo from list (often empty).
+   * Used when schemaEnv !== 'dasma'.
+   */
+  private async syncFromBiostarLegacy(
+    jobKey: string,
+    jobName?: string,
+  ): Promise<void> {
+    const { token, sessionId } = await this.getApiToken();
+
+    const limit = 500;
+    let offset = 0;
+    let total = 0;
+    let fetchedCount = 0;
+    let totalUpdated = 0;
+    let totalCreated = 0;
+    let totalSkipped = 0;
+
+    do {
+      this.logger.log(
+        `Fetching Biostar users: offset=${offset}, limit=${limit}`,
+      );
+
+      const response = await axios.get(`${this.apiBaseUrl}/api/users`, {
+        params: {
+          limit,
+          offset,
+          group_id: 1,
+          order_by: 'name:true',
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'bs-session-id': sessionId,
+          accept: 'application/json',
+        },
+        httpsAgent: new https.Agent({
+          rejectUnauthorized: false,
+        }),
+        timeout: 120000,
+      });
+
+      const userCollection = response.data?.UserCollection;
+      if (!userCollection) {
+        throw new BadRequestException(
+          'Invalid response format from Biostar API',
+        );
+      }
+
+      total = userCollection.total || 0;
+      const users = userCollection.rows || [];
+
+      this.logger.log(
+        `Fetched ${users.length} users (${fetchedCount + users.length}/${total})`,
+      );
+
+      for (const user of users) {
+        try {
+          const userId = user.user_id;
+          const photo = user.photo || null;
+          const name = user.name || null;
+
+          if (!userId) {
+            this.logger.warn('Skipping user with no user_id');
+            totalSkipped++;
+            continue;
+          }
+
+          const existingStudent = await this.studentRepository.findOne({
+            where: { ID_Number: userId },
+          });
+
+          if (existingStudent) {
+            if (photo && photo !== existingStudent.Photo) {
+              await this.studentRepository.update(
+                { ID_Number: userId },
+                { Photo: photo, updatedAt: new Date() },
+              );
+              totalUpdated++;
+              this.logger.debug(`Updated photo for student ${userId}`);
+            } else if (!photo) {
+              this.logger.debug(
+                `No photo for user ${userId}, skipping update`,
+              );
+              totalSkipped++;
+            } else {
+              this.logger.debug(`Photo unchanged for student ${userId}`);
+              totalSkipped++;
+            }
+          } else {
+            const newStudent = this.studentRepository.create({
+              ID_Number: userId,
+              Photo: photo,
+              Name: name,
+              isArchived: false,
+            });
+            await this.studentRepository.save(newStudent);
+            totalCreated++;
+            this.logger.debug(`Created new student ${userId}`);
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error processing user ${user.user_id}:`,
+            error.message,
+          );
+          totalSkipped++;
+        }
+      }
+
+      fetchedCount += users.length;
+      offset += limit;
+
+      if (fetchedCount >= total || users.length === 0) break;
+    } while (fetchedCount < total);
+
+    this.logger.log(
+      `Biostar sync completed: ${totalCreated} created, ${totalUpdated} updated, ${totalSkipped} skipped`,
+    );
+  }
+
+  /**
+   * Scalable dasma Biostar sync: incremental discovery, detail fetch with
+   * bounded concurrency, checkpoint for resume.
+   */
+  private async syncFromBiostarDasma(
+    jobKey: string,
+    jobName?: string,
+  ): Promise<void> {
+    const { token, sessionId } = await this.getApiToken();
+    const concurrency = Math.max(
+      1,
+      parseInt(
+        this.configService.get('BIOSTAR_DETAIL_CONCURRENCY') || '8',
+        10,
+      ) || 8,
+    );
+    const maxCandidates =
+      parseInt(
+        this.configService.get('BIOSTAR_MAX_CANDIDATES_PER_RUN') || '0',
+        10,
+      ) || 0;
+
+    const state = await this.getOrCreateBiostarSyncState();
+    state.lastRunAt = new Date();
+    await this.biostarSyncStateRepository.save(state);
+
+    this.logger.log(
+      `[Dasma Biostar] Starting sync: incremental=${!!state.lastSuccessAt && !!state.lastModifiedCursor}, lastModifiedCursor=${state.lastModifiedCursor ?? 'none'}, lastSuccessAt=${state.lastSuccessAt?.toISOString() ?? 'never'}`,
+    );
+
+    let totalDiscovered = 0;
+    let totalCandidates = 0;
+    let totalDetailFetched = 0;
+    let totalUpdated = 0;
+    let totalCreated = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+    let maxLastModified = state.lastModifiedCursor || '0';
+
+    const limit = 500;
+    const useIncremental = !!state.lastSuccessAt && !!state.lastModifiedCursor;
+    // Incremental: filtered result set, start at 0. Full: resume from checkpoint if we failed mid-run.
+    let offset = useIncremental ? 0 : (state.lastProcessedOffset ?? 0);
+
+    try {
+      // Phase A & B: List users (with optional last_modified), filter by photo_exists
+      do {
+        const params: Record<string, string | number> = {
+          limit,
+          offset,
+          group_id: 1,
+          order_by: 'name:true',
+        };
+        if (useIncremental && state.lastModifiedCursor) {
+          params.last_modified = state.lastModifiedCursor;
+        }
+
+        const response = await axios.get(`${this.apiBaseUrl}/api/users`, {
+          params,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'bs-session-id': sessionId,
+            accept: 'application/json',
+          },
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+          timeout: 120000,
+        });
+
+        const userCollection = response.data?.UserCollection;
+        if (!userCollection) {
+          throw new BadRequestException(
+            'Invalid response format from Biostar API',
+          );
+        }
+
+        const total = parseInt(String(userCollection.total || 0), 10);
+        const rows = userCollection.rows || [];
+        totalDiscovered += rows.length;
+
+        let candidates = rows.filter((u: Record<string, unknown>) => {
+          if (!u.user_id) return false;
+          const photoExists =
+            u.photo_exists === true || u.photo_exists === 'true';
+          return photoExists;
+        });
+
+        if (
+          maxCandidates > 0 &&
+          totalCandidates + candidates.length > maxCandidates
+        ) {
+          const take = maxCandidates - totalCandidates;
+          candidates = candidates.slice(0, take);
+        }
+        totalCandidates += candidates.length;
+
+        this.logger.log(
+          `[Dasma Biostar] List page: offset=${offset}, discovered=${rows.length}, candidates=${candidates.length} (totalDiscovered=${totalDiscovered}, totalCandidates=${totalCandidates})`,
+        );
+
+        for (const u of rows) {
+          const lm = String(u.last_modified ?? '0');
+          if (lm > maxLastModified) maxLastModified = lm;
+        }
+
+        // Phase C: Detail fetch with bounded concurrency
+        const results = await this.runWithConcurrency(
+          candidates,
+          concurrency,
+          async (candidate: { user_id: string }) => {
+            const detail = await this.fetchBiostarUserDetailWithRetry(
+              candidate.user_id,
+              token,
+              sessionId,
+            );
+            return { userId: candidate.user_id, detail };
+          },
+        );
+
+        for (const { userId, detail } of results) {
+          if (!detail) {
+            totalFailed++;
+            continue;
+          }
+          totalDetailFetched++;
+
+          const userObj =
+            (detail.User as Record<string, unknown>) ?? detail;
+          const photo =
+            (detail.photo as string | null) ??
+            (userObj?.photo as string | null) ??
+            null;
+          const name =
+            (detail.name as string | null) ??
+            (userObj?.name as string | null) ??
+            null;
+
+          const existingStudent = await this.studentRepository.findOne({
+            where: { ID_Number: userId },
+          });
+
+          if (existingStudent) {
+            if (photo && photo !== existingStudent.Photo) {
+              await this.studentRepository.update(
+                { ID_Number: userId },
+                { Photo: photo, updatedAt: new Date() },
+              );
+              totalUpdated++;
+            } else {
+              totalSkipped++;
+            }
+          } else {
+            const newStudent = this.studentRepository.create({
+              ID_Number: userId,
+              Photo: photo,
+              Name: name,
+              isArchived: false,
+            });
+            await this.studentRepository.save(newStudent);
+            totalCreated++;
+          }
+        }
+
+        // Phase E: Checkpoint after each page
+        state.lastProcessedOffset = offset + limit;
+        state.lastProcessedUserId =
+          rows.length > 0 ? String(rows[rows.length - 1].user_id) : null;
+        state.lastModifiedCursor = maxLastModified;
+        await this.biostarSyncStateRepository.save(state);
+
+        offset += limit;
+
+        if (rows.length === 0 || (total > 0 && offset >= total)) break;
+        if (maxCandidates > 0 && totalCandidates >= maxCandidates) break;
+      } while (true);
+
+      state.lastSuccessAt = new Date();
+      state.lastError = null;
+      state.lastModifiedCursor = maxLastModified;
+      await this.biostarSyncStateRepository.save(state);
+
+      this.logger.log(
+        `[Dasma Biostar] Sync completed: discovered=${totalDiscovered}, candidates=${totalCandidates}, detailFetched=${totalDetailFetched}, updated=${totalUpdated}, created=${totalCreated}, skipped=${totalSkipped}, failed=${totalFailed}`,
+      );
+    } catch (error) {
+      state.lastError = error?.message ?? String(error);
+      await this.biostarSyncStateRepository.save(state);
+      throw error;
+    }
+  }
+
+  private async getOrCreateBiostarSyncState(): Promise<BiostarSyncState> {
+    let state = await this.biostarSyncStateRepository.findOne({
+      where: { schemaKey: 'dasma' },
+    });
+    if (!state) {
+      state = this.biostarSyncStateRepository.create({
+        schemaKey: 'dasma',
+      });
+      await this.biostarSyncStateRepository.save(state);
+    }
+    return state;
+  }
+
+  private async fetchBiostarUserDetailWithRetry(
+    userId: string,
+    token: string,
+    sessionId: string,
+    maxRetries = 3,
+  ): Promise<Record<string, unknown> | null> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await axios.get(
+          `${this.apiBaseUrl}/api/users/${userId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'bs-session-id': sessionId,
+              accept: 'application/json',
+            },
+            httpsAgent: new https.Agent({
+              rejectUnauthorized: false,
+            }),
+            timeout: 30000,
+          },
+        );
+
+        const data = response.data;
+        const user = data?.User ?? data;
+        return (user && typeof user === 'object' ? user : {}) as Record<
+          string,
+          unknown
+        >;
+      } catch (err) {
+        lastError = err;
+        const status = axios.isAxiosError(err) ? err.response?.status : null;
+        const isRetryable =
+          status === 429 ||
+          (status != null && status >= 500) ||
+          err?.code === 'ECONNRESET' ||
+          err?.code === 'ETIMEDOUT';
+
+        if (isRetryable && attempt < maxRetries - 1) {
+          const delay = Math.min(1000 * 2 ** attempt + Math.random() * 500, 8000);
+          await new Promise((r) => setTimeout(r, delay));
+        } else {
+          this.logger.warn(
+            `[Dasma Biostar] Detail fetch failed for user ${userId} (attempt ${attempt + 1}/${maxRetries}):`,
+            axios.isAxiosError(err) ? err.message : err,
+          );
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  private async runWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    fn: (item: T) => Promise<R>,
+  ): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let index = 0;
+
+    async function worker(): Promise<void> {
+      while (index < items.length) {
+        const i = index++;
+        results[i] = await fn(items[i]);
+      }
+    }
+
+    const workers = Array.from(
+      { length: Math.min(concurrency, items.length, 1) },
+      () => worker(),
+    );
+    await Promise.all(workers);
+    return results;
   }
 
   private async getApiToken(): Promise<{ token: string; sessionId: string }> {
