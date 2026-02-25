@@ -1771,7 +1771,9 @@ export class DatabaseSyncService {
                   formats: headers.map(() => 'Text'),
                 },
                 start_line: 2,
-                import_option: 2,
+                // BioStar API: 1 = Preserve Data, 2 = Overwrite Data
+                import_option:
+                  this.schemaEnv === 'dasma' ? 1 : 2,
               },
               Query: {
                 headers: headers,
