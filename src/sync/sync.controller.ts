@@ -62,4 +62,55 @@ export class SyncController {
   async getAllStudents() {
     return this.syncService.getAllStudents();
   }
+
+  @Get('employees')
+  @ApiOperation({
+    summary: 'Get all active employees',
+    description:
+      'Returns complete list of active employees for mobile database synchronization',
+  })
+  @CacheTTL(3600000) // 1 hour
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved employees',
+    schema: {
+      type: 'object',
+      properties: {
+        employees: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              employee_id: { type: 'string' },
+              username: { type: 'string' },
+              first_name: { type: 'string' },
+              last_name: { type: 'string' },
+              email: { type: 'string' },
+              is_active: { type: 'boolean' },
+              date_created: { type: 'string', format: 'date-time' },
+              date_activated: { type: 'string', format: 'date-time' },
+              date_deactivated: {
+                type: 'string',
+                format: 'date-time',
+                nullable: true,
+              },
+              device_id: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Error retrieving data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  async getAllEmployees() {
+    return this.syncService.getAllEmployees();
+  }
 }

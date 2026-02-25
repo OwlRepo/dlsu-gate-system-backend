@@ -1036,14 +1036,14 @@ export class DatabaseSyncService {
       ? 'manual'
       : jobName.replace('-', '');
 
-    // Prepare the synced records data
+    // Prepare the synced records data (supports both main and dasma CSV row shapes)
     const syncedData = formattedRecords.map((record) => ({
       user_id: record.user_id,
       name: record.name,
-      lived_name: record.lived_name,
-      remarks: record.remarks,
-      campus_entry: record.original_campus_entry,
-      expiry_datetime: record.expiry_datetime,
+      lived_name: record.lived_name ?? '',
+      remarks: record.remarks ?? record.Remarks ?? '',
+      campus_entry: record.original_campus_entry ?? '',
+      expiry_datetime: record.expiry_datetime ?? '',
       sync_timestamp: new Date().toISOString(),
     }));
 
@@ -1186,6 +1186,7 @@ export class DatabaseSyncService {
         Campus_Entry: campusEntry,
         Unique_ID: null, // Not available in new schema
         isArchived: isArchived,
+        Group: record['Group'] ?? record.Group ?? null,
       };
     } else {
       // Old schema: return as-is (already has correct field names)
@@ -1470,26 +1471,35 @@ export class DatabaseSyncService {
           tempDir,
           `sync_${jobName}_batch${batchNumber}_${Date.now()}.csv`,
         );
+        const dasmaHeaders = [
+          { id: 'user_id', title: 'user_id' },
+          { id: 'name', title: 'name' },
+          { id: 'department', title: 'department' },
+          { id: 'user_title', title: 'user_title' },
+          { id: 'user_group', title: 'user_group' },
+          { id: 'Remarks', title: 'Remarks' },
+        ];
+        const mainHeaders = [
+          { id: 'user_id', title: 'user_id' },
+          { id: 'name', title: 'name' },
+          { id: 'department', title: 'department' },
+          { id: 'user_title', title: 'user_title' },
+          { id: 'phone', title: 'phone' },
+          { id: 'email', title: 'email' },
+          { id: 'user_group', title: 'user_group' },
+          { id: 'lived_name', title: 'Lived Name' },
+          { id: 'remarks', title: 'Remarks' },
+          { id: 'csn', title: 'csn' },
+          { id: 'photo', title: 'photo' },
+          { id: 'face_image_file1', title: 'face_image_file1' },
+          { id: 'face_image_file2', title: 'face_image_file2' },
+          { id: 'start_datetime', title: 'start_datetime' },
+          { id: 'expiry_datetime', title: 'expiry_datetime' },
+          { id: 'original_campus_entry', title: 'original_campus_entry' },
+        ];
         const csvWriter = createObjectCsvWriter({
           path: csvFilePath,
-          header: [
-            { id: 'user_id', title: 'user_id' },
-            { id: 'name', title: 'name' },
-            { id: 'department', title: 'department' },
-            { id: 'user_title', title: 'user_title' },
-            { id: 'phone', title: 'phone' },
-            { id: 'email', title: 'email' },
-            { id: 'user_group', title: 'user_group' },
-            { id: 'lived_name', title: 'Lived Name' },
-            { id: 'remarks', title: 'Remarks' },
-            { id: 'csn', title: 'csn' },
-            { id: 'photo', title: 'photo' },
-            { id: 'face_image_file1', title: 'face_image_file1' },
-            { id: 'face_image_file2', title: 'face_image_file2' },
-            { id: 'start_datetime', title: 'start_datetime' },
-            { id: 'expiry_datetime', title: 'expiry_datetime' },
-            { id: 'original_campus_entry', title: 'original_campus_entry' },
-          ],
+          header: this.schemaEnv === 'dasma' ? dasmaHeaders : mainHeaders,
         });
         const skippedRecords = [];
         dayjs.extend(utc);
@@ -1549,29 +1559,44 @@ export class DatabaseSyncService {
               }
 
               // --- BioStar 2 Visual Face CSV Import Extension ---
-              // Save face images as files and reference them in CSV
-              const faceImageBase64 = await this.convertPhotoToBase64(
-                record.Photo,
-                record.ID_Number,
-              );
+              // dasma: no photo/csn/face columns; skip image generation
+              let faceImageBase64: string | null = null;
               let faceImageFile1 = '';
               let faceImageFile2 = '';
-              if (faceImageBase64) {
-                // Write two image files per user (for demo, use same image for both)
-                const fileName1 = `${userId}_1.jpg`;
-                const fileName2 = `${userId}_2.jpg`;
-                const filePath1 = path.join(tempDir, fileName1);
-                const filePath2 = path.join(tempDir, fileName2);
-                fs.writeFileSync(
-                  filePath1,
-                  Buffer.from(faceImageBase64, 'base64'),
+              if (this.schemaEnv !== 'dasma') {
+                faceImageBase64 = await this.convertPhotoToBase64(
+                  record.Photo,
+                  record.ID_Number,
                 );
-                fs.writeFileSync(
-                  filePath2,
-                  Buffer.from(faceImageBase64, 'base64'),
-                );
-                faceImageFile1 = fileName1;
-                faceImageFile2 = fileName2;
+                if (faceImageBase64) {
+                  const fileName1 = `${userId}_1.jpg`;
+                  const fileName2 = `${userId}_2.jpg`;
+                  const filePath1 = path.join(tempDir, fileName1);
+                  const filePath2 = path.join(tempDir, fileName2);
+                  fs.writeFileSync(
+                    filePath1,
+                    Buffer.from(faceImageBase64, 'base64'),
+                  );
+                  fs.writeFileSync(
+                    filePath2,
+                    Buffer.from(faceImageBase64, 'base64'),
+                  );
+                  faceImageFile1 = fileName1;
+                  faceImageFile2 = fileName2;
+                }
+              }
+
+              if (this.schemaEnv === 'dasma') {
+                const userTitle =
+                  (record.Group && String(record.Group).trim()) || 'Student';
+                return {
+                  user_id: record.ID_Number,
+                  name: name,
+                  department: 'DLSU',
+                  user_title: userTitle,
+                  user_group: 'All Users',
+                  Remarks: remarks,
+                };
               }
 
               const isDisabled =
@@ -1587,9 +1612,9 @@ export class DatabaseSyncService {
                 lived_name: livedName,
                 remarks: remarks,
                 csn: userId,
-                photo: faceImageBase64, // retain photo value for API
-                face_image_file1: faceImageFile1, // reference image file
-                face_image_file2: faceImageFile2, // reference image file
+                photo: faceImageBase64,
+                face_image_file1: faceImageFile1,
+                face_image_file2: faceImageFile2,
                 start_datetime: isDisabled
                   ? formattedStartDateDisabled
                   : formattedStartDateEnabled,
@@ -1697,30 +1722,40 @@ export class DatabaseSyncService {
               .split('\n')
               .slice(1);
             const faceTemplateData = new Map();
-            for (const line of csvData) {
-              if (!line.trim()) continue;
-              const values = line.split(',');
-              const userId = values[0];
-              const faceImage1 = values[11];
-              const faceImage2 = values[12];
-              if (faceImage1 && faceImage1.includes('|')) {
-                const [, templateFile] = faceImage1.split('|');
-                const templatePath = path.join(tempDir, templateFile);
-                if (fs.existsSync(templatePath)) {
-                  const templateData = JSON.parse(
-                    fs.readFileSync(templatePath, 'utf8'),
-                  );
-                  faceTemplateData.set(`${userId}_1`, templateData);
+            if (this.schemaEnv !== 'dasma') {
+              const faceImage1Idx = headers.findIndex(
+                (h) => h === 'face_image_file1',
+              );
+              const faceImage2Idx = headers.findIndex(
+                (h) => h === 'face_image_file2',
+              );
+              for (const line of csvData) {
+                if (!line.trim()) continue;
+                const values = line.split(',');
+                const userId = values[0];
+                const faceImage1 =
+                  faceImage1Idx >= 0 ? values[faceImage1Idx] : undefined;
+                const faceImage2 =
+                  faceImage2Idx >= 0 ? values[faceImage2Idx] : undefined;
+                if (faceImage1 && faceImage1.includes('|')) {
+                  const [, templateFile] = faceImage1.split('|');
+                  const templatePath = path.join(tempDir, templateFile);
+                  if (fs.existsSync(templatePath)) {
+                    const templateData = JSON.parse(
+                      fs.readFileSync(templatePath, 'utf8'),
+                    );
+                    faceTemplateData.set(`${userId}_1`, templateData);
+                  }
                 }
-              }
-              if (faceImage2 && faceImage2.includes('|')) {
-                const [, templateFile] = faceImage2.split('|');
-                const templatePath = path.join(tempDir, templateFile);
-                if (fs.existsSync(templatePath)) {
-                  const templateData = JSON.parse(
-                    fs.readFileSync(templatePath, 'utf8'),
-                  );
-                  faceTemplateData.set(`${userId}_2`, templateData);
+                if (faceImage2 && faceImage2.includes('|')) {
+                  const [, templateFile] = faceImage2.split('|');
+                  const templatePath = path.join(tempDir, templateFile);
+                  if (fs.existsSync(templatePath)) {
+                    const templateData = JSON.parse(
+                      fs.readFileSync(templatePath, 'utf8'),
+                    );
+                    faceTemplateData.set(`${userId}_2`, templateData);
+                  }
                 }
               }
             }
