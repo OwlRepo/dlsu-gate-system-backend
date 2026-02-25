@@ -1985,12 +1985,14 @@ export class DatabaseSyncService {
         // Note: totalSkipped, totalEnabled, totalDisabled are calculated but not used in summary
         // Keeping for potential future use
         void (totalSkipped += skippedRecords.length);
-        void (totalEnabled += formattedRecords.filter(
-          (r) => r.original_campus_entry.toString().toUpperCase() === 'Y',
-        ).length);
-        void (totalDisabled += formattedRecords.filter(
-          (r) => r.original_campus_entry.toString().toUpperCase() === 'N',
-        ).length);
+        void (totalEnabled += formattedRecords.filter((r) => {
+          const campusEntry = r.original_campus_entry?.toString()?.toUpperCase();
+          return campusEntry === 'Y';
+        }).length);
+        void (totalDisabled += formattedRecords.filter((r) => {
+          const campusEntry = r.original_campus_entry?.toString()?.toUpperCase();
+          return campusEntry === 'N';
+        }).length);
         // Explicitly nullify large objects and arrays
         batchRecords.length = 0;
         batchRecordsWithPhoto.length = 0;
