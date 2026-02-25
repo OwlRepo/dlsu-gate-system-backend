@@ -68,13 +68,13 @@ export class DatabaseSyncService {
     private schedulerRegistry: SchedulerRegistry,
     private databaseSyncQueueService: DatabaseSyncQueueService,
   ) {
-    this.initializeSchedules();
-
     // Schema selector: 'main' (old schema) or 'dasma' (new Entrant-style schema)
     // Reads SOURCE_DB_SCHEMA_ENV from .env; defaults to 'main' if not set
     const rawEnv = this.configService.get('SOURCE_DB_SCHEMA_ENV') ?? 'main';
     const envValue = String(rawEnv).trim().toLowerCase();
     this.schemaEnv = envValue === 'dasma' ? 'dasma' : 'main';
+
+    this.initializeSchedules();
 
     this.sqlConfig = {
       user: this.configService.get('SOURCE_DB_USERNAME'),
@@ -108,6 +108,11 @@ export class DatabaseSyncService {
   }
 
   private async initializeBiostarSchedules() {
+    // Dasma: unified schedule (1/2) runs combined main+biostar; no separate biostar crons
+    if (this.schemaEnv === 'dasma') {
+      return;
+    }
+
     const defaultBiostarSchedules = [
       { scheduleNumber: 3, displayNumber: 1, time: '09:00' },
       { scheduleNumber: 4, displayNumber: 2, time: '21:00' },
@@ -259,7 +264,11 @@ export class DatabaseSyncService {
     const job = new CronJob(
       cronExpression,
       () => {
-        this.executeDatabaseSync(name);
+        if (this.schemaEnv === 'dasma') {
+          this.executeCombinedSync(name);
+        } else {
+          this.executeDatabaseSync(name);
+        }
       },
       null,
       true,
@@ -270,6 +279,38 @@ export class DatabaseSyncService {
     // Cast to match the expected type while preserving functionality
     this.schedulerRegistry.addCronJob(name, job as any);
     job.start();
+  }
+
+  /**
+   * For dasma: runs main sync first (SQL->PG->Biostar), then biostar sync (Biostar->PG photos).
+   * Updates lastSyncTime for the shared schedule when jobName is sync-1 or sync-2.
+   */
+  private async executeCombinedSync(jobName: string): Promise<void> {
+    try {
+      this.logger.log(`Starting combined sync for ${jobName}`);
+      await this.executeDatabaseSync(jobName);
+      const biostarJobKey = `biostar-after-${jobName}`;
+      await this.syncFromBiostar(biostarJobKey);
+
+      const scheduleMatch = jobName.match(/^sync-(\d+)$/);
+      if (scheduleMatch) {
+        const scheduleNumber = parseInt(scheduleMatch[1], 10);
+        const schedule = await this.syncScheduleRepository.findOne({
+          where: { scheduleNumber },
+        });
+        if (schedule) {
+          schedule.lastSyncTime = new Date();
+          await this.syncScheduleRepository.save(schedule);
+          this.logger.log(
+            `Updated last sync time for schedule ${scheduleNumber}`,
+          );
+        }
+      }
+      this.logger.log(`Combined sync completed for ${jobName}`);
+    } catch (error) {
+      this.logger.error(`Combined sync failed for ${jobName}:`, error);
+      throw error;
+    }
   }
 
   private addBiostarCronJob(
@@ -362,6 +403,11 @@ export class DatabaseSyncService {
   }
 
   async getAllBiostarSchedules(): Promise<ScheduledSyncDto[]> {
+    // Dasma: shared schedule (1/2) - delegate to main schedules
+    if (this.schemaEnv === 'dasma') {
+      return this.getAllSchedules();
+    }
+
     const schedules = await this.syncScheduleRepository.find({
       where: { scheduleNumber: In([3, 4]) },
     });
@@ -388,6 +434,11 @@ export class DatabaseSyncService {
   async updateBiostarSchedule(scheduleNumber: number, time: string) {
     if (scheduleNumber !== 1 && scheduleNumber !== 2) {
       throw new BadRequestException('Schedule number must be 1 or 2');
+    }
+
+    // Dasma: shared schedule - delegate to main schedule
+    if (this.schemaEnv === 'dasma') {
+      return this.updateSchedule(scheduleNumber, time);
     }
 
     // Map display scheduleNumber (1, 2) to database scheduleNumber (3, 4)
@@ -444,7 +495,7 @@ export class DatabaseSyncService {
 
   async syncFromBiostar(jobName?: string): Promise<void> {
     const jobKey = jobName || 'biostar-manual-sync';
-    
+
     if (this.activeJobs.get(jobKey)) {
       this.logger.warn(`Biostar sync ${jobKey} is already running`);
       return;
@@ -532,7 +583,9 @@ export class DatabaseSyncService {
                 totalUpdated++;
                 this.logger.debug(`Updated photo for student ${userId}`);
               } else if (!photo) {
-                this.logger.debug(`No photo for user ${userId}, skipping update`);
+                this.logger.debug(
+                  `No photo for user ${userId}, skipping update`,
+                );
                 totalSkipped++;
               } else {
                 this.logger.debug(`Photo unchanged for student ${userId}`);
@@ -1096,14 +1149,15 @@ export class DatabaseSyncService {
     let offset = 0;
     let batchNumber = 0;
     const tableName = this.configService.get('SOURCE_DB_TABLE');
-    
+
     while (true) {
       batchNumber++;
       let query: string;
-      
+
       if (this.schemaEnv === 'dasma') {
         // New Entrant-style schema (dasma): explicit columns
-        const columns = 'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
+        const columns =
+          'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
         if (hasIsArchivedColumn) {
           query = `
             SELECT ${columns} FROM ${tableName}
@@ -1139,7 +1193,7 @@ export class DatabaseSyncService {
           `;
         }
       }
-      
+
       const result = await pool.request().query(query);
       if (result.recordset.length === 0) break;
       yield { batchRecords: result.recordset, batchNumber };
@@ -1161,7 +1215,7 @@ export class DatabaseSyncService {
       if (record.FirstName) nameParts.push(record.FirstName.trim());
       if (record.MiddleName) nameParts.push(record.MiddleName.trim());
       if (record.Suffix) nameParts.push(record.Suffix.trim());
-      
+
       // Format: "LastName, FirstName MiddleName Suffix"
       let fullName = '';
       if (nameParts.length > 0) {
@@ -1170,13 +1224,13 @@ export class DatabaseSyncService {
           fullName += ', ' + nameParts.slice(1).join(' ');
         }
       }
-      
+
       // Map Status (bit: 1/true=ALLOWED, 0/false=NOT ALLOWED) to Campus_Entry (Y/N)
       const campusEntry = Boolean(record.Status) ? 'Y' : 'N';
-      
+
       // Map IsArchived (bit: 1/true=TRUE, 0/false=FALSE) to isArchived (boolean)
       const isArchived = Boolean(record.IsArchived);
-      
+
       return {
         ID_Number: record.ID?.toString() || '',
         Name: fullName,
@@ -1201,6 +1255,19 @@ export class DatabaseSyncService {
         isArchived: record.isArchived === 'Y' || record.isArchived === true,
       };
     }
+  }
+
+  /**
+   * Normalizes Group value to allowed values only: EMPLOYEE, STUDENT, AGENCY.
+   * Invalid or empty values return null.
+   */
+  private normalizeGroupValue(val: any): string | null {
+    if (val == null || val === '') return null;
+    const trimmed = String(val).trim();
+    if (!trimmed) return null;
+    const upper = trimmed.toUpperCase();
+    if (['EMPLOYEE', 'STUDENT', 'AGENCY'].includes(upper)) return upper;
+    return null;
   }
 
   private logMemoryUsage(batchNumber: number) {
@@ -1305,7 +1372,8 @@ export class DatabaseSyncService {
       }
 
       // 2. Check if isArchived/IsArchived column exists
-      const archivedColumnName = this.schemaEnv === 'dasma' ? 'IsArchived' : 'isArchived';
+      const archivedColumnName =
+        this.schemaEnv === 'dasma' ? 'IsArchived' : 'isArchived';
       const hasIsArchivedColumn = await this.checkColumnExists(
         pool,
         archivedColumnName,
@@ -1333,7 +1401,7 @@ export class DatabaseSyncService {
         const normalizedRecords = batchRecords.map((record) =>
           this.normalizeRecord(record),
         );
-        
+
         // Convert photos to base64 before adding to batchRecords
         const batchRecordsWithPhoto = await Promise.all(
           normalizedRecords.map(async (record) => ({
@@ -1382,7 +1450,8 @@ export class DatabaseSyncService {
             }
             uniqueId = parsedId;
           }
-          
+
+          const groupValue = this.normalizeGroupValue(record.Group);
           const data = {
             ID_Number: record.ID_Number,
             Name: record.Name,
@@ -1392,6 +1461,7 @@ export class DatabaseSyncService {
             Campus_Entry: record.Campus_Entry,
             Unique_ID: uniqueId,
             isArchived: record.isArchived,
+            group: groupValue ?? null,
             updatedAt: new Date(),
           };
           const existing = existingMap.get(record.ID_Number);
@@ -1404,7 +1474,8 @@ export class DatabaseSyncService {
             existing.Photo !== record.Photo ||
             existing.Campus_Entry !== record.Campus_Entry ||
             existing.Unique_ID !== uniqueId ||
-            existing.isArchived !== record.isArchived
+            existing.isArchived !== record.isArchived ||
+            existing.group !== (groupValue ?? null)
           ) {
             toUpdate.push({ ...data, id: existing.id });
           }
@@ -1772,8 +1843,7 @@ export class DatabaseSyncService {
                 },
                 start_line: 2,
                 // BioStar API: 1 = Preserve Data, 2 = Overwrite Data
-                import_option:
-                  this.schemaEnv === 'dasma' ? 1 : 2,
+                import_option: this.schemaEnv === 'dasma' ? 1 : 2,
               },
               Query: {
                 headers: headers,
@@ -1988,11 +2058,15 @@ export class DatabaseSyncService {
         // Keeping for potential future use
         void (totalSkipped += skippedRecords.length);
         void (totalEnabled += formattedRecords.filter((r) => {
-          const campusEntry = r.original_campus_entry?.toString()?.toUpperCase();
+          const campusEntry = r.original_campus_entry
+            ?.toString()
+            ?.toUpperCase();
           return campusEntry === 'Y';
         }).length);
         void (totalDisabled += formattedRecords.filter((r) => {
-          const campusEntry = r.original_campus_entry?.toString()?.toUpperCase();
+          const campusEntry = r.original_campus_entry
+            ?.toString()
+            ?.toUpperCase();
           return campusEntry === 'N';
         }).length);
         // Explicitly nullify large objects and arrays
@@ -2116,8 +2190,12 @@ export class DatabaseSyncService {
       // Generate a unique job name
       const jobName = `manual-${pendingJob.id}`;
 
-      // Execute the sync job
-      await this.executeDatabaseSync(jobName);
+      // Execute the sync job (combined main+biostar for dasma, main only otherwise)
+      if (this.schemaEnv === 'dasma') {
+        await this.executeCombinedSync(jobName);
+      } else {
+        await this.executeDatabaseSync(jobName);
+      }
 
       // Update job status to completed
       await this.databaseSyncQueueService.updateQueueStatus(
@@ -2154,17 +2232,15 @@ export class DatabaseSyncService {
       this.logger.log('1. Testing SQL Server connection...');
       pool = await sql.connect(this.sqlConfig);
       const tableName = this.configService.get('SOURCE_DB_TABLE');
-      
+
       let query: string;
       let hasIsArchivedColumn: boolean;
-      
+
       if (this.schemaEnv === 'dasma') {
         // New schema (dasma): check for IsArchived (capital I)
-        hasIsArchivedColumn = await this.checkColumnExists(
-          pool,
-          'IsArchived',
-        );
-        const columns = 'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
+        hasIsArchivedColumn = await this.checkColumnExists(pool, 'IsArchived');
+        const columns =
+          'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
         if (hasIsArchivedColumn) {
           query = `SELECT TOP 1 ${columns} FROM ${tableName} WHERE IsArchived = 0 ORDER BY ID`;
         } else {
@@ -2172,17 +2248,14 @@ export class DatabaseSyncService {
         }
       } else {
         // Old schema (main): check for isArchived (lowercase i)
-        hasIsArchivedColumn = await this.checkColumnExists(
-          pool,
-          'isArchived',
-        );
+        hasIsArchivedColumn = await this.checkColumnExists(pool, 'isArchived');
         if (hasIsArchivedColumn) {
           query = `SELECT TOP 1 * FROM ${tableName} WHERE isArchived = 'N' OR isArchived IS NULL ORDER BY ID_Number`;
         } else {
           query = `SELECT TOP 1 * FROM ${tableName} ORDER BY ID_Number`;
         }
       }
-      
+
       const sqlResult = await pool.request().query(query);
       sqlServerConnected = true;
       this.logger.log('SQL Server connection successful');

@@ -3,20 +3,29 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { In } from 'typeorm';
 import { SyncQueue } from './entities/sync-queue.entity';
 import { SyncSchedule } from './entities/sync-schedule.entity';
 import { CronJob } from 'cron';
 
 @Injectable()
 export class DatabaseSyncQueueService {
+  private readonly schemaEnv: string;
+
   constructor(
     @InjectRepository(SyncQueue)
     private syncQueueRepository: Repository<SyncQueue>,
     @InjectRepository(SyncSchedule)
     private syncScheduleRepository: Repository<SyncSchedule>,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    const rawEnv = this.configService.get('SOURCE_DB_SCHEMA_ENV') ?? 'main';
+    const envValue = String(rawEnv).trim().toLowerCase();
+    this.schemaEnv = envValue === 'dasma' ? 'dasma' : 'main';
+  }
 
   async addToQueue() {
     // Check if there's already a job running
@@ -42,7 +51,11 @@ export class DatabaseSyncQueueService {
     }
 
     // Check for upcoming scheduled syncs
-    const schedules = await this.syncScheduleRepository.find();
+    // Dasma: only shared schedules (1/2); non-dasma: all schedules (1,2,3,4)
+    const scheduleNumbers = this.schemaEnv === 'dasma' ? [1, 2] : [1, 2, 3, 4];
+    const schedules = await this.syncScheduleRepository.find({
+      where: { scheduleNumber: In(scheduleNumbers) },
+    });
     const now = new Date();
 
     for (const schedule of schedules) {

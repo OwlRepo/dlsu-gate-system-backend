@@ -35,6 +35,9 @@ export class Student {
   @Column({ type: 'boolean', default: false })
   isArchived: boolean;
 
+  @Column({ name: 'group', nullable: true })
+  group: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

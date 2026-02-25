@@ -165,7 +165,8 @@ export class ReportsController {
     examples: {
       singleEntry: {
         summary: 'Single Entry Report',
-        description: 'Create a single entry report when a person enters the gate',
+        description:
+          'Create a single entry report when a person enters the gate',
         value: {
           datetime: '2024-03-15T10:30:00Z',
           type: '1',
@@ -178,7 +179,8 @@ export class ReportsController {
       },
       singleExit: {
         summary: 'Single Exit Report',
-        description: 'Create a single exit report when a person leaves the gate',
+        description:
+          'Create a single exit report when a person leaves the gate',
         value: {
           datetime: '2024-03-15T18:45:00Z',
           type: '2',
@@ -204,7 +206,8 @@ export class ReportsController {
       },
       bulkEntry: {
         summary: 'Bulk Entry Reports',
-        description: 'Create multiple entry reports at once (useful for offline sync)',
+        description:
+          'Create multiple entry reports at once (useful for offline sync)',
         value: [
           {
             datetime: '2024-03-15T08:00:00Z',

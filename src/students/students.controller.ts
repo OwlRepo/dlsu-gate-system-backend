@@ -45,7 +45,8 @@ export class StudentsController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search term for ID_Number, Name, or Remarks',
+    description:
+      'Search term for ID_Number, Name, Remarks, Campus_Entry, or group',
   })
   @ApiQuery({
     name: 'isArchived',
@@ -72,6 +73,11 @@ export class StudentsController {
               Campus_Entry: { type: 'string' },
               Unique_ID: { type: 'number' },
               isArchived: { type: 'boolean' },
+              group: {
+                type: 'string',
+                nullable: true,
+                description: 'EMPLOYEE, STUDENT, or AGENCY',
+              },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' },
             },

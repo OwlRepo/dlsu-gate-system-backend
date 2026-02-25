@@ -43,6 +43,11 @@ export class SyncController {
               Campus_Entry: { type: 'string', nullable: true },
               Unique_ID: { type: 'string', nullable: true },
               isArchived: { type: 'boolean' },
+              group: {
+                type: 'string',
+                nullable: true,
+                description: 'EMPLOYEE, STUDENT, or AGENCY',
+              },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' },
             },

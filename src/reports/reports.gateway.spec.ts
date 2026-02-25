@@ -9,11 +9,11 @@ jest.mock('../config/dayjs.config', () => {
   const actualDayjs = jest.requireActual('dayjs');
   const utc = jest.requireActual('dayjs/plugin/utc');
   const timezone = jest.requireActual('dayjs/plugin/timezone');
-  
+
   actualDayjs.extend(utc);
   actualDayjs.extend(timezone);
   actualDayjs.tz.setDefault('Asia/Manila');
-  
+
   // Return the configured dayjs as default export
   return {
     __esModule: true,
@@ -114,7 +114,9 @@ describe('ReportsGateway', () => {
       };
 
       // Mock getCurrentDateString to return new date (after midnight)
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-21');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-21');
 
       await gateway['handleInterval']();
 
@@ -125,17 +127,22 @@ describe('ReportsGateway', () => {
       expect(gateway['currentStats'].entry).toBe(0);
       expect(gateway['currentStats'].exit).toBe(0);
       // Verify WebSocket emit was called with reset stats
-      expect(mockServer.emit).toHaveBeenCalledWith('stats-update', expect.objectContaining({
-        onPremise: 0,
-        entry: 0,
-        exit: 0,
-      }));
+      expect(mockServer.emit).toHaveBeenCalledWith(
+        'stats-update',
+        expect.objectContaining({
+          onPremise: 0,
+          entry: 0,
+          exit: 0,
+        }),
+      );
     });
 
     it('should not reset stats when date has not changed', async () => {
       // Set same date
       gateway['currentStatsDate'] = '2024-03-20';
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-20');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-20');
       mockReportsService.find.mockResolvedValue([]);
 
       // Set up stats
@@ -166,13 +173,17 @@ describe('ReportsGateway', () => {
     it('should handle timezone correctly (Asia/Manila)', async () => {
       // Test at 11:59 PM Manila time (should not reset)
       gateway['currentStatsDate'] = '2024-03-20';
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-20');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-20');
 
       await gateway['handleInterval']();
       expect(gateway['currentStatsDate']).toBe('2024-03-20');
 
       // Test at 12:00 AM Manila time (should reset)
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-21');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-21');
 
       await gateway['handleInterval']();
       expect(gateway['currentStatsDate']).toBe('2024-03-21');
@@ -180,7 +191,9 @@ describe('ReportsGateway', () => {
 
       // Test at 12:01 AM Manila time (should not reset again)
       const previousStatsDate = gateway['currentStatsDate'];
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-21');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-21');
 
       await gateway['handleInterval']();
       expect(gateway['currentStatsDate']).toBe(previousStatsDate);
@@ -209,7 +222,9 @@ describe('ReportsGateway', () => {
       expect(gateway['currentStats'].entry).toBe(0);
       expect(gateway['currentStats'].exit).toBe(0);
       expect(gateway['currentStats'].gateAccessStats.allowed).toBe(0);
-      expect(gateway['currentStats'].gateAccessStats.allowedWithRemarks).toBe(0);
+      expect(gateway['currentStats'].gateAccessStats.allowedWithRemarks).toBe(
+        0,
+      );
       expect(gateway['currentStats'].gateAccessStats.notAllowed).toBe(0);
       expect(gateway['currentStats'].lastUpdated).toBeInstanceOf(Date);
     });
@@ -219,17 +234,20 @@ describe('ReportsGateway', () => {
 
       await gateway['resetStatsForNewDay']('2024-03-21');
 
-      expect(mockServer.emit).toHaveBeenCalledWith('stats-update', expect.objectContaining({
-        onPremise: 0,
-        entry: 0,
-        exit: 0,
-        gateAccessStats: {
-          allowed: 0,
-          allowedWithRemarks: 0,
-          notAllowed: 0,
-        },
-        lastUpdated: expect.any(Date),
-      }));
+      expect(mockServer.emit).toHaveBeenCalledWith(
+        'stats-update',
+        expect.objectContaining({
+          onPremise: 0,
+          entry: 0,
+          exit: 0,
+          gateAccessStats: {
+            allowed: 0,
+            allowedWithRemarks: 0,
+            notAllowed: 0,
+          },
+          lastUpdated: expect.any(Date),
+        }),
+      );
     });
 
     it('should log reset event', async () => {
@@ -264,14 +282,31 @@ describe('ReportsGateway', () => {
 
       // Mock reports for new day
       const newDayReports = [
-        createMockReport('1', '1', new Date('2024-03-21T08:00:00+08:00'), 'GREEN;allowed'),
-        createMockReport('2', '1', new Date('2024-03-21T09:00:00+08:00'), 'GREEN;allowed'),
-        createMockReport('3', '2', new Date('2024-03-21T10:00:00+08:00'), 'GREEN;allowed'),
+        createMockReport(
+          '1',
+          '1',
+          new Date('2024-03-21T08:00:00+08:00'),
+          'GREEN;allowed',
+        ),
+        createMockReport(
+          '2',
+          '1',
+          new Date('2024-03-21T09:00:00+08:00'),
+          'GREEN;allowed',
+        ),
+        createMockReport(
+          '3',
+          '2',
+          new Date('2024-03-21T10:00:00+08:00'),
+          'GREEN;allowed',
+        ),
       ];
       mockReportsService.find.mockResolvedValue(newDayReports);
 
       // Spy on getCurrentDateString to avoid dayjs issues in test
-      const getDateSpy = jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-21');
+      const getDateSpy = jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-21');
 
       const stats = await gateway['calculateTodayStats']();
 
@@ -286,7 +321,9 @@ describe('ReportsGateway', () => {
     it('should not include previous day data after reset', async () => {
       // Set up previous day's date
       gateway['currentStatsDate'] = '2024-03-19';
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-20');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-20');
       gateway['connectedClients'] = 2; // Ensure interval runs
 
       // Mock empty array for new day (no reports yet)
@@ -310,7 +347,9 @@ describe('ReportsGateway', () => {
 
   describe('Initialization', () => {
     it('should initialize currentStatsDate on module init', async () => {
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-20');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-20');
 
       await gateway.onModuleInit();
 
@@ -324,8 +363,12 @@ describe('ReportsGateway', () => {
         createMockReport('2', '2', new Date('2024-03-20T09:00:00+08:00')),
       ];
       mockReportsService.find.mockResolvedValue(mockReports);
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-20');
-      jest.spyOn(gateway as any, 'initializeStats').mockResolvedValue(undefined);
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-20');
+      jest
+        .spyOn(gateway as any, 'initializeStats')
+        .mockResolvedValue(undefined);
 
       await gateway.onModuleInit();
 
@@ -337,7 +380,9 @@ describe('ReportsGateway', () => {
   describe('Interval Handler', () => {
     it('should check for date change on each interval', async () => {
       gateway['currentStatsDate'] = '2024-03-20';
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-20');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-20');
 
       await gateway['handleInterval']();
 
@@ -345,7 +390,9 @@ describe('ReportsGateway', () => {
       expect(gateway['currentStatsDate']).toBe('2024-03-20');
 
       // Now change date
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-21');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-21');
 
       await gateway['handleInterval']();
 
@@ -397,7 +444,9 @@ describe('ReportsGateway', () => {
 
     it('should handle database errors during reset', async () => {
       gateway['currentStatsDate'] = '2024-03-20';
-      jest.spyOn(gateway as any, 'getCurrentDateString').mockReturnValue('2024-03-21');
+      jest
+        .spyOn(gateway as any, 'getCurrentDateString')
+        .mockReturnValue('2024-03-21');
 
       // Reset should still occur even if database query fails later
       await gateway['resetStatsForNewDay']('2024-03-21');

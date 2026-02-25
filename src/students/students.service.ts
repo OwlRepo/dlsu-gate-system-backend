@@ -45,13 +45,14 @@ export class StudentsService {
         'student.Campus_Entry',
         'student.Unique_ID',
         'student.isArchived',
+        'student.group',
         'student.createdAt',
         'student.updatedAt',
       ]);
 
     if (search) {
       queryBuilder.where(
-        '(student.ID_Number LIKE :search OR student.Name LIKE :search OR student.Remarks LIKE :search OR student.Campus_Entry LIKE :search)',
+        '(student.ID_Number LIKE :search OR student.Name LIKE :search OR student.Remarks LIKE :search OR student.Campus_Entry LIKE :search OR student.group LIKE :search)',
         { search: `%${search}%` },
       );
     }
@@ -79,6 +80,7 @@ export class StudentsService {
       'Campus Entry',
       'Unique ID',
       'Archived',
+      'group',
       'Created At',
       'Updated At',
     ];
@@ -123,6 +125,7 @@ export class StudentsService {
           student.Campus_Entry,
           student.Unique_ID,
           student.isArchived,
+          student.group ?? '',
           student.createdAt.toISOString(),
           student.updatedAt.toISOString(),
         ]

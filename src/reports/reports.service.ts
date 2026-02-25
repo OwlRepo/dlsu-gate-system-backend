@@ -101,10 +101,7 @@ export class ReportsService {
 
     // Add ordering (newest first) and pagination
     const skip = (page - 1) * limit;
-    queryBuilder
-      .orderBy('report.datetime', 'DESC')
-      .skip(skip)
-      .take(limit);
+    queryBuilder.orderBy('report.datetime', 'DESC').skip(skip).take(limit);
 
     const [items, total] = await queryBuilder.getManyAndCount();
 
@@ -195,6 +192,7 @@ export class ReportsService {
         'student."Unique_ID" as card',
         'student."Lived_Name" as lived_name',
         'student.Remarks as remarks',
+        'student."group" as group',
       ];
       if (includePhoto) {
         columns.push('student.Photo as photo');
@@ -213,6 +211,7 @@ export class ReportsService {
           card: student.card,
           lived_name: student.lived_name,
           remarks: student.remarks,
+          group: student.group ?? null,
           ...(includePhoto && { photo: student.photo }),
         });
       });
@@ -226,6 +225,7 @@ export class ReportsService {
       { id: 'name', title: 'Name' },
       { id: 'lived_name', title: 'Lived_Name' },
       { id: 'remarks', title: 'Remarks' },
+      { id: 'group', title: 'group' },
       { id: 'status', title: 'Status' },
       { id: 'device', title: 'Device' }, // Added device header
     ];
@@ -258,6 +258,7 @@ export class ReportsService {
         name: report.name,
         lived_name: student?.lived_name || 'null',
         remarks: student?.remarks || 'null',
+        group: student?.group ?? '',
         status: report.status || 'null',
         device: report.device || 'null', // Added device field
       };

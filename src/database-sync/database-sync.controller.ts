@@ -239,7 +239,10 @@ export class DatabaseSyncController {
     `,
   })
   @ApiBody({ type: UpdateScheduleDto })
-  @ApiResponse({ status: 200, description: 'Biostar schedule successfully updated' })
+  @ApiResponse({
+    status: 200,
+    description: 'Biostar schedule successfully updated',
+  })
   @ApiResponse({ status: 400, description: 'Invalid military time format' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({
