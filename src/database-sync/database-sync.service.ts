@@ -674,13 +674,15 @@ export class DatabaseSyncService {
     jobName?: string,
   ): Promise<void> {
     const { token, sessionId } = await this.getApiToken();
-    const concurrency = Math.max(
+    const baseConcurrency = Math.max(
       1,
       parseInt(
         this.configService.get('BIOSTAR_DETAIL_CONCURRENCY') || '8',
         10,
       ) || 8,
     );
+    let effectiveConcurrency = baseConcurrency;
+    const rateLimitTracker = { count: 0 };
     const maxCandidates =
       parseInt(
         this.configService.get('BIOSTAR_MAX_CANDIDATES_PER_RUN') || '0',
@@ -695,6 +697,7 @@ export class DatabaseSyncService {
       `[Dasma Biostar] Starting sync: incremental=${!!state.lastSuccessAt && !!state.lastModifiedCursor}, lastModifiedCursor=${state.lastModifiedCursor ?? 'none'}, lastSuccessAt=${state.lastSuccessAt?.toISOString() ?? 'never'}`,
     );
 
+    const runStartMs = Date.now();
     let totalDiscovered = 0;
     let totalCandidates = 0;
     let totalDetailFetched = 0;
@@ -702,6 +705,9 @@ export class DatabaseSyncService {
     let totalCreated = 0;
     let totalSkipped = 0;
     let totalFailed = 0;
+    let totalCardUpdated = 0;
+    let totalCardCleared = 0;
+    let totalRateLimitHits = 0;
     let maxLastModified = state.lastModifiedCursor || '0';
 
     const limit = 500;
@@ -750,7 +756,9 @@ export class DatabaseSyncService {
           if (!u.user_id) return false;
           const photoExists =
             u.photo_exists === true || u.photo_exists === 'true';
-          return photoExists;
+          const cardCount = parseInt(String(u.card_count ?? 0), 10) || 0;
+          const hasCard = cardCount > 0;
+          return photoExists || hasCard;
         });
 
         if (
@@ -771,19 +779,35 @@ export class DatabaseSyncService {
           if (lm > maxLastModified) maxLastModified = lm;
         }
 
-        // Phase C: Detail fetch with bounded concurrency
-        const results = await this.runWithConcurrency(
-          candidates,
-          concurrency,
-          async (candidate: { user_id: string }) => {
-            const detail = await this.fetchBiostarUserDetailWithRetry(
-              candidate.user_id,
-              token,
-              sessionId,
+        try {
+          // Phase C: Detail fetch with bounded concurrency (adaptive on rate limit)
+          const results = await this.runWithConcurrency(
+            candidates,
+            effectiveConcurrency,
+            async (candidate: { user_id: string }) => {
+              const detail = await this.fetchBiostarUserDetailWithRetry(
+                candidate.user_id,
+                token,
+                sessionId,
+                3,
+                rateLimitTracker,
+              );
+              return { userId: candidate.user_id, detail };
+            },
+          );
+
+          totalRateLimitHits += rateLimitTracker.count;
+        if (rateLimitTracker.count >= 3) {
+            const prev = effectiveConcurrency;
+            effectiveConcurrency = Math.max(
+              1,
+              Math.floor(effectiveConcurrency / 2),
             );
-            return { userId: candidate.user_id, detail };
-          },
-        );
+            this.logger.warn(
+              `[Dasma Biostar] Rate limit threshold reached (${rateLimitTracker.count} hits), reducing concurrency ${prev} -> ${effectiveConcurrency}`,
+            );
+            rateLimitTracker.count = 0;
+          }
 
         for (const { userId, detail } of results) {
           if (!detail) {
@@ -802,18 +826,33 @@ export class DatabaseSyncService {
             (detail.name as string | null) ??
             (userObj?.name as string | null) ??
             null;
+          const uniqueId = this.extractBiostarCardValue(detail);
 
           const existingStudent = await this.studentRepository.findOne({
             where: { ID_Number: userId },
           });
 
           if (existingStudent) {
-            if (photo && photo !== existingStudent.Photo) {
+            const photoChanged = photo !== existingStudent.Photo;
+            const existingUnique = existingStudent.Unique_ID != null ? String(existingStudent.Unique_ID).trim() : null;
+            const uniqueIdChanged = (uniqueId ?? null) !== (existingUnique || null);
+            const nameChanged = name !== (existingStudent.Name ?? null);
+            if (photoChanged || uniqueIdChanged || nameChanged) {
               await this.studentRepository.update(
                 { ID_Number: userId },
-                { Photo: photo, updatedAt: new Date() },
+                {
+                  Photo: photo,
+                  Unique_ID: uniqueId,
+                  Name: name ?? existingStudent.Name,
+                  updatedAt: new Date(),
+                },
               );
               totalUpdated++;
+              if (uniqueId != null && uniqueId !== '') {
+                totalCardUpdated++;
+              } else if (existingUnique) {
+                totalCardCleared++;
+              }
             } else {
               totalSkipped++;
             }
@@ -821,12 +860,31 @@ export class DatabaseSyncService {
             const newStudent = this.studentRepository.create({
               ID_Number: userId,
               Photo: photo,
+              Unique_ID: uniqueId,
               Name: name,
               isArchived: false,
             });
             await this.studentRepository.save(newStudent);
             totalCreated++;
+            if (uniqueId != null && uniqueId !== '') {
+              totalCardUpdated++;
+            }
           }
+        }
+
+        } catch (pageError) {
+          state.lastProcessedOffset = offset;
+          state.lastProcessedUserId =
+            rows.length > 0 ? String(rows[rows.length - 1].user_id) : null;
+          state.lastModifiedCursor = maxLastModified;
+          state.lastError =
+            (pageError as Error)?.message ?? String(pageError);
+          await this.biostarSyncStateRepository.save(state);
+          this.logger.error(
+            `[Dasma Biostar] Page failed at offset=${offset}, checkpoint saved for resume`,
+            pageError,
+          );
+          throw pageError;
         }
 
         // Phase E: Checkpoint after each page
@@ -847,14 +905,47 @@ export class DatabaseSyncService {
       state.lastModifiedCursor = maxLastModified;
       await this.biostarSyncStateRepository.save(state);
 
+      const durationMs = Date.now() - runStartMs;
       this.logger.log(
-        `[Dasma Biostar] Sync completed: discovered=${totalDiscovered}, candidates=${totalCandidates}, detailFetched=${totalDetailFetched}, updated=${totalUpdated}, created=${totalCreated}, skipped=${totalSkipped}, failed=${totalFailed}`,
+        `[Dasma Biostar] Sync completed: discovered=${totalDiscovered}, candidates=${totalCandidates}, detailFetched=${totalDetailFetched}, updated=${totalUpdated}, created=${totalCreated}, skipped=${totalSkipped}, failed=${totalFailed}, cardUpdated=${totalCardUpdated}, cardCleared=${totalCardCleared}, rateLimitHits=${totalRateLimitHits}, finalConcurrency=${effectiveConcurrency}, durationMs=${durationMs}`,
       );
+      const failRatio =
+        totalDetailFetched > 0 ? totalFailed / totalDetailFetched : 0;
+      if (failRatio > 0.1) {
+        this.logger.warn(
+          `[Dasma Biostar] High failure ratio: ${(failRatio * 100).toFixed(1)}% (${totalFailed}/${totalDetailFetched})`,
+        );
+      }
+      if (totalRateLimitHits > 5) {
+        this.logger.warn(
+          `[Dasma Biostar] Elevated rate limit hits: ${totalRateLimitHits}`,
+        );
+      }
     } catch (error) {
       state.lastError = error?.message ?? String(error);
       await this.biostarSyncStateRepository.save(state);
       throw error;
     }
+  }
+
+  private extractBiostarCardValue(detail: Record<string, unknown>): string | null {
+    const userObj = (detail.User as Record<string, unknown>) ?? detail;
+    const creds = userObj?.credentials as Record<string, unknown> | undefined;
+    const cardsFromCreds = creds?.cards as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(cardsFromCreds) && cardsFromCreds.length > 0) {
+      const first = cardsFromCreds[0];
+      const cid = first?.card_id ?? first?.cardID;
+      if (cid != null) return String(cid).trim() || null;
+    }
+    const cards = (detail.cards ?? userObj?.cards) as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(cards) && cards.length > 0) {
+      const first = cards[0];
+      const cid = first?.card_id ?? first?.cardID;
+      if (cid != null) return String(cid).trim() || null;
+    }
+    const csn = detail.csn ?? userObj?.csn;
+    if (csn != null) return String(csn).trim() || null;
+    return null;
   }
 
   private async getOrCreateBiostarSyncState(): Promise<BiostarSyncState> {
@@ -875,8 +966,8 @@ export class DatabaseSyncService {
     token: string,
     sessionId: string,
     maxRetries = 3,
+    rateLimitTracker?: { count: number },
   ): Promise<Record<string, unknown> | null> {
-    let lastError: unknown;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const response = await axios.get(
@@ -901,7 +992,6 @@ export class DatabaseSyncService {
           unknown
         >;
       } catch (err) {
-        lastError = err;
         const status = axios.isAxiosError(err) ? err.response?.status : null;
         const isRetryable =
           status === 429 ||
@@ -909,8 +999,17 @@ export class DatabaseSyncService {
           err?.code === 'ECONNRESET' ||
           err?.code === 'ETIMEDOUT';
 
+        if (status === 429 && rateLimitTracker) {
+          rateLimitTracker.count++;
+        }
+
         if (isRetryable && attempt < maxRetries - 1) {
-          const delay = Math.min(1000 * 2 ** attempt + Math.random() * 500, 8000);
+          const baseDelay = status === 429 ? 5000 : 1000;
+          const maxDelay = status === 429 ? 30000 : 16000;
+          const delay = Math.min(
+            baseDelay * 2 ** attempt + Math.random() * 1000,
+            maxDelay,
+          );
           await new Promise((r) => setTimeout(r, delay));
         } else {
           this.logger.warn(
