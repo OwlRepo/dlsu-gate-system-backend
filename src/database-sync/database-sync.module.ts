@@ -8,6 +8,10 @@ import { Student } from '../students/entities/student.entity';
 import { DatabaseSyncQueueService } from './database-sync-queue.service';
 import { SyncQueue } from './entities/sync-queue.entity';
 import { BiostarSyncState } from './entities/biostar-sync-state.entity';
+import { DatabaseSyncCommonService } from './services/shared/database-sync-common.service';
+import { BiostarApiService } from './services/shared/biostar-api.service';
+import { DatabaseSyncMainPathService } from './services/database-sync-main-path.service';
+import { DatabaseSyncDasmaPathService } from './services/database-sync-dasma-path.service';
 
 @Module({
   imports: [
@@ -20,7 +24,14 @@ import { BiostarSyncState } from './entities/biostar-sync-state.entity';
     ScheduleModule.forRoot(),
   ],
   controllers: [DatabaseSyncController],
-  providers: [DatabaseSyncService, DatabaseSyncQueueService],
+  providers: [
+    DatabaseSyncService,
+    DatabaseSyncQueueService,
+    DatabaseSyncCommonService,
+    BiostarApiService,
+    DatabaseSyncMainPathService,
+    DatabaseSyncDasmaPathService,
+  ],
   exports: [DatabaseSyncService, DatabaseSyncQueueService],
 })
 export class DatabaseSyncModule {}

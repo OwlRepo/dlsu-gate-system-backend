@@ -1,0 +1,977 @@
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { In } from 'typeorm';
+import * as sql from 'mssql';
+import * as fs from 'fs';
+import * as path from 'path';
+import axios from 'axios';
+import * as https from 'https';
+import * as FormData from 'form-data';
+import { createObjectCsvWriter } from 'csv-writer';
+import * as dayjs from 'dayjs';
+import * as utc from 'dayjs/plugin/utc';
+import * as timezone from 'dayjs/plugin/timezone';
+
+import { IDatabaseSyncPath } from './database-sync-path.interface';
+import { Student } from '../../students/entities/student.entity';
+import { SyncSchedule } from '../entities/sync-schedule.entity';
+import { BiostarSyncState } from '../entities/biostar-sync-state.entity';
+import { DatabaseSyncCommonService } from './shared/database-sync-common.service';
+import { BiostarApiService } from './shared/biostar-api.service';
+
+@Injectable()
+export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
+  private readonly logger = new Logger(DatabaseSyncDasmaPathService.name);
+  private readonly logDir: string;
+  private sqlConfig: sql.config;
+
+  constructor(
+    private configService: ConfigService,
+    @InjectRepository(Student)
+    private studentRepository: Repository<Student>,
+    @InjectRepository(SyncSchedule)
+    private syncScheduleRepository: Repository<SyncSchedule>,
+    @InjectRepository(BiostarSyncState)
+    private biostarSyncStateRepository: Repository<BiostarSyncState>,
+    private commonService: DatabaseSyncCommonService,
+    private biostarApiService: BiostarApiService,
+  ) {
+    this.logDir = this.commonService.getLogDir();
+    this.sqlConfig = {
+      user: this.configService.get('SOURCE_DB_USERNAME'),
+      password: this.configService.get('SOURCE_DB_PASSWORD'),
+      database: this.configService.get('SOURCE_DB_NAME'),
+      server: this.configService.get('SOURCE_DB_HOST'),
+      port: parseInt(this.configService.get('SOURCE_DB_PORT')),
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+        enableArithAbort: true,
+        connectTimeout: 120000,
+        requestTimeout: 120000,
+      },
+      pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 120000,
+      },
+    };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- interface requires these params
+  async syncFromBiostar(jobKey: string, jobName?: string): Promise<void> {
+    const { token, sessionId } = await this.biostarApiService.getApiToken();
+    const apiBaseUrl = this.biostarApiService.getApiBaseUrl();
+    const baseConcurrency = Math.max(
+      1,
+      parseInt(
+        this.configService.get('BIOSTAR_DETAIL_CONCURRENCY') || '8',
+        10,
+      ) || 8,
+    );
+    let effectiveConcurrency = baseConcurrency;
+    const rateLimitTracker = { count: 0 };
+    const maxCandidates =
+      parseInt(
+        this.configService.get('BIOSTAR_MAX_CANDIDATES_PER_RUN') || '0',
+        10,
+      ) || 0;
+
+    const state = await this.getOrCreateBiostarSyncState();
+    state.lastRunAt = new Date();
+    await this.biostarSyncStateRepository.save(state);
+
+    this.logger.log(
+      `[Dasma Biostar] Starting sync: incremental=${!!state.lastSuccessAt && !!state.lastModifiedCursor}, lastModifiedCursor=${state.lastModifiedCursor ?? 'none'}, lastSuccessAt=${state.lastSuccessAt?.toISOString() ?? 'never'}`,
+    );
+
+    const runStartMs = Date.now();
+    let totalDiscovered = 0;
+    let totalCandidates = 0;
+    let totalDetailFetched = 0;
+    let totalUpdated = 0;
+    let totalCreated = 0;
+    let totalSkipped = 0;
+    let totalFailed = 0;
+    let totalCardUpdated = 0;
+    let totalCardCleared = 0;
+    let totalRateLimitHits = 0;
+    let maxLastModified = state.lastModifiedCursor || '0';
+
+    const limit = 500;
+    const useIncremental = !!state.lastSuccessAt && !!state.lastModifiedCursor;
+    let offset = useIncremental ? 0 : (state.lastProcessedOffset ?? 0);
+
+    try {
+      do {
+        const params: Record<string, string | number> = {
+          limit,
+          offset,
+          group_id: 1,
+          order_by: 'name:true',
+        };
+        if (useIncremental && state.lastModifiedCursor) {
+          params.last_modified = state.lastModifiedCursor;
+        }
+
+        const response = await axios.get(`${apiBaseUrl}/api/users`, {
+          params,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'bs-session-id': sessionId,
+            accept: 'application/json',
+          },
+          httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+          }),
+          timeout: 120000,
+        });
+
+        const userCollection = response.data?.UserCollection;
+        if (!userCollection) {
+          throw new BadRequestException(
+            'Invalid response format from Biostar API',
+          );
+        }
+
+        const total = parseInt(String(userCollection.total || 0), 10);
+        const rows = userCollection.rows || [];
+        totalDiscovered += rows.length;
+
+        let candidates = rows.filter((u: Record<string, unknown>) => {
+          if (!u.user_id) return false;
+          const photoExists =
+            u.photo_exists === true || u.photo_exists === 'true';
+          const cardCount = parseInt(String(u.card_count ?? 0), 10) || 0;
+          const hasCard = cardCount > 0;
+          return photoExists || hasCard;
+        });
+
+        if (
+          maxCandidates > 0 &&
+          totalCandidates + candidates.length > maxCandidates
+        ) {
+          const take = maxCandidates - totalCandidates;
+          candidates = candidates.slice(0, take);
+        }
+        totalCandidates += candidates.length;
+
+        this.logger.log(
+          `[Dasma Biostar] List page: offset=${offset}, discovered=${rows.length}, candidates=${candidates.length} (totalDiscovered=${totalDiscovered}, totalCandidates=${totalCandidates})`,
+        );
+
+        for (const u of rows) {
+          const lm = String(u.last_modified ?? '0');
+          if (lm > maxLastModified) maxLastModified = lm;
+        }
+
+        try {
+          const results = await this.commonService.runWithConcurrency(
+            candidates,
+            effectiveConcurrency,
+            async (candidate: { user_id: string }) => {
+              const detail =
+                await this.biostarApiService.fetchBiostarUserDetailWithRetry(
+                  candidate.user_id,
+                  token,
+                  sessionId,
+                  3,
+                  rateLimitTracker,
+                );
+              return { userId: candidate.user_id, detail };
+            },
+          );
+
+          totalRateLimitHits += rateLimitTracker.count;
+          if (rateLimitTracker.count >= 3) {
+            const prev = effectiveConcurrency;
+            effectiveConcurrency = Math.max(
+              1,
+              Math.floor(effectiveConcurrency / 2),
+            );
+            this.logger.warn(
+              `[Dasma Biostar] Rate limit threshold reached (${rateLimitTracker.count} hits), reducing concurrency ${prev} -> ${effectiveConcurrency}`,
+            );
+            rateLimitTracker.count = 0;
+          }
+
+          for (const { userId, detail } of results) {
+            if (!detail) {
+              totalFailed++;
+              continue;
+            }
+            totalDetailFetched++;
+
+            const userObj = (detail.User as Record<string, unknown>) ?? detail;
+            const photo =
+              (detail.photo as string | null) ??
+              (userObj?.photo as string | null) ??
+              null;
+            const name =
+              (detail.name as string | null) ??
+              (userObj?.name as string | null) ??
+              null;
+            const uniqueId = this.extractBiostarCardValue(detail);
+
+            const existingStudent = await this.studentRepository.findOne({
+              where: { ID_Number: userId },
+            });
+
+            if (existingStudent) {
+              const photoChanged = photo !== existingStudent.Photo;
+              const existingUnique =
+                existingStudent.Unique_ID != null
+                  ? String(existingStudent.Unique_ID).trim()
+                  : null;
+              const uniqueIdChanged =
+                (uniqueId ?? null) !== (existingUnique || null);
+              const nameChanged = name !== (existingStudent.Name ?? null);
+              if (photoChanged || uniqueIdChanged || nameChanged) {
+                await this.studentRepository.update(
+                  { ID_Number: userId },
+                  {
+                    Photo: photo,
+                    Unique_ID: uniqueId,
+                    Name: name ?? existingStudent.Name,
+                    updatedAt: new Date(),
+                  },
+                );
+                totalUpdated++;
+                if (uniqueId != null && uniqueId !== '') {
+                  totalCardUpdated++;
+                } else if (existingUnique) {
+                  totalCardCleared++;
+                }
+              } else {
+                totalSkipped++;
+              }
+            } else {
+              const newStudent = this.studentRepository.create({
+                ID_Number: userId,
+                Photo: photo,
+                Unique_ID: uniqueId,
+                Name: name,
+                isArchived: false,
+              });
+              await this.studentRepository.save(newStudent);
+              totalCreated++;
+              if (uniqueId != null && uniqueId !== '') {
+                totalCardUpdated++;
+              }
+            }
+          }
+        } catch (pageError) {
+          state.lastProcessedOffset = offset;
+          state.lastProcessedUserId =
+            rows.length > 0 ? String(rows[rows.length - 1].user_id) : null;
+          state.lastModifiedCursor = maxLastModified;
+          state.lastError = (pageError as Error)?.message ?? String(pageError);
+          await this.biostarSyncStateRepository.save(state);
+          this.logger.error(
+            `[Dasma Biostar] Page failed at offset=${offset}, checkpoint saved for resume`,
+            pageError,
+          );
+          throw pageError;
+        }
+
+        state.lastProcessedOffset = offset + limit;
+        state.lastProcessedUserId =
+          rows.length > 0 ? String(rows[rows.length - 1].user_id) : null;
+        state.lastModifiedCursor = maxLastModified;
+        await this.biostarSyncStateRepository.save(state);
+
+        offset += limit;
+
+        if (rows.length === 0 || (total > 0 && offset >= total)) break;
+        if (maxCandidates > 0 && totalCandidates >= maxCandidates) break;
+      } while (true);
+
+      state.lastSuccessAt = new Date();
+      state.lastError = null;
+      state.lastModifiedCursor = maxLastModified;
+      await this.biostarSyncStateRepository.save(state);
+
+      const durationMs = Date.now() - runStartMs;
+      this.logger.log(
+        `[Dasma Biostar] Sync completed: discovered=${totalDiscovered}, candidates=${totalCandidates}, detailFetched=${totalDetailFetched}, updated=${totalUpdated}, created=${totalCreated}, skipped=${totalSkipped}, failed=${totalFailed}, cardUpdated=${totalCardUpdated}, cardCleared=${totalCardCleared}, rateLimitHits=${totalRateLimitHits}, finalConcurrency=${effectiveConcurrency}, durationMs=${durationMs}`,
+      );
+      const failRatio =
+        totalDetailFetched > 0 ? totalFailed / totalDetailFetched : 0;
+      if (failRatio > 0.1) {
+        this.logger.warn(
+          `[Dasma Biostar] High failure ratio: ${(failRatio * 100).toFixed(1)}% (${totalFailed}/${totalDetailFetched})`,
+        );
+      }
+      if (totalRateLimitHits > 5) {
+        this.logger.warn(
+          `[Dasma Biostar] Elevated rate limit hits: ${totalRateLimitHits}`,
+        );
+      }
+    } catch (error) {
+      state.lastError = error?.message ?? String(error);
+      await this.biostarSyncStateRepository.save(state);
+      throw error;
+    }
+  }
+
+  private extractBiostarCardValue(
+    detail: Record<string, unknown>,
+  ): string | null {
+    const userObj = (detail.User as Record<string, unknown>) ?? detail;
+    const creds = userObj?.credentials as Record<string, unknown> | undefined;
+    const cardsFromCreds = creds?.cards as
+      | Array<Record<string, unknown>>
+      | undefined;
+    if (Array.isArray(cardsFromCreds) && cardsFromCreds.length > 0) {
+      const first = cardsFromCreds[0];
+      const cid = first?.card_id ?? first?.cardID;
+      if (cid != null) return String(cid).trim() || null;
+    }
+    const cards = (detail.cards ?? userObj?.cards) as
+      | Array<Record<string, unknown>>
+      | undefined;
+    if (Array.isArray(cards) && cards.length > 0) {
+      const first = cards[0];
+      const cid = first?.card_id ?? first?.cardID;
+      if (cid != null) return String(cid).trim() || null;
+    }
+    const csn = detail.csn ?? userObj?.csn;
+    if (csn != null) return String(csn).trim() || null;
+    return null;
+  }
+
+  private async getOrCreateBiostarSyncState(): Promise<BiostarSyncState> {
+    let state = await this.biostarSyncStateRepository.findOne({
+      where: { schemaKey: 'dasma' },
+    });
+    if (!state) {
+      state = this.biostarSyncStateRepository.create({
+        schemaKey: 'dasma',
+      });
+      await this.biostarSyncStateRepository.save(state);
+    }
+    return state;
+  }
+
+  async executeDatabaseSync(jobName: string): Promise<{
+    success: boolean;
+    message: string;
+    recordsProcessed: number;
+  } | void> {
+    let pool: sql.ConnectionPool | null = null;
+
+    try {
+      this.logger.log(`Starting database sync for ${jobName}`);
+
+      this.logger.log('Attempting SQL Server connection...');
+      try {
+        pool = await sql.connect(this.sqlConfig);
+        this.logger.log('Successfully connected to SQL Server');
+      } catch (sqlError) {
+        this.logger.error('SQL Connection Error:', {
+          message: sqlError.message,
+          code: sqlError.code,
+          state: sqlError.state,
+          serverName: sqlError.serverName,
+          procName: sqlError.procName,
+          number: sqlError.number,
+          class: sqlError.class,
+          lineNumber: sqlError.lineNumber,
+          stack: sqlError.stack,
+        });
+        throw new BadRequestException({
+          message: 'Failed to connect to SQL Server',
+          details: sqlError.message,
+          code: sqlError.code,
+          state: sqlError.state,
+        });
+      }
+
+      const hasIsArchivedColumn = await this.commonService.checkColumnExists(
+        pool,
+        'IsArchived',
+      );
+      this.logger.log(
+        `Table ${hasIsArchivedColumn ? 'has' : 'does not have'} IsArchived column`,
+      );
+      const batchSize = parseInt(process.env.SYNC_BATCH_SIZE) || 500;
+      let totalProcessed = 0;
+      let totalSkipped = 0;
+      let totalEnabled = 0;
+      let totalDisabled = 0;
+      const failedRecordsAll = [];
+      const tempDir = path.join(process.cwd(), 'temp');
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+      }
+
+      const dasmaHeaders = [
+        { id: 'user_id', title: 'user_id' },
+        { id: 'name', title: 'name' },
+        { id: 'department', title: 'department' },
+        { id: 'user_title', title: 'user_title' },
+        { id: 'user_group', title: 'user_group' },
+        { id: 'Remarks', title: 'Remarks' },
+      ];
+
+      dayjs.extend(utc);
+      dayjs.extend(timezone);
+
+      for await (const { batchRecords, batchNumber } of this.fetchBatches(
+        pool,
+        hasIsArchivedColumn,
+        batchSize,
+      )) {
+        const normalizedRecords = batchRecords.map((record) =>
+          this.normalizeRecord(record),
+        );
+
+        const batchRecordsWithPhoto = normalizedRecords.map((record) => ({
+          ...record,
+          Photo: null,
+        }));
+
+        const existingMap = new Map();
+        const idNumbers = batchRecordsWithPhoto.map((r) => r.ID_Number);
+        const chunkSize = 100;
+
+        for (let i = 0; i < idNumbers.length; i += chunkSize) {
+          const chunk = idNumbers.slice(i, i + chunkSize);
+          const existingStudentsChunk =
+            await this.commonService.executeWithRetry(
+              () =>
+                this.studentRepository.find({
+                  where: { ID_Number: In(chunk) },
+                }),
+              3,
+              `get existing students chunk ${Math.floor(i / chunkSize) + 1}`,
+            );
+          existingStudentsChunk.forEach((s) => existingMap.set(s.ID_Number, s));
+        }
+
+        const toCreate = [];
+        const toUpdate = [];
+        for (const record of batchRecordsWithPhoto) {
+          const groupValue = this.commonService.normalizeGroupValue(
+            record.Group,
+          );
+          const data = {
+            ID_Number: record.ID_Number,
+            Name: record.Name,
+            Lived_Name: record.Lived_Name,
+            Remarks: record.Remarks,
+            Photo: record.Photo,
+            Campus_Entry: record.Campus_Entry,
+            Unique_ID: record.Unique_ID,
+            isArchived: record.isArchived,
+            group: groupValue ?? null,
+            updatedAt: new Date(),
+          };
+          const existing = existingMap.get(record.ID_Number);
+          if (!existing) {
+            toCreate.push(data);
+          } else if (
+            existing.Name !== record.Name ||
+            existing.Lived_Name !== record.Lived_Name ||
+            existing.Remarks !== record.Remarks ||
+            existing.Photo !== record.Photo ||
+            existing.Campus_Entry !== record.Campus_Entry ||
+            existing.Unique_ID !== record.Unique_ID ||
+            existing.isArchived !== record.isArchived ||
+            existing.group !== (groupValue ?? null)
+          ) {
+            toUpdate.push({ ...data, id: existing.id });
+          }
+        }
+
+        if (toCreate.length) {
+          const insertChunkSize = 50;
+          for (let i = 0; i < toCreate.length; i += insertChunkSize) {
+            const insertChunk = toCreate.slice(i, i + insertChunkSize);
+            await this.commonService.executeWithRetry(
+              async () => {
+                try {
+                  await this.studentRepository.insert(insertChunk);
+                } catch (error) {
+                  if (
+                    error.message.includes(
+                      'duplicate key value violates unique constraint',
+                    )
+                  ) {
+                    this.logger.warn(
+                      `[Batch ${batchNumber}] Duplicate key error, updating existing records`,
+                    );
+                    for (const rec of insertChunk) {
+                      const existing = await this.studentRepository.findOne({
+                        where: { ID_Number: rec.ID_Number },
+                      });
+                      if (existing) {
+                        await this.studentRepository.update(
+                          { ID_Number: rec.ID_Number },
+                          rec,
+                        );
+                      }
+                    }
+                  } else {
+                    throw error;
+                  }
+                }
+              },
+              3,
+              `insert chunk ${Math.floor(i / insertChunkSize) + 1}`,
+            );
+          }
+        }
+        if (toUpdate.length) {
+          const updateChunkSize = 50;
+          for (let i = 0; i < toUpdate.length; i += updateChunkSize) {
+            const updateChunk = toUpdate.slice(i, i + updateChunkSize);
+            await this.commonService.executeWithRetry(
+              () => this.studentRepository.save(updateChunk),
+              3,
+              `update chunk ${Math.floor(i / updateChunkSize) + 1}`,
+            );
+          }
+        }
+        this.logger.log(
+          `[Batch ${batchNumber}] Synced ${toCreate.length + toUpdate.length} records (${batchRecordsWithPhoto.length - (toCreate.length + toUpdate.length)} unchanged)`,
+        );
+
+        const csvFilePath = path.join(
+          tempDir,
+          `sync_${jobName}_batch${batchNumber}_${Date.now()}.csv`,
+        );
+        const csvWriter = createObjectCsvWriter({
+          path: csvFilePath,
+          header: dasmaHeaders,
+        });
+        const skippedRecords = [];
+
+        const formattedRecords = batchRecordsWithPhoto
+          .map((record) => {
+            const userId = this.commonService.sanitizeUserId(
+              record.ID_Number?.toString()?.trim() || '',
+            );
+            const name = this.commonService.removeSpecialChars(
+              record.Name?.trim() || '',
+            );
+            const remarks = record.Remarks?.trim() || '';
+            const validationErrors = [];
+            if (!userId || userId.length > 10) {
+              validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
+            }
+            if (!name) {
+              validationErrors.push('Empty name');
+            }
+            if (validationErrors.length > 0) {
+              skippedRecords.push({
+                ID_Number: record.ID_Number,
+                userId,
+                name,
+                livedName: '',
+                remarks,
+                length: userId.length,
+                reasons: validationErrors,
+                timestamp: new Date().toISOString(),
+              });
+              this.logger.warn(
+                `[Batch ${batchNumber}] Skipping record with validation errors - ID: ${record.ID_Number}, Errors: ${validationErrors.join(', ')}`,
+              );
+              return null;
+            }
+
+            const userTitle =
+              (record.Group && String(record.Group).trim()) || 'Student';
+            return {
+              user_id: record.ID_Number,
+              name: name,
+              department: 'DLSU',
+              user_title: userTitle,
+              user_group: 'All Users',
+              Remarks: remarks,
+              original_campus_entry: record.Campus_Entry ?? '',
+            };
+          })
+          .filter((record) => record !== null);
+
+        await csvWriter.writeRecords(formattedRecords);
+        this.logger.log(
+          `[Batch ${batchNumber}] CSV file created at ${csvFilePath}`,
+        );
+
+        let csvFileReady = false;
+        for (let i = 0; i < 10; i++) {
+          try {
+            await fs.promises.access(
+              csvFilePath,
+              fs.constants.F_OK | fs.constants.R_OK,
+            );
+            const stats = await fs.promises.stat(csvFilePath);
+            if (stats.size > 0) {
+              csvFileReady = true;
+              break;
+            }
+          } catch {
+            this.logger.warn(
+              `[Batch ${batchNumber}] CSV file not ready yet, retrying...`,
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        if (!csvFileReady) {
+          this.logger.error(
+            `[Batch ${batchNumber}] CSV file was not created or is empty. Aborting upload for this batch.`,
+          );
+          failedRecordsAll.push({
+            batchNumber,
+            error: 'CSV file not created or empty',
+            details: `File: ${csvFilePath}`,
+          });
+          const failedFile = path.join(
+            this.logDir,
+            `failed_batch_${jobName}_${batchNumber}_${Date.now()}.json`,
+          );
+          fs.writeFileSync(
+            failedFile,
+            JSON.stringify(failedRecordsAll, null, 2),
+          );
+          this.logger.log(
+            `[Batch ${batchNumber}] Failed records written to ${failedFile}`,
+          );
+          continue;
+        }
+
+        await this.commonService.logSyncedRecords(formattedRecords, jobName);
+
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            const { token, sessionId } =
+              await this.biostarApiService.getApiToken();
+            const apiBaseUrl = this.biostarApiService.getApiBaseUrl();
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', fs.createReadStream(csvFilePath));
+            this.logger.log(
+              `[Batch ${batchNumber}] Uploading CSV file to attachments...`,
+            );
+            const uploadResponse = await axios.post(
+              `${apiBaseUrl}/api/attachments`,
+              uploadFormData,
+              {
+                headers: {
+                  ...uploadFormData.getHeaders(),
+                  Authorization: `Bearer ${token}`,
+                  'bs-session-id': sessionId,
+                },
+                maxBodyLength: Infinity,
+                maxContentLength: Infinity,
+                timeout: 120000,
+                httpsAgent: new https.Agent({
+                  rejectUnauthorized: false,
+                }),
+              },
+            );
+            if (!uploadResponse.data?.filename) {
+              throw new Error('Failed to get filename from upload response');
+            }
+            const uploadedFileName = uploadResponse.data.filename;
+            this.logger.log(
+              `[Batch ${batchNumber}] File uploaded successfully as: ${uploadedFileName}`,
+            );
+
+            const firstLine = fs
+              .readFileSync(csvFilePath, 'utf8')
+              .split('\n')[0];
+            const headers = firstLine.split(',');
+
+            const importPayload = {
+              File: {
+                uri: uploadedFileName,
+                fileName: uploadedFileName,
+              },
+              CsvOption: {
+                columns: {
+                  total: headers.length.toString(),
+                  rows: headers,
+                  formats: headers.map(() => 'Text'),
+                },
+                start_line: 2,
+                import_option: 1,
+              },
+              Query: {
+                headers: headers,
+                columns: headers,
+              },
+            };
+            this.logger.log(`[Batch ${batchNumber}] Importing CSV file...`);
+            const importResponse = await axios.post(
+              `${apiBaseUrl}/api/users/csv_import`,
+              importPayload,
+              {
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                  'bs-session-id': sessionId,
+                },
+                httpsAgent: new https.Agent({
+                  rejectUnauthorized: false,
+                }),
+              },
+            );
+            if (importResponse.data?.Response?.code === '1') {
+              if (importResponse.data.CsvRowCollection) {
+                const failedRows = importResponse.data.CsvRowCollection.rows;
+                if (importResponse.data.File?.uri) {
+                  const errorFileUri = importResponse.data.File.uri;
+                  this.logger.warn(
+                    `[Batch ${batchNumber}] Error details file generated: ${errorFileUri}`,
+                  );
+                  try {
+                    const errorFilePath = path.join(
+                      this.logDir,
+                      `error_details_batch_${jobName}_${batchNumber}_${Date.now()}.csv`,
+                    );
+                    const downloadResponse = await axios.get(
+                      `${apiBaseUrl}/download/${errorFileUri}`,
+                      {
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                          'bs-session-id': sessionId,
+                        },
+                        responseType: 'stream',
+                        httpsAgent: new https.Agent({
+                          rejectUnauthorized: false,
+                        }),
+                      },
+                    );
+                    const writer = fs.createWriteStream(errorFilePath);
+                    downloadResponse.data.pipe(writer);
+                    await new Promise((resolve, reject) => {
+                      writer.on('finish', () => resolve(undefined));
+                      writer.on('error', reject);
+                    });
+                    this.logger.log(
+                      `[Batch ${batchNumber}] Error details file downloaded to ${errorFilePath}`,
+                    );
+                    failedRecordsAll.push({
+                      batchNumber,
+                      error: `Partial import: ${failedRows.length} rows failed`,
+                      failedRows,
+                      importResponse: importResponse.data,
+                      errorDetailsFilePath: errorFilePath,
+                    });
+                  } catch (downloadError) {
+                    this.logger.error(
+                      `[Batch ${batchNumber}] Failed to download error details file: ${downloadError.message}`,
+                    );
+                    failedRecordsAll.push({
+                      batchNumber,
+                      error: `Partial import: ${failedRows.length} rows failed`,
+                      failedRows,
+                      importResponse: importResponse.data,
+                      downloadError: downloadError.message,
+                    });
+                  }
+                } else {
+                  failedRecordsAll.push({
+                    batchNumber,
+                    error: `Partial import: ${failedRows.length} rows failed`,
+                    failedRows,
+                    importResponse: importResponse.data,
+                  });
+                }
+                break;
+              }
+            } else if (importResponse.data?.Response?.code !== '0') {
+              this.logger.log(
+                `[Batch ${batchNumber}] CSV import successful - All ${formattedRecords.length} records processed`,
+              );
+            }
+            this.logger.log(
+              `[Batch ${batchNumber}] CSV file uploaded successfully`,
+            );
+            break;
+          } catch (error) {
+            retries--;
+            const errorMessage = axios.isAxiosError(error)
+              ? `API Error: ${error.response?.status} - ${error.response?.data?.message || error.message}`
+              : `Upload Error: ${error.message}`;
+            if (retries === 0) {
+              this.logger.warn(
+                `[Batch ${batchNumber}] Final upload attempt failed: ${errorMessage}`,
+              );
+              failedRecordsAll.push({
+                batchNumber,
+                error: 'CSV upload failed after all retries',
+                details: errorMessage,
+              });
+              break;
+            }
+            this.logger.warn(
+              `[Batch ${batchNumber}] Upload attempt failed (${retries} retries left): ${errorMessage}`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+          }
+        }
+
+        if (skippedRecords.length > 0) {
+          const skippedFile = path.join(
+            this.logDir,
+            `skipped_batch_${jobName}_${batchNumber}_${Date.now()}.json`,
+          );
+          fs.writeFileSync(
+            skippedFile,
+            JSON.stringify(skippedRecords, null, 2),
+          );
+          this.logger.log(
+            `[Batch ${batchNumber}] Skipped records written to ${skippedFile}`,
+          );
+        }
+        if (failedRecordsAll.length > 0) {
+          const failedFile = path.join(
+            this.logDir,
+            `failed_batch_${jobName}_${batchNumber}_${Date.now()}.json`,
+          );
+          fs.writeFileSync(
+            failedFile,
+            JSON.stringify(failedRecordsAll, null, 2),
+          );
+          this.logger.log(
+            `[Batch ${batchNumber}] Failed records written to ${failedFile}`,
+          );
+        }
+
+        totalProcessed += formattedRecords.length;
+        void (totalSkipped += skippedRecords.length);
+        void (totalEnabled += formattedRecords.filter((r) => {
+          const campusEntry = r.original_campus_entry
+            ?.toString()
+            ?.toUpperCase();
+          return campusEntry === 'Y';
+        }).length);
+        void (totalDisabled += formattedRecords.filter((r) => {
+          const campusEntry = r.original_campus_entry
+            ?.toString()
+            ?.toUpperCase();
+          return campusEntry === 'N';
+        }).length);
+
+        batchRecords.length = 0;
+        batchRecordsWithPhoto.length = 0;
+        skippedRecords.length = 0;
+        failedRecordsAll.length = 0;
+        for (let i = 0; i < formattedRecords.length; i++) {
+          formattedRecords[i] = null;
+        }
+
+        this.commonService.logMemoryUsage(batchNumber);
+        await this.commonService.cleanupTempFiles(tempDir);
+        if (global.gc) {
+          global.gc();
+        }
+      }
+
+      this.logger.log('All batches processed, performing final cleanup...');
+      await this.commonService.cleanupTempFiles(tempDir);
+
+      const scheduleNumber = parseInt(jobName.replace('sync-', ''));
+      if (!isNaN(scheduleNumber)) {
+        const schedule = await this.syncScheduleRepository.findOne({
+          where: { scheduleNumber },
+        });
+        if (schedule) {
+          schedule.lastSyncTime = new Date();
+          await this.syncScheduleRepository.save(schedule);
+          this.logger.log(
+            `Updated last sync time for schedule ${scheduleNumber}`,
+          );
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Sync completed successfully',
+        recordsProcessed: totalProcessed,
+      };
+    } catch (error) {
+      this.logger.error(`Sync failed for ${jobName}:`, error);
+      throw error;
+    } finally {
+      if (pool) {
+        await pool.close();
+        this.logger.log('Database connection closed');
+      }
+    }
+  }
+
+  private async *fetchBatches(
+    pool: sql.ConnectionPool,
+    hasIsArchivedColumn: boolean,
+    batchSize: number,
+  ) {
+    let offset = 0;
+    let batchNumber = 0;
+    const tableName = this.configService.get('SOURCE_DB_TABLE');
+
+    while (true) {
+      batchNumber++;
+      let query: string;
+      const columns =
+        'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
+      if (hasIsArchivedColumn) {
+        query = `
+          SELECT ${columns} FROM ${tableName}
+          WHERE IsArchived = 0 OR IsArchived IS NULL
+          ORDER BY ID
+          OFFSET ${offset} ROWS
+          FETCH NEXT ${batchSize} ROWS ONLY
+        `;
+      } else {
+        query = `
+          SELECT ${columns} FROM ${tableName}
+          ORDER BY ID
+          OFFSET ${offset} ROWS
+          FETCH NEXT ${batchSize} ROWS ONLY
+        `;
+      }
+
+      const result = await pool.request().query(query);
+      if (result.recordset.length === 0) break;
+      yield { batchRecords: result.recordset, batchNumber };
+      offset += batchSize;
+    }
+  }
+
+  private normalizeRecord(record: any): any {
+    const nameParts: string[] = [];
+    if (record.LastName) nameParts.push(record.LastName.trim());
+    if (record.FirstName) nameParts.push(record.FirstName.trim());
+    if (record.MiddleName) nameParts.push(record.MiddleName.trim());
+    if (record.Suffix) nameParts.push(record.Suffix.trim());
+
+    let fullName = '';
+    if (nameParts.length > 0) {
+      fullName = nameParts[0];
+      if (nameParts.length > 1) {
+        fullName += ', ' + nameParts.slice(1).join(' ');
+      }
+    }
+
+    const campusEntry = Boolean(record.Status) ? 'Y' : 'N';
+    const isArchived = Boolean(record.IsArchived);
+
+    return {
+      ID_Number: record.ID?.toString() || '',
+      Name: fullName,
+      Lived_Name: null,
+      Remarks: record.Remarks || null,
+      Photo: null,
+      Campus_Entry: campusEntry,
+      Unique_ID: null,
+      isArchived: isArchived,
+      Group: record['Group'] ?? record.Group ?? null,
+    };
+  }
+}
