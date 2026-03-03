@@ -422,6 +422,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
         { id: 'user_title', title: 'user_title' },
         { id: 'user_group', title: 'user_group' },
         { id: 'remarks', title: 'Remarks' },
+        { id: 'start_datetime', title: 'start_datetime' },
+        { id: 'expiry_datetime', title: 'expiry_datetime' },
+        { id: 'original_campus_entry', title: 'original_campus_entry' },
       ];
 
       dayjs.extend(utc);
@@ -492,7 +495,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
               Remarks: record.Remarks,
               Photo: record.Photo,
               Campus_Entry: record.Campus_Entry,
-              Unique_ID: incomingUniqueId,
+              Unique_ID: incomingUniqueId ?? existing.Unique_ID ?? null,
               isArchived: record.isArchived,
               group: groupValue ?? null,
             });
@@ -534,7 +537,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                           Photo: rec.Photo ?? null,
                           Campus_Entry: rec.Campus_Entry ?? null,
                           Unique_ID:
-                            this.normalizeUniqueIdValue(rec.Unique_ID) ?? null,
+                            this.normalizeUniqueIdValue(rec.Unique_ID) ??
+                            existing.Unique_ID ??
+                            null,
                           isArchived: rec.isArchived ?? false,
                           group: rec.group ?? null,
                         });
@@ -591,6 +596,20 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
         });
         const skippedRecords = [];
 
+        const currentDate = dayjs().tz('Asia/Manila').startOf('day');
+        const formattedStartDateEnabled = currentDate
+          .subtract(1, 'day')
+          .format('YYYY-MM-DD HH:mm:ss.SSS');
+        const formattedExpiryDateEnabled = currentDate
+          .add(10, 'year')
+          .format('YYYY-MM-DD HH:mm:ss.SSS');
+        const formattedStartDateDisabled = currentDate
+          .subtract(2, 'day')
+          .format('YYYY-MM-DD HH:mm:ss.SSS');
+        const formattedExpiryDateDisabled = currentDate
+          .subtract(1, 'day')
+          .format('YYYY-MM-DD HH:mm:ss.SSS');
+
         const formattedRecords = batchRecordsWithPhoto
           .map((record) => {
             const userId = this.commonService.sanitizeUserId(
@@ -626,6 +645,8 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
 
             const userTitle =
               (record.Group && String(record.Group).trim()) || 'Student';
+            const isDisabled =
+              record.Campus_Entry?.toString().toUpperCase() === 'N';
             return {
               user_id: record.ID_Number,
               name: name,
@@ -633,6 +654,12 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
               user_title: userTitle,
               user_group: 'All Users',
               remarks: remarks,
+              start_datetime: isDisabled
+                ? formattedStartDateDisabled
+                : formattedStartDateEnabled,
+              expiry_datetime: isDisabled
+                ? formattedExpiryDateDisabled
+                : formattedExpiryDateEnabled,
               original_campus_entry: record.Campus_Entry ?? '',
             };
           })
