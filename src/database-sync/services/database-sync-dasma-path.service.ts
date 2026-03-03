@@ -62,6 +62,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- interface requires these params
   async syncFromBiostar(jobKey: string, jobName?: string): Promise<void> {
+    void jobName; // intentionally unused for path-level sync
     const { token, sessionId } = await this.biostarApiService.getApiToken();
     const apiBaseUrl = this.biostarApiService.getApiBaseUrl();
     const baseConcurrency = Math.max(
@@ -213,7 +214,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
               (detail.name as string | null) ??
               (userObj?.name as string | null) ??
               null;
-            const uniqueId = this.extractBiostarCardValue(detail);
+            const uniqueId = this.normalizeUniqueIdValue(
+              this.extractBiostarCardValue(detail),
+            );
 
             const existingStudent = await this.studentRepository.findOne({
               where: { ID_Number: userId },
@@ -226,23 +229,28 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                   ? String(existingStudent.Unique_ID).trim()
                   : null;
               const uniqueIdChanged =
-                (uniqueId ?? null) !== (existingUnique || null);
+                uniqueId !== null && uniqueId !== (existingUnique || null);
               const nameChanged = name !== (existingStudent.Name ?? null);
               if (photoChanged || uniqueIdChanged || nameChanged) {
+                const updatePayload: Partial<Student> = {
+                  updatedAt: new Date(),
+                };
+                if (photoChanged) {
+                  updatePayload.Photo = photo;
+                }
+                if (nameChanged) {
+                  updatePayload.Name = name ?? existingStudent.Name;
+                }
+                if (uniqueIdChanged) {
+                  updatePayload.Unique_ID = uniqueId;
+                }
                 await this.studentRepository.update(
                   { ID_Number: userId },
-                  {
-                    Photo: photo,
-                    Unique_ID: uniqueId,
-                    Name: name ?? existingStudent.Name,
-                    updatedAt: new Date(),
-                  },
+                  updatePayload,
                 );
                 totalUpdated++;
-                if (uniqueId != null && uniqueId !== '') {
+                if (uniqueIdChanged) {
                   totalCardUpdated++;
-                } else if (existingUnique) {
-                  totalCardCleared++;
                 }
               } else {
                 totalSkipped++;
@@ -413,7 +421,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
         { id: 'department', title: 'department' },
         { id: 'user_title', title: 'user_title' },
         { id: 'user_group', title: 'user_group' },
-        { id: 'Remarks', title: 'Remarks' },
+        { id: 'remarks', title: 'Remarks' },
       ];
 
       dayjs.extend(utc);
@@ -451,38 +459,49 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
           existingStudentsChunk.forEach((s) => existingMap.set(s.ID_Number, s));
         }
 
-        const toCreate = [];
-        const toUpdate = [];
+        const toCreate: Array<Partial<Student>> = [];
+        const toUpdate: Array<{
+          ID_Number: string;
+          changes: Partial<Student>;
+        }> = [];
         for (const record of batchRecordsWithPhoto) {
+          const incomingUniqueId = this.normalizeUniqueIdValue(record.Unique_ID);
           const groupValue = this.commonService.normalizeGroupValue(
             record.Group,
           );
-          const data = {
+          const data: Partial<Student> = {
             ID_Number: record.ID_Number,
             Name: record.Name,
             Lived_Name: record.Lived_Name,
             Remarks: record.Remarks,
             Photo: record.Photo,
             Campus_Entry: record.Campus_Entry,
-            Unique_ID: record.Unique_ID,
             isArchived: record.isArchived,
             group: groupValue ?? null,
-            updatedAt: new Date(),
           };
+          if (incomingUniqueId !== null) {
+            data.Unique_ID = incomingUniqueId;
+          }
           const existing = existingMap.get(record.ID_Number);
           if (!existing) {
             toCreate.push(data);
-          } else if (
-            existing.Name !== record.Name ||
-            existing.Lived_Name !== record.Lived_Name ||
-            existing.Remarks !== record.Remarks ||
-            existing.Photo !== record.Photo ||
-            existing.Campus_Entry !== record.Campus_Entry ||
-            existing.Unique_ID !== record.Unique_ID ||
-            existing.isArchived !== record.isArchived ||
-            existing.group !== (groupValue ?? null)
-          ) {
-            toUpdate.push({ ...data, id: existing.id });
+          } else {
+            const changedFields = this.buildChangedFields(existing, {
+              Name: record.Name,
+              Lived_Name: record.Lived_Name,
+              Remarks: record.Remarks,
+              Photo: record.Photo,
+              Campus_Entry: record.Campus_Entry,
+              Unique_ID: incomingUniqueId,
+              isArchived: record.isArchived,
+              group: groupValue ?? null,
+            });
+            if (Object.keys(changedFields).length > 0) {
+              toUpdate.push({
+                ID_Number: record.ID_Number,
+                changes: changedFields,
+              });
+            }
           }
         }
 
@@ -505,13 +524,26 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                     );
                     for (const rec of insertChunk) {
                       const existing = await this.studentRepository.findOne({
-                        where: { ID_Number: rec.ID_Number },
+                        where: { ID_Number: rec.ID_Number as string },
                       });
                       if (existing) {
-                        await this.studentRepository.update(
-                          { ID_Number: rec.ID_Number },
-                          rec,
-                        );
+                        const changedFields = this.buildChangedFields(existing, {
+                          Name: rec.Name ?? null,
+                          Lived_Name: rec.Lived_Name ?? null,
+                          Remarks: rec.Remarks ?? null,
+                          Photo: rec.Photo ?? null,
+                          Campus_Entry: rec.Campus_Entry ?? null,
+                          Unique_ID:
+                            this.normalizeUniqueIdValue(rec.Unique_ID) ?? null,
+                          isArchived: rec.isArchived ?? false,
+                          group: rec.group ?? null,
+                        });
+                        if (Object.keys(changedFields).length > 0) {
+                          await this.studentRepository.update(
+                            { ID_Number: rec.ID_Number as string },
+                            { ...changedFields, updatedAt: new Date() },
+                          );
+                        }
                       }
                     }
                   } else {
@@ -529,7 +561,17 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
           for (let i = 0; i < toUpdate.length; i += updateChunkSize) {
             const updateChunk = toUpdate.slice(i, i + updateChunkSize);
             await this.commonService.executeWithRetry(
-              () => this.studentRepository.save(updateChunk),
+              async () => {
+                for (const record of updateChunk) {
+                  await this.studentRepository.update(
+                    { ID_Number: record.ID_Number },
+                    {
+                      ...record.changes,
+                      updatedAt: new Date(),
+                    },
+                  );
+                }
+              },
               3,
               `update chunk ${Math.floor(i / updateChunkSize) + 1}`,
             );
@@ -590,7 +632,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
               department: 'DLSU',
               user_title: userTitle,
               user_group: 'All Users',
-              Remarks: remarks,
+              remarks: remarks,
               original_campus_entry: record.Campus_Entry ?? '',
             };
           })
@@ -698,7 +740,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                   formats: headers.map(() => 'Text'),
                 },
                 start_line: 2,
-                import_option: 1,
+                import_option: 2,
               },
               Query: {
                 headers: headers,
@@ -973,5 +1015,65 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
       isArchived: isArchived,
       Group: record['Group'] ?? record.Group ?? null,
     };
+  }
+
+  private normalizeUniqueIdValue(value: unknown): string | null {
+    if (value == null) {
+      return null;
+    }
+
+    const normalized = String(value).trim();
+    return normalized === '' ? null : normalized;
+  }
+
+  private buildChangedFields(
+    existing: Student,
+    incoming: Pick<
+      Student,
+      | 'Name'
+      | 'Lived_Name'
+      | 'Remarks'
+      | 'Photo'
+      | 'Campus_Entry'
+      | 'Unique_ID'
+      | 'isArchived'
+      | 'group'
+    >,
+  ): Partial<Student> {
+    const changedFields: Partial<Student> = {};
+
+    if (existing.Name !== incoming.Name) {
+      changedFields.Name = incoming.Name;
+    }
+    if (existing.Lived_Name !== incoming.Lived_Name) {
+      changedFields.Lived_Name = incoming.Lived_Name;
+    }
+    if (existing.Remarks !== incoming.Remarks) {
+      changedFields.Remarks = incoming.Remarks;
+    }
+    if (existing.Photo !== incoming.Photo) {
+      changedFields.Photo = incoming.Photo;
+    }
+    if (existing.Campus_Entry !== incoming.Campus_Entry) {
+      changedFields.Campus_Entry = incoming.Campus_Entry;
+    }
+    if (existing.isArchived !== incoming.isArchived) {
+      changedFields.isArchived = incoming.isArchived;
+    }
+    if (existing.group !== incoming.group) {
+      changedFields.group = incoming.group;
+    }
+
+    const normalizedIncomingUnique = this.normalizeUniqueIdValue(
+      incoming.Unique_ID,
+    );
+    if (
+      normalizedIncomingUnique !== null &&
+      String(existing.Unique_ID ?? '').trim() !== normalizedIncomingUnique
+    ) {
+      changedFields.Unique_ID = normalizedIncomingUnique;
+    }
+
+    return changedFields;
   }
 }

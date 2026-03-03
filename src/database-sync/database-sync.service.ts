@@ -26,6 +26,7 @@ export class DatabaseSyncService {
   private readonly logger = new Logger(DatabaseSyncService.name);
   private readonly activeJobs = new Map<string, boolean>();
   private readonly jobStartTimes = new Map<string, Date>();
+  private studentMutationLock: Promise<void> = Promise.resolve();
   private sqlConfig: sql.config;
   private readonly schemaEnv: string;
   private readonly logDir = path.join(process.cwd(), 'logs', 'skipped-records');
@@ -108,6 +109,32 @@ export class DatabaseSyncService {
     return this.schemaEnv === 'dasma'
       ? this.dasmaPathService
       : this.mainPathService;
+  }
+
+  private async runWithStudentMutationLock<T>(
+    operationName: string,
+    handler: () => Promise<T>,
+  ): Promise<T> {
+    const previousLock = this.studentMutationLock;
+    let releaseLock!: () => void;
+    this.studentMutationLock = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+
+    const waitStart = Date.now();
+    await previousLock;
+    const waitedMs = Date.now() - waitStart;
+    if (waitedMs > 0) {
+      this.logger.warn(
+        `Waiting for global student mutation lock (${operationName}) for ${waitedMs}ms`,
+      );
+    }
+
+    try {
+      return await handler();
+    } finally {
+      releaseLock();
+    }
   }
 
   private async initializeBiostarSchedules() {
@@ -293,31 +320,33 @@ export class DatabaseSyncService {
    * Updates lastSyncTime for the shared schedule when jobName is sync-1 or sync-2.
    */
   private async executeCombinedSync(jobName: string): Promise<void> {
-    try {
-      this.logger.log(`Starting combined sync for ${jobName}`);
-      await this.executeDatabaseSync(jobName);
-      const biostarJobKey = `biostar-after-${jobName}`;
-      await this.syncFromBiostar(biostarJobKey);
+    await this.runWithStudentMutationLock(`combined-sync:${jobName}`, async () => {
+      try {
+        this.logger.log(`Starting combined sync for ${jobName}`);
+        await this.executeDatabaseSyncInternal(jobName, false);
+        const biostarJobKey = `biostar-after-${jobName}`;
+        await this.syncFromBiostarInternal(biostarJobKey, false);
 
-      const scheduleMatch = jobName.match(/^sync-(\d+)$/);
-      if (scheduleMatch) {
-        const scheduleNumber = parseInt(scheduleMatch[1], 10);
-        const schedule = await this.syncScheduleRepository.findOne({
-          where: { scheduleNumber },
-        });
-        if (schedule) {
-          schedule.lastSyncTime = new Date();
-          await this.syncScheduleRepository.save(schedule);
-          this.logger.log(
-            `Updated last sync time for schedule ${scheduleNumber}`,
-          );
+        const scheduleMatch = jobName.match(/^sync-(\d+)$/);
+        if (scheduleMatch) {
+          const scheduleNumber = parseInt(scheduleMatch[1], 10);
+          const schedule = await this.syncScheduleRepository.findOne({
+            where: { scheduleNumber },
+          });
+          if (schedule) {
+            schedule.lastSyncTime = new Date();
+            await this.syncScheduleRepository.save(schedule);
+            this.logger.log(
+              `Updated last sync time for schedule ${scheduleNumber}`,
+            );
+          }
         }
+        this.logger.log(`Combined sync completed for ${jobName}`);
+      } catch (error) {
+        this.logger.error(`Combined sync failed for ${jobName}:`, error);
+        throw error;
       }
-      this.logger.log(`Combined sync completed for ${jobName}`);
-    } catch (error) {
-      this.logger.error(`Combined sync failed for ${jobName}:`, error);
-      throw error;
-    }
+    });
   }
 
   private addBiostarCronJob(
@@ -343,19 +372,34 @@ export class DatabaseSyncService {
   }
 
   private async executeDatabaseSync(jobName: string) {
+    return this.executeDatabaseSyncInternal(jobName, true);
+  }
+
+  private async executeDatabaseSyncInternal(
+    jobName: string,
+    useGlobalLock: boolean,
+  ) {
     if (this.activeJobs.get(jobName)) {
       this.logger.warn(`Sync ${jobName} is already running`);
       return;
     }
 
-    try {
-      this.activeJobs.set(jobName, true);
-      this.jobStartTimes.set(jobName, new Date());
-      return await this.getPathService().executeDatabaseSync(jobName);
-    } finally {
-      this.activeJobs.set(jobName, false);
-      this.jobStartTimes.delete(jobName);
+    const runSync = async () => {
+      try {
+        this.activeJobs.set(jobName, true);
+        this.jobStartTimes.set(jobName, new Date());
+        return await this.getPathService().executeDatabaseSync(jobName);
+      } finally {
+        this.activeJobs.set(jobName, false);
+        this.jobStartTimes.delete(jobName);
+      }
+    };
+
+    if (!useGlobalLock) {
+      return runSync();
     }
+
+    return this.runWithStudentMutationLock(`db-sync:${jobName}`, runSync);
   }
 
   async triggerManualSync() {
@@ -579,6 +623,13 @@ export class DatabaseSyncService {
   }
 
   async syncFromBiostar(jobName?: string): Promise<void> {
+    return this.syncFromBiostarInternal(jobName, true);
+  }
+
+  private async syncFromBiostarInternal(
+    jobName: string | undefined,
+    useGlobalLock: boolean,
+  ): Promise<void> {
     const jobKey = jobName || 'biostar-manual-sync';
 
     if (this.activeJobs.get(jobKey)) {
@@ -586,42 +637,50 @@ export class DatabaseSyncService {
       return;
     }
 
-    try {
-      this.activeJobs.set(jobKey, true);
-      this.jobStartTimes.set(jobKey, new Date());
-      this.logger.log(`Starting Biostar sync for ${jobKey}`);
+    const runBiostarSync = async () => {
+      try {
+        this.activeJobs.set(jobKey, true);
+        this.jobStartTimes.set(jobKey, new Date());
+        this.logger.log(`Starting Biostar sync for ${jobKey}`);
 
-      await this.getPathService().syncFromBiostar(jobKey, jobName);
+        await this.getPathService().syncFromBiostar(jobKey, jobName);
 
-      // Update lastSyncTime if this is a scheduled biostar-only sync (non-dasma)
-      if (
-        this.schemaEnv !== 'dasma' &&
-        jobName &&
-        jobName.startsWith('biostar-sync-')
-      ) {
-        const scheduleNumberStr = jobName.replace('biostar-sync-', '');
-        const displayNumber = parseInt(scheduleNumberStr, 10);
-        const dbScheduleNumber = displayNumber === 1 ? 3 : 4;
+        // Update lastSyncTime if this is a scheduled biostar-only sync (non-dasma)
+        if (
+          this.schemaEnv !== 'dasma' &&
+          jobName &&
+          jobName.startsWith('biostar-sync-')
+        ) {
+          const scheduleNumberStr = jobName.replace('biostar-sync-', '');
+          const displayNumber = parseInt(scheduleNumberStr, 10);
+          const dbScheduleNumber = displayNumber === 1 ? 3 : 4;
 
-        const schedule = await this.syncScheduleRepository.findOne({
-          where: { scheduleNumber: dbScheduleNumber },
-        });
+          const schedule = await this.syncScheduleRepository.findOne({
+            where: { scheduleNumber: dbScheduleNumber },
+          });
 
-        if (schedule) {
-          schedule.lastSyncTime = new Date();
-          await this.syncScheduleRepository.save(schedule);
+          if (schedule) {
+            schedule.lastSyncTime = new Date();
+            await this.syncScheduleRepository.save(schedule);
+          }
         }
+      } catch (error) {
+        this.logger.error(`Biostar sync failed:`, error);
+        throw new BadRequestException({
+          message: 'Biostar sync failed',
+          details: error.message,
+        });
+      } finally {
+        this.activeJobs.set(jobKey, false);
+        this.jobStartTimes.delete(jobKey);
       }
-    } catch (error) {
-      this.logger.error(`Biostar sync failed:`, error);
-      throw new BadRequestException({
-        message: 'Biostar sync failed',
-        details: error.message,
-      });
-    } finally {
-      this.activeJobs.set(jobKey, false);
-      this.jobStartTimes.delete(jobKey);
+    };
+
+    if (!useGlobalLock) {
+      return runBiostarSync();
     }
+
+    return this.runWithStudentMutationLock(`biostar-sync:${jobKey}`, runBiostarSync);
   }
 
   async testConnection() {
