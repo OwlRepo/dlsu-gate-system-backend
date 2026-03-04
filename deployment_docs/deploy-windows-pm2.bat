@@ -132,16 +132,32 @@ echo.
 
 ::: ========== STEP 4: Gracefully Stop Existing PM2 App ==========
 echo [4/8] Stopping existing PM2 process (if running)...
-pm2 describe dlsu-portal-be >nul 2>&1
-if %errorLevel% equ 0 (
-    echo Stopping dlsu-portal-be...
-    pm2 stop dlsu-portal-be
-    timeout /t 2 /nobreak >nul
-    pm2 delete dlsu-portal-be >nul 2>&1
-    timeout /t 1 /nobreak >nul
-    echo [OK] Previous instance stopped and removed
+set PM2_STEP_OK=0
+pm2 ping >nul 2>&1
+if !errorLevel! neq 0 (
+    echo [INFO] PM2 daemon not running - no process to stop
+    set PM2_STEP_OK=1
 ) else (
-    echo [OK] No existing process to stop
+    pm2 describe dlsu-portal-be >nul 2>&1
+    if !errorLevel! equ 0 (
+        echo   Stopping dlsu-portal-be...
+        pm2 stop dlsu-portal-be
+        timeout /t 2 /nobreak >nul
+        echo   Removing dlsu-portal-be from PM2...
+        pm2 delete dlsu-portal-be
+        if !errorLevel! equ 0 (
+            echo [OK] Previous instance stopped and removed
+        ) else (
+            echo [OK] Process removed or already gone - continuing
+        )
+        set PM2_STEP_OK=1
+    ) else (
+        echo [OK] No existing process to stop
+        set PM2_STEP_OK=1
+    )
+)
+if !PM2_STEP_OK! neq 1 (
+    echo [WARNING] PM2 step had issues - attempting to continue
 )
 echo.
 
