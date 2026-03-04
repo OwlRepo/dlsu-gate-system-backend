@@ -21,17 +21,50 @@ if %errorLevel% neq 0 (
     exit /b 1
 )
 
+set "NSSM="
 where nssm >nul 2>&1
-if %errorLevel% neq 0 (
-    if exist "%~dp0nssm.exe" (
-        set "NSSM=%~dp0nssm.exe"
-    ) else (
-        echo [ERROR] NSSM not found. Install NSSM or place nssm.exe in this folder.
-        pause
-        exit /b 1
-    )
-) else (
+if %errorLevel% equ 0 (
     for /f "delims=" %%i in ('where nssm') do set "NSSM=%%i" & goto :nssm_found
+)
+if exist "%~dp0nssm.exe" set "NSSM=%~dp0nssm.exe"
+if not defined NSSM if exist "%ProgramData%\chocolatey\bin\nssm.exe" set "NSSM=%ProgramData%\chocolatey\bin\nssm.exe"
+if not defined NSSM if exist "%SystemRoot%\System32\nssm.exe" set "NSSM=%SystemRoot%\System32\nssm.exe"
+if not defined NSSM if exist "C:\nssm\win64\nssm.exe" set "NSSM=C:\nssm\win64\nssm.exe"
+if not defined NSSM if exist "C:\nssm\win32\nssm.exe" set "NSSM=C:\nssm\win32\nssm.exe"
+
+if not defined NSSM (
+    echo [WARNING] NSSM not found in PATH or common locations.
+    where winget >nul 2>&1
+    if !errorLevel! equ 0 (
+        echo [INFO] Attempting NSSM install with winget...
+        winget install --id NSSM.NSSM -e --accept-source-agreements --accept-package-agreements >nul 2>&1
+    ) else (
+        where choco >nul 2>&1
+        if !errorLevel! equ 0 (
+            echo [INFO] Attempting NSSM install with Chocolatey...
+            choco install nssm -y >nul 2>&1
+        )
+    )
+)
+
+if not defined NSSM (
+    where nssm >nul 2>&1
+    if !errorLevel! equ 0 (
+        for /f "delims=" %%i in ('where nssm') do set "NSSM=%%i" & goto :nssm_found
+    )
+    if exist "%ProgramData%\chocolatey\bin\nssm.exe" set "NSSM=%ProgramData%\chocolatey\bin\nssm.exe"
+    if not defined NSSM if exist "%SystemRoot%\System32\nssm.exe" set "NSSM=%SystemRoot%\System32\nssm.exe"
+    if not defined NSSM if exist "C:\nssm\win64\nssm.exe" set "NSSM=C:\nssm\win64\nssm.exe"
+)
+
+if not defined NSSM (
+    echo [ERROR] NSSM is still not available.
+    echo [INFO] Install NSSM manually, then rerun:
+    echo        - winget install --id NSSM.NSSM -e
+    echo        - OR choco install nssm -y
+    echo        - OR place nssm.exe in this folder: %~dp0
+    pause
+    exit /b 1
 )
 :nssm_found
 

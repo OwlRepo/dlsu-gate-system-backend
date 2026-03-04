@@ -64,13 +64,24 @@ if !errorLevel! neq 0 (
 )
 
 echo [4/5] Running migrations...
-if !USE_BUN! equ 1 (
-    call bun run migration:run
-) else (
-    call npm run migration:run
+set "MIGRATION_OK=0"
+call npm run migration:run
+if !errorLevel! equ 0 set "MIGRATION_OK=1"
+
+if !MIGRATION_OK! neq 1 (
+    echo [WARNING] Primary migration command failed. Trying fallback DataSource path...
+    call npm run typeorm -- migration:run -- -d src/config/data-source.ts
+    if !errorLevel! equ 0 set "MIGRATION_OK=1"
 )
-if !errorLevel! neq 0 (
-    echo [WARNING] Migration run failed or nothing to migrate. Continuing...
+
+if !MIGRATION_OK! neq 1 (
+    echo [WARNING] First fallback failed. Trying legacy TypeORM config path...
+    call npm run typeorm -- migration:run -- -d src/config/typeorm.config.ts
+    if !errorLevel! equ 0 set "MIGRATION_OK=1"
+)
+
+if !MIGRATION_OK! neq 1 (
+    echo [WARNING] Migration commands failed. Continuing deployment...
 )
 
 echo [5/5] Installing and starting Windows Service...

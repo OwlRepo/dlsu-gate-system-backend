@@ -25,6 +25,11 @@ The existing PM2 flow in `deployment_docs/` remains for test/staging and is not 
 1. Run `deploy-service.bat`
 2. Validate with `status-service.bat`
 
+Notes:
+
+- Migration step includes fallback commands for both `src/config/data-source.ts` and `src/config/typeorm.config.ts`.
+- Service install step auto-searches NSSM in common locations and attempts install via `winget`/`choco` before failing.
+
 ## Update Deploy
 
 1. Run `update-service.bat`
