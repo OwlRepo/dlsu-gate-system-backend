@@ -73,31 +73,32 @@ if %errorLevel% neq 0 (
 )
 
 :: Restart PM2
+set PM2=npx --yes pm2
 echo Restarting application...
 set ECOSYSTEM=deployment_docs\ecosystem.windows.config.js
-pm2 describe dlsu-portal-be >nul 2>&1
+%PM2% describe dlsu-portal-be >nul 2>&1
 if !errorLevel! equ 0 (
-    pm2 restart dlsu-portal-be
+    %PM2% restart dlsu-portal-be
     if !errorLevel! neq 0 (
         echo [WARNING] PM2 restart failed - app may have stopped
     )
 ) else (
     echo [INFO] App not in PM2. Starting from ecosystem...
-    pm2 start "%ECOSYSTEM%" --env production
+    %PM2% start "%ECOSYSTEM%" --env production
     if !errorLevel! neq 0 (
         echo [ERROR] Failed to start application
         pause
         exit /b 1
     )
 )
-pm2 save >nul 2>&1
+%PM2% save >nul 2>&1
 
 echo.
 echo ========================================
 echo   Update Completed!
 echo ========================================
 echo.
-pm2 status
+%PM2% status
 echo.
 pause
 
