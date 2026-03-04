@@ -34,18 +34,16 @@ if %errorLevel% neq 0 (
 for /f "tokens=*" %%i in ('node --version 2^>nul') do set NODE_VERSION=%%i
 echo [OK] Node.js: !NODE_VERSION!
 
-::: Check Bun (required for install and build)
+::: Check Bun (optional - fallback to npm)
+set USE_BUN=0
 where bun >nul 2>&1
-if %errorLevel% neq 0 (
-    echo [ERROR] Bun is not installed!
-    echo Install from: https://bun.sh/
-    echo   curl -fsSL https://bun.sh/install ^| bash
-    echo   Or: npm install -g bun
-    pause
-    exit /b 1
+if !errorLevel! equ 0 (
+    set USE_BUN=1
+    for /f "tokens=*" %%i in ('bun --version 2^>nul') do set BUN_VERSION=%%i
+    echo [OK] Bun: !BUN_VERSION!
+) else (
+    echo [OK] Bun not found - will use npm
 )
-for /f "tokens=*" %%i in ('bun --version 2^>nul') do set BUN_VERSION=%%i
-echo [OK] Bun: !BUN_VERSION!
 
 ::: Check PM2 (install if missing via npm)
 where pm2 >nul 2>&1
@@ -91,37 +89,60 @@ if not exist "%PROJECT_ROOT%\logs" mkdir "%PROJECT_ROOT%\logs"
 echo [OK] Logs directory ready
 echo.
 
-::: ========== STEP 2: Install Dependencies (Bun) ==========
-echo [2/8] Installing dependencies with Bun...
-echo [INFO] Using --ignore-scripts to avoid postinstall PATH issues on Bun.
-call bun install --ignore-scripts
-if %errorLevel% neq 0 (
-    echo [WARNING] bun install had issues, retrying...
+::: ========== STEP 2: Install Dependencies ==========
+echo [2/8] Installing dependencies...
+if !USE_BUN! equ 1 (
+    echo [INFO] Using Bun (--ignore-scripts to avoid postinstall PATH issues)...
     call bun install --ignore-scripts
-    if %errorLevel% neq 0 (
-        echo [ERROR] bun install failed. Check the output above.
+    if !errorLevel! neq 0 (
+        echo [WARNING] bun install had issues, retrying...
+        call bun install --ignore-scripts
+        if !errorLevel! neq 0 (
+            echo [ERROR] bun install failed. Check the output above.
+            pause
+            exit /b 1
+        )
+    )
+    if exist "%PROJECT_ROOT%\patches\*" (
+        echo [INFO] Applying patch-package patches...
+        call bunx patch-package
+        if !errorLevel! neq 0 (
+            echo [ERROR] Failed to apply patch-package patches.
+            echo Run manually: bunx patch-package
+            pause
+            exit /b 1
+        )
+    )
+) else (
+    echo [INFO] Using npm...
+    call npm install --loglevel=error
+    if !errorLevel! neq 0 (
+        echo [ERROR] npm install failed. Check the output above.
         pause
         exit /b 1
     )
-)
-
-if exist "%PROJECT_ROOT%\patches\*" (
-    echo [INFO] Applying patch-package patches...
-    call bunx patch-package
-    if %errorLevel% neq 0 (
-        echo [ERROR] Failed to apply patch-package patches.
-        echo Run manually: bunx patch-package
-        pause
-        exit /b 1
+    if exist "%PROJECT_ROOT%\patches\*" (
+        echo [INFO] Applying patch-package patches...
+        call npx patch-package
+        if !errorLevel! neq 0 (
+            echo [ERROR] Failed to apply patch-package patches.
+            echo Run manually: npx patch-package
+            pause
+            exit /b 1
+        )
     )
 )
 
 echo [OK] Dependencies installed
 echo.
 
-::: ========== STEP 3: Build Application (Bun) ==========
-echo [3/8] Building application with Bun...
-call bun run build
+::: ========== STEP 3: Build Application ==========
+echo [3/8] Building application...
+if !USE_BUN! equ 1 (
+    call bun run build
+) else (
+    call npm run build
+)
 if %errorLevel% neq 0 (
     echo [ERROR] Build failed. Check the output above.
     pause

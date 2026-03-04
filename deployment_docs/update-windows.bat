@@ -19,18 +19,45 @@ if %errorLevel% neq 0 (
     echo Continuing with update...
 )
 
+:: Detect Bun vs npm
+set USE_BUN=0
+where bun >nul 2>&1
+if !errorLevel! equ 0 set USE_BUN=1
+
 :: Install dependencies
 echo Installing dependencies...
-call npm install --loglevel=error
-if %errorLevel% neq 0 (
+if !USE_BUN! equ 1 (
+    echo [INFO] Using Bun...
+    call bun install --ignore-scripts
+) else (
+    echo [INFO] Using npm...
+    call npm install --loglevel=error
+)
+if !errorLevel! neq 0 (
     echo [ERROR] Failed to install dependencies
     pause
     exit /b 1
 )
 
+if exist "%~dp0\..\patches\*" (
+    echo [INFO] Applying patch-package patches...
+    if !USE_BUN! equ 1 (
+        call bunx patch-package
+    ) else (
+        call npx patch-package
+    )
+    if !errorLevel! neq 0 (
+        echo [WARNING] patch-package had issues - continuing
+    )
+)
+
 :: Build application
 echo Building application...
-call npm run build
+if !USE_BUN! equ 1 (
+    call bun run build
+) else (
+    call npm run build
+)
 if %errorLevel% neq 0 (
     echo [ERROR] Build failed
     pause
