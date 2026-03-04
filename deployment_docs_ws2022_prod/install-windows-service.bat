@@ -22,10 +22,7 @@ if %errorLevel% neq 0 (
 )
 
 set "NSSM="
-where nssm >nul 2>&1
-if %errorLevel% equ 0 (
-    for /f "delims=" %%i in ('where nssm') do set "NSSM=%%i" & goto :nssm_found
-)
+for /f "delims=" %%i in ('where nssm 2^>nul') do set "NSSM=%%i" & goto :nssm_found
 if exist "%~dp0nssm.exe" set "NSSM=%~dp0nssm.exe"
 if not defined NSSM if exist "%ProgramData%\chocolatey\bin\nssm.exe" set "NSSM=%ProgramData%\chocolatey\bin\nssm.exe"
 if not defined NSSM if exist "%SystemRoot%\System32\nssm.exe" set "NSSM=%SystemRoot%\System32\nssm.exe"
@@ -38,12 +35,28 @@ if not defined NSSM (
     if !errorLevel! equ 0 (
         echo [INFO] Attempting NSSM install with winget...
         winget install --id NSSM.NSSM -e --accept-source-agreements --accept-package-agreements >nul 2>&1
-    ) else (
-        where choco >nul 2>&1
-        if !errorLevel! equ 0 (
-            echo [INFO] Attempting NSSM install with Chocolatey...
-            choco install nssm -y >nul 2>&1
-        )
+    )
+)
+
+if not defined NSSM (
+    where choco >nul 2>&1
+    if !errorLevel! equ 0 (
+        echo [INFO] Attempting NSSM install with Chocolatey...
+        choco install nssm -y >nul 2>&1
+    )
+)
+
+if not defined NSSM (
+    echo [INFO] Attempting direct NSSM download...
+    set "TOOLS_DIR=%~dp0.tools"
+    set "NSSM_ZIP=%TOOLS_DIR%\nssm-2.24.zip"
+    set "NSSM_EXTRACT=%TOOLS_DIR%\nssm-2.24"
+    if not exist "!TOOLS_DIR!" mkdir "!TOOLS_DIR!"
+    powershell -NoProfile -Command "try { Invoke-WebRequest -Uri 'https://nssm.cc/release/nssm-2.24.zip' -OutFile '!NSSM_ZIP!' -UseBasicParsing; exit 0 } catch { exit 1 }" >nul 2>&1
+    if !errorLevel! equ 0 (
+        powershell -NoProfile -Command "try { if (Test-Path '!NSSM_EXTRACT!') { Remove-Item -Recurse -Force '!NSSM_EXTRACT!' }; Expand-Archive -Path '!NSSM_ZIP!' -DestinationPath '!NSSM_EXTRACT!' -Force; exit 0 } catch { exit 1 }" >nul 2>&1
+        if exist "!NSSM_EXTRACT!\nssm-2.24\win64\nssm.exe" set "NSSM=!NSSM_EXTRACT!\nssm-2.24\win64\nssm.exe"
+        if not defined NSSM if exist "!NSSM_EXTRACT!\nssm-2.24\win32\nssm.exe" set "NSSM=!NSSM_EXTRACT!\nssm-2.24\win32\nssm.exe"
     )
 )
 
