@@ -46,16 +46,34 @@ if !errorLevel! equ 0 (
 )
 
 ::: Check PM2 (install if missing via npm)
+::: Add npm global bin to PATH so pm2 is found after install
+for /f "delims=" %%i in ('npm config get prefix 2^>nul') do set "NPM_PREFIX=%%i"
+if defined NPM_PREFIX set "PATH=!NPM_PREFIX!;!NPM_PREFIX!\node_modules;!PATH!"
+
 where pm2 >nul 2>&1
-if %errorLevel% neq 0 (
+if !errorLevel! neq 0 (
     echo Installing PM2 globally...
-    call npm install -g pm2 --loglevel=error
-    if %errorLevel% neq 0 (
-        echo [ERROR] Failed to install PM2. Try running as Administrator.
-        pause
-        exit /b 1
+    call npm install -g pm2 --loglevel=error --no-fund --no-audit
+    where pm2 >nul 2>&1
+    if !errorLevel! neq 0 (
+        echo [INFO] Checking npm global location...
+        if exist "!NPM_PREFIX!\pm2.cmd" (
+            set "PATH=!NPM_PREFIX!;!PATH!"
+            echo [OK] PM2 found at npm prefix, PATH updated
+        ) else if exist "!NPM_PREFIX!\node_modules\pm2\bin\pm2" (
+            set "PATH=!NPM_PREFIX!\node_modules\pm2\bin;!PATH!"
+            echo [OK] PM2 found in node_modules, PATH updated
+        ) else (
+            echo [ERROR] PM2 not available after install.
+            echo.
+            echo Try: Open NEW Administrator CMD, run: npm install -g pm2
+            echo Then run this script again from that new window.
+            pause
+            exit /b 1
+        )
+    ) else (
+        echo [OK] PM2 installed
     )
-    echo [OK] PM2 installed
 ) else (
     echo [OK] PM2 already installed
 )
