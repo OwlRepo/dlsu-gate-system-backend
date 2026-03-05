@@ -205,6 +205,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
             }
             totalDetailFetched++;
 
+            const cleanUserId = (userId || '').trim().replace(/\s/g, '');
             const userObj = (detail.User as Record<string, unknown>) ?? detail;
             const photo =
               (detail.photo as string | null) ??
@@ -219,7 +220,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
             );
 
             const existingStudent = await this.studentRepository.findOne({
-              where: { ID_Number: userId },
+              where: { ID_Number: cleanUserId },
             });
 
             if (existingStudent) {
@@ -245,7 +246,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                   updatePayload.Unique_ID = uniqueId;
                 }
                 await this.studentRepository.update(
-                  { ID_Number: userId },
+                  { ID_Number: cleanUserId },
                   updatePayload,
                 );
                 totalUpdated++;
@@ -257,7 +258,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
               }
             } else {
               const newStudent = this.studentRepository.create({
-                ID_Number: userId,
+                ID_Number: cleanUserId,
                 Photo: photo,
                 Unique_ID: uniqueId,
                 Name: name,
@@ -647,8 +648,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
               (record.Group && String(record.Group).trim()) || 'Student';
             const isDisabled =
               record.Campus_Entry?.toString().toUpperCase() === 'N';
+            const csvUserId = (userId || '').trim().replace(/\s/g, '');
             return {
-              user_id: record.ID_Number,
+              user_id: csvUserId,
               name: name,
               department: 'DLSU',
               user_title: userTitle,
@@ -1031,8 +1033,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
     const campusEntry = Boolean(record.Status) ? 'Y' : 'N';
     const isArchived = Boolean(record.IsArchived);
 
+    const rawId = (record.ID?.toString() || '').trim().replace(/\s/g, '');
     return {
-      ID_Number: record.ID?.toString() || '',
+      ID_Number: rawId,
       Name: fullName,
       Lived_Name: null,
       Remarks: record.Remarks || null,
