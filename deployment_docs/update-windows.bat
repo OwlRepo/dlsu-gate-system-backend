@@ -4,6 +4,10 @@ title DLSU Gate System - Update
 
 :: Change to project root directory
 cd /d "%~dp0\.."
+set PROJECT_ROOT=%cd%
+
+for /f "delims=" %%i in ('npm config get prefix 2^>nul') do set "NPM_PREFIX=%%i"
+if defined NPM_PREFIX set "PATH=!NPM_PREFIX!;!NPM_PREFIX!\node_modules;!PATH!"
 
 echo.
 echo ========================================
@@ -14,7 +18,7 @@ echo.
 :: Pull latest changes
 echo Pulling latest changes...
 git pull origin main
-if %errorLevel% neq 0 (
+if !errorLevel! neq 0 (
     echo [WARNING] Failed to pull changes or not a git repository
     echo Continuing with update...
 )
@@ -73,7 +77,7 @@ if !USE_BUN! equ 1 (
 ) else (
     call npm run build
 )
-if %errorLevel% neq 0 (
+if !errorLevel! neq 0 (
     echo [ERROR] Build failed
     pause
     exit /b 1
@@ -82,7 +86,7 @@ if %errorLevel% neq 0 (
 :: Run migrations
 echo Running migrations...
 call npm run migration:run
-if %errorLevel% neq 0 (
+if !errorLevel! neq 0 (
     echo [WARNING] Migration failed or no migrations to run
     echo This is OK if database is already up to date
 )
@@ -94,13 +98,13 @@ pm2 describe dlsu-portal-be >nul 2>&1
 if !errorLevel! equ 0 (
     pm2 restart dlsu-portal-be
     if !errorLevel! neq 0 (
-        echo [WARNING] PM2 restart failed - app may have stopped
+        echo [WARNING] PM2 restart failed. Run: pm2 logs dlsu-portal-be --lines 100
     )
 ) else (
     echo [INFO] App not in PM2. Starting from ecosystem...
     pm2 start "%ECOSYSTEM%" --env production
     if !errorLevel! neq 0 (
-        echo [ERROR] Failed to start application
+        echo [ERROR] Failed to start application. Run: pm2 status
         pause
         exit /b 1
     )

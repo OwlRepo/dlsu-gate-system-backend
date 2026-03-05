@@ -14,6 +14,11 @@ title DLSU Gate System - PM2 Deploy (Windows)
 ::: Change to project root directory
 cd /d "%~dp0\.."
 set PROJECT_ROOT=%cd%
+if not exist "%PROJECT_ROOT%\logs" mkdir "%PROJECT_ROOT%\logs"
+
+set DEPLOY_LOG=%PROJECT_ROOT%\logs\deploy-%date:~-4,4%%date:~-10,2%%date:~-7,2%-%time:~0,2%%time:~3,2%%time:~6,2%.log
+set DEPLOY_LOG=%DEPLOY_LOG: =0%
+echo Deploy started %date% %time% >> "%DEPLOY_LOG%"
 
 echo.
 echo ========================================
@@ -27,7 +32,7 @@ echo.
 
 ::: Check Node.js (required for PM2 and runtime)
 where node >nul 2>&1
-if %errorLevel% neq 0 (
+if !errorLevel! neq 0 (
     echo [ERROR] Node.js is not installed!
     echo Please install Node.js v18+ from: https://nodejs.org/
     pause
@@ -172,8 +177,9 @@ if !USE_BUN! equ 1 (
 ) else (
     call npm run build
 )
-if %errorLevel% neq 0 (
+if !errorLevel! neq 0 (
     echo [ERROR] Build failed. Check the output above.
+    echo Full deploy log: %DEPLOY_LOG%
     pause
     exit /b 1
 )
@@ -188,13 +194,14 @@ if !errorLevel! neq 0 (
     echo [INFO] PM2 daemon not running - no process to stop
     set PM2_STEP_OK=1
 ) else (
+    echo [INFO] PM2 daemon responding
     pm2 describe dlsu-portal-be >nul 2>&1
     if !errorLevel! equ 0 (
         echo   Stopping dlsu-portal-be...
-        pm2 stop dlsu-portal-be
+        pm2 stop dlsu-portal-be 2>&1
         timeout /t 2 /nobreak >nul
         echo   Removing dlsu-portal-be from PM2...
-        pm2 delete dlsu-portal-be
+        pm2 delete dlsu-portal-be 2>&1
         if !errorLevel! equ 0 (
             echo [OK] Previous instance stopped and removed
         ) else (
@@ -209,27 +216,43 @@ if !errorLevel! neq 0 (
 if !PM2_STEP_OK! neq 1 (
     echo [WARNING] PM2 step had issues - attempting to continue
 )
+echo Step 4 done PM2_STEP_OK=!PM2_STEP_OK! >> "%DEPLOY_LOG%"
 echo.
 
 ::: ========== STEP 5: Start Application with PM2 ==========
 echo [5/8] Starting application with PM2...
-pm2 start %ECOSYSTEM% --env production
-if %errorLevel% neq 0 (
+pm2 start "%ECOSYSTEM%" --env production
+if !errorLevel! neq 0 (
+    echo [WARNING] First start attempt failed. Retrying after short delay...
+    timeout /t 2 /nobreak >nul
+    pm2 ping >nul 2>&1
+    pm2 start "%ECOSYSTEM%" --env production
+)
+if !errorLevel! neq 0 (
     echo [ERROR] Failed to start application with PM2
-    echo Check logs: pm2 logs dlsu-portal-be
+    echo.
+    echo Troubleshooting - run these commands:
+    echo   pm2 status
+    echo   pm2 logs dlsu-portal-be --lines 100
+    echo Full deploy log: %DEPLOY_LOG%
     pause
     exit /b 1
 )
-
+pm2 describe dlsu-portal-be >nul 2>&1
+if !errorLevel! neq 0 (
+    echo [WARNING] App not yet in PM2 list - waiting 3s and rechecking...
+    timeout /t 3 /nobreak >nul
+)
 pm2 save >nul 2>&1
 echo [OK] Application started
+echo Step 5 start OK >> "%DEPLOY_LOG%"
 echo.
 
 ::: ========== STEP 6: Configure PM2 Startup on Boot ==========
 echo [6/8] Configuring PM2 startup on Windows boot...
 
 net session >nul 2>&1
-set IS_ADMIN=%errorLevel%
+set IS_ADMIN=!errorLevel!
 
 if !IS_ADMIN! equ 0 (
     echo Running as Administrator - configuring startup...
@@ -275,7 +298,7 @@ set /a ATTEMPT+=1
 echo   Attempt !ATTEMPT!/!MAX_ATTEMPTS! - Checking %DOCS_URL%...
 
 powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri '%DOCS_URL%' -UseBasicParsing -TimeoutSec 5; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
-if %errorLevel% equ 0 (
+if !errorLevel! equ 0 (
     set READY=1
     goto :readiness_done
 )
@@ -291,10 +314,11 @@ if !READY! neq 1 (
     echo [ERROR] Docs endpoint did not become ready after !MAX_ATTEMPTS! attempts.
     echo URL checked: %DOCS_URL%
     echo.
-    echo Troubleshooting:
-    echo   - pm2 logs dlsu-portal-be
-    echo   - pm2 status
-    echo   - Check database and Redis connectivity
+    echo Troubleshooting - run these commands:
+    echo   pm2 status
+    echo   pm2 logs dlsu-portal-be --lines 100
+    echo   Check database and Redis connectivity
+    echo Full deploy log: %DEPLOY_LOG%
     pm2 status
     pause
     exit /b 1
@@ -305,10 +329,12 @@ echo.
 
 ::: ========== STEP 8: Success - Confirm and Open Docs ==========
 echo [8/8] Deployment complete.
+echo Deploy succeeded %date% %time% >> "%DEPLOY_LOG%"
 echo.
 echo ========================================
 echo   Deployment Successful!
 echo ========================================
+echo Deploy log: %DEPLOY_LOG%
 echo.
 echo Application Status:
 pm2 status

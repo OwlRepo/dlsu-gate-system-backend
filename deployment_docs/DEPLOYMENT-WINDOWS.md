@@ -634,6 +634,7 @@ taskkill /PID <PID> /F
    ```batch
    node dist/main.js
    ```
+6. Each run of `deploy-windows-pm2.bat` writes a timestamped log to `logs\deploy-YYYYMMDD-HHMMSS.log`; on failure the script prints its path. Run `pm2 status` and `pm2 logs dlsu-portal-be --lines 100` for one-tap diagnostics. On Windows Server 2022, run the deploy script as Administrator from Command Prompt or PowerShell (`cmd /c deployment_docs\deploy-windows-pm2.bat`).
 
 #### PM2 Auto-Start Not Working
 
