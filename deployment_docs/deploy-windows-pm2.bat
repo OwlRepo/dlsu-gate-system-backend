@@ -45,8 +45,38 @@ if !errorLevel! equ 0 (
     echo [OK] Bun not found - will use npm
 )
 
-set PM2=npx --yes pm2
-echo [OK] Using npx pm2 (no global install required)
+::: Check PM2 (install if missing via npm)
+::: Add npm global bin to PATH so pm2 is found after install
+for /f "delims=" %%i in ('npm config get prefix 2^>nul') do set "NPM_PREFIX=%%i"
+if defined NPM_PREFIX set "PATH=!NPM_PREFIX!;!NPM_PREFIX!\node_modules;!PATH!"
+
+where pm2 >nul 2>&1
+if !errorLevel! neq 0 (
+    echo Installing PM2 globally...
+    call npm install -g pm2 --loglevel=error --no-fund --no-audit
+    where pm2 >nul 2>&1
+    if !errorLevel! neq 0 (
+        echo [INFO] Checking npm global location...
+        if exist "!NPM_PREFIX!\pm2.cmd" (
+            set "PATH=!NPM_PREFIX!;!PATH!"
+            echo [OK] PM2 found at npm prefix, PATH updated
+        ) else if exist "!NPM_PREFIX!\node_modules\pm2\bin\pm2" (
+            set "PATH=!NPM_PREFIX!\node_modules\pm2\bin;!PATH!"
+            echo [OK] PM2 found in node_modules, PATH updated
+        ) else (
+            echo [ERROR] PM2 not available after install.
+            echo.
+            echo Try: Open NEW Administrator CMD, run: npm install -g pm2
+            echo Then run this script again from that new window.
+            pause
+            exit /b 1
+        )
+    ) else (
+        echo [OK] PM2 installed
+    )
+) else (
+    echo [OK] PM2 already installed
+)
 
 ::: Verify project files
 if not exist "%PROJECT_ROOT%\package.json" (
@@ -142,18 +172,18 @@ echo.
 ::: ========== STEP 4: Gracefully Stop Existing PM2 App ==========
 echo [4/8] Stopping existing PM2 process (if running)...
 set PM2_STEP_OK=0
-%PM2% ping >nul 2>&1
+pm2 ping >nul 2>&1
 if !errorLevel! neq 0 (
     echo [INFO] PM2 daemon not running - no process to stop
     set PM2_STEP_OK=1
 ) else (
-    %PM2% describe dlsu-portal-be >nul 2>&1
+    pm2 describe dlsu-portal-be >nul 2>&1
     if !errorLevel! equ 0 (
         echo   Stopping dlsu-portal-be...
-        %PM2% stop dlsu-portal-be
+        pm2 stop dlsu-portal-be
         timeout /t 2 /nobreak >nul
         echo   Removing dlsu-portal-be from PM2...
-        %PM2% delete dlsu-portal-be
+        pm2 delete dlsu-portal-be
         if !errorLevel! equ 0 (
             echo [OK] Previous instance stopped and removed
         ) else (
@@ -172,15 +202,15 @@ echo.
 
 ::: ========== STEP 5: Start Application with PM2 ==========
 echo [5/8] Starting application with PM2...
-%PM2% start "%ECOSYSTEM%" --env production
-if !errorLevel! neq 0 (
+pm2 start %ECOSYSTEM% --env production
+if %errorLevel% neq 0 (
     echo [ERROR] Failed to start application with PM2
-    echo Check logs: %PM2% logs dlsu-portal-be
+    echo Check logs: pm2 logs dlsu-portal-be
     pause
     exit /b 1
 )
 
-%PM2% save >nul 2>&1
+pm2 save >nul 2>&1
 echo [OK] Application started
 echo.
 
@@ -192,7 +222,7 @@ set IS_ADMIN=%errorLevel%
 
 if !IS_ADMIN! equ 0 (
     echo Running as Administrator - configuring startup...
-    for /f "tokens=*" %%i in ('%PM2% startup 2^>^&1') do (
+    for /f "tokens=*" %%i in ('pm2 startup 2^>^&1') do (
         set STARTUP_LINE=%%i
         echo %%i | findstr /i "pm2" >nul
         if !errorLevel! equ 0 (
@@ -210,15 +240,15 @@ if !IS_ADMIN! equ 0 (
     echo.
     echo To enable auto-start on Windows boot:
     echo 1. Open Command Prompt as Administrator
-    echo 2. Run: %PM2% startup
-    echo 3. Execute the command shown by %PM2% startup
+    echo 2. Run: pm2 startup
+    echo 3. Execute the command shown by pm2 startup
 )
 
-%PM2% save >nul 2>&1
+pm2 save >nul 2>&1
 if exist "%USERPROFILE%\.pm2\dump.pm2" (
     echo [OK] PM2 process list saved
 ) else (
-    echo [WARNING] PM2 dump not found. Run '%PM2% save' manually.
+    echo [WARNING] PM2 dump not found. Run 'pm2 save' manually.
 )
 echo.
 
@@ -251,10 +281,10 @@ if !READY! neq 1 (
     echo URL checked: %DOCS_URL%
     echo.
     echo Troubleshooting:
-    echo   - %PM2% logs dlsu-portal-be
-    echo   - %PM2% status
+    echo   - pm2 logs dlsu-portal-be
+    echo   - pm2 status
     echo   - Check database and Redis connectivity
-    %PM2% status
+    pm2 status
     pause
     exit /b 1
 )
@@ -270,7 +300,7 @@ echo   Deployment Successful!
 echo ========================================
 echo.
 echo Application Status:
-%PM2% status
+pm2 status
 echo.
 echo URLs:
 echo   API:       http://localhost:10580
