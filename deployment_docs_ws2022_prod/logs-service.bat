@@ -14,5 +14,12 @@ echo OUT: %OUT_LOG%
 echo ERR: %ERR_LOG%
 echo.
 
-powershell -NoProfile -Command "if (Test-Path '%OUT_LOG%') { Write-Host '--- LAST 100 OUT LINES ---'; Get-Content '%OUT_LOG%' -Tail 100 }; if (Test-Path '%ERR_LOG%') { Write-Host '--- LAST 100 ERR LINES ---'; Get-Content '%ERR_LOG%' -Tail 100 }"
+echo Following logs live. Press Ctrl+C to stop.
+echo.
+
+powershell -NoProfile -Command "$out='%OUT_LOG%'; $err='%ERR_LOG%'; foreach ($p in @($out,$err)) { if (-not (Test-Path $p)) { New-Item -ItemType File -Path $p -Force | Out-Null } }; Write-Host '--- FOLLOWING OUT + ERR (tail 100) ---'; Get-Content -Path @($out,$err) -Tail 100 -Wait"
+
+echo.
+echo Log follow stopped.
+pause
 exit /b 0
