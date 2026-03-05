@@ -23,12 +23,18 @@ if %errorLevel% neq 0 (
 set USE_BUN=0
 where bun >nul 2>&1
 if !errorLevel! equ 0 set USE_BUN=1
+if /I "%~1"=="force-npm" set USE_BUN=0
 
 :: Install dependencies
 echo Installing dependencies...
 if !USE_BUN! equ 1 (
     echo [INFO] Using Bun...
     call bun install --ignore-scripts
+    if !errorLevel! neq 0 (
+        echo [WARNING] Bun install failed, falling back to npm install...
+        set USE_BUN=0
+        call npm install --loglevel=error --no-fund --no-audit
+    )
 ) else (
     echo [INFO] Using npm...
     call npm install --loglevel=error
@@ -43,6 +49,10 @@ if exist "%~dp0\..\patches\*" (
     echo [INFO] Applying patch-package patches...
     if !USE_BUN! equ 1 (
         call bunx patch-package
+        if !errorLevel! neq 0 (
+            echo [WARNING] bunx patch-package failed, trying npx...
+            call npx patch-package
+        )
     ) else (
         call npx patch-package
     )
@@ -55,6 +65,11 @@ if exist "%~dp0\..\patches\*" (
 echo Building application...
 if !USE_BUN! equ 1 (
     call bun run build
+    if !errorLevel! neq 0 (
+        echo [WARNING] Bun build failed, falling back to npm build...
+        set USE_BUN=0
+        call npm run build
+    )
 ) else (
     call npm run build
 )

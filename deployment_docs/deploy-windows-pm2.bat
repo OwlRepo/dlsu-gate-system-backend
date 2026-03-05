@@ -6,6 +6,8 @@ if "%~1"=="" (
     cmd /k "%~f0" _deploy
     exit /b
 )
+if /I "%~1"=="force-npm" set FORCE_NPM=1
+if /I "%~2"=="force-npm" set FORCE_NPM=1
 
 title DLSU Gate System - PM2 Deploy (Windows)
 
@@ -43,6 +45,10 @@ if !errorLevel! equ 0 (
     echo [OK] Bun: !BUN_VERSION!
 ) else (
     echo [OK] Bun not found - will use npm
+)
+if defined FORCE_NPM (
+    set USE_BUN=0
+    echo [INFO] force-npm enabled. Using npm for install/build.
 )
 
 ::: Check PM2 (install if missing via npm)
@@ -110,13 +116,18 @@ echo.
 ::: ========== STEP 2: Install Dependencies ==========
 echo [2/8] Installing dependencies...
 if !USE_BUN! equ 1 (
-    echo [INFO] Using Bun (--ignore-scripts to avoid postinstall PATH issues)...
+    echo [INFO] Using Bun with --ignore-scripts to avoid postinstall PATH issues...
     call bun install --ignore-scripts
     if !errorLevel! neq 0 (
         echo [WARNING] bun install had issues, retrying...
         call bun install --ignore-scripts
+    )
+    if !errorLevel! neq 0 (
+        echo [WARNING] Bun install failed twice. Falling back to npm install...
+        set USE_BUN=0
+        call npm install --loglevel=error --no-fund --no-audit
         if !errorLevel! neq 0 (
-            echo [ERROR] bun install failed. Check the output above.
+            echo [ERROR] npm install failed after Bun fallback.
             pause
             exit /b 1
         )
@@ -125,10 +136,8 @@ if !USE_BUN! equ 1 (
         echo [INFO] Applying patch-package patches...
         call bunx patch-package
         if !errorLevel! neq 0 (
-            echo [ERROR] Failed to apply patch-package patches.
-            echo Run manually: bunx patch-package
-            pause
-            exit /b 1
+            echo [WARNING] bunx patch-package failed. Trying npx patch-package...
+            call npx patch-package
         )
     )
 ) else (
@@ -143,10 +152,7 @@ if !USE_BUN! equ 1 (
         echo [INFO] Applying patch-package patches...
         call npx patch-package
         if !errorLevel! neq 0 (
-            echo [ERROR] Failed to apply patch-package patches.
-            echo Run manually: npx patch-package
-            pause
-            exit /b 1
+            echo [WARNING] patch-package failed. Continuing without patches.
         )
     )
 )
@@ -158,6 +164,11 @@ echo.
 echo [3/8] Building application...
 if !USE_BUN! equ 1 (
     call bun run build
+    if !errorLevel! neq 0 (
+        echo [WARNING] Bun build failed. Falling back to npm build...
+        set USE_BUN=0
+        call npm run build
+    )
 ) else (
     call npm run build
 )
