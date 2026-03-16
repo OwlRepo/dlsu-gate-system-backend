@@ -1,26 +1,26 @@
 /**
- * Updates .cursor/file-index/*.mdc based on staged file changes.
+ * Updates .cursor/file-index/*.md based on staged file changes.
  * Maps file paths to index files and updates timestamps/entries.
  * Usage: bun run scripts/update-cursor-indexes.ts [--dry-run]
- * Hard Rule A: All .cursor docs use .mdc extension only.
+ * Hard Rule A: All .cursor docs use .md extension only (per CURSOR_INTEGRATION.mdc GLOBAL OUTPUT FORMAT).
  */
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const INDEX_MAP: Record<string, string[]> = {
-  'file-index/controllers-index.mdc': ['src/**/*.controller.ts'],
-  'file-index/services-index.mdc': [
+  'file-index/controllers-index.md': ['src/**/*.controller.ts'],
+  'file-index/services-index.md': [
     'src/**/*.service.ts',
     'src/**/services/*.ts',
   ],
-  'file-index/models-index.mdc': ['src/**/entities/*.entity.ts'],
-  'file-index/utils-index.mdc': [
+  'file-index/models-index.md': ['src/**/entities/*.entity.ts'],
+  'file-index/utils-index.md': [
     'src/config/*.ts',
     'src/common/**/*.ts',
     'src/decorators/*.ts',
     'src/interceptors/*.ts',
   ],
-  'file-index/src-index.mdc': ['src/**/*.ts'],
+  'file-index/src-index.md': ['src/**/*.ts'],
 };
 
 function getStagedFiles(): string[] {

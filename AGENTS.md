@@ -1,1 +1,1 @@
-For any task, load @.cursor/rules/entry-point.mdc first and follow its workflow.
+For any task, load @.cursor/rules/entry-point.md first and follow its workflow.
