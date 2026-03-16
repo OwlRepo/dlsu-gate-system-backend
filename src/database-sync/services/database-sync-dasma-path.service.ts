@@ -447,6 +447,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
       let totalActiveExported = 0;
       let totalArchivedDisabledExported = 0;
       const failedRecordsAll = [];
+      const seenIdsFromSource = new Set<string>();
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir);
@@ -480,6 +481,10 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
           ...record,
           Photo: null,
         }));
+
+        batchRecordsWithPhoto.forEach((r) =>
+          seenIdsFromSource.add(r.ID_Number),
+        );
 
         const existingMap = new Map();
         const idNumbers = batchRecordsWithPhoto.map((r) => r.ID_Number);
@@ -652,7 +657,10 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
           .subtract(1, 'day')
           .format('YYYY-MM-DD HH:mm:ss.SSS');
 
-        const formattedRecords = batchRecordsWithPhoto
+        const activeRecordsForBiostar = batchRecordsWithPhoto.filter(
+          (r) => r.isArchived !== true,
+        );
+        const formattedRecords = activeRecordsForBiostar
           .map((record) => {
             // Preserve ID_Number as-is for identity; no hex conversion or truncation
             const userId = (record.ID_Number?.toString() || '').trim();
@@ -704,7 +712,6 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                 ? formattedExpiryDateDisabled
                 : formattedExpiryDateEnabled,
               original_campus_entry: record.Campus_Entry ?? '',
-              _isArchived: record.isArchived,
             };
           })
           .filter((record) => record !== null);
@@ -957,11 +964,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
         }
 
         totalProcessed += formattedRecords.length;
-        totalActiveExported += formattedRecords.filter(
-          (r) => !(r as { _isArchived?: boolean })._isArchived,
-        ).length;
-        totalArchivedDisabledExported += formattedRecords.filter(
-          (r) => (r as { _isArchived?: boolean })._isArchived,
+        totalActiveExported += formattedRecords.length;
+        totalArchivedDisabledExported += batchRecordsWithPhoto.filter(
+          (r) => r.isArchived === true,
         ).length;
         void (totalSkipped += skippedRecords.length);
         void (totalEnabled += formattedRecords.filter((r) => {
@@ -993,8 +998,34 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
       }
 
       this.logger.log('All batches processed, performing final cleanup...');
+
+      let archivedByReconciliation = 0;
+      if (seenIdsFromSource.size > 0) {
+        const activeStudents = await this.studentRepository.find({
+          where: { isArchived: false },
+          select: ['ID_Number'],
+        });
+        const missingIds = activeStudents
+          .filter((s) => !seenIdsFromSource.has(s.ID_Number))
+          .map((s) => s.ID_Number);
+        if (missingIds.length > 0) {
+          const reconcileChunkSize = 200;
+          for (let i = 0; i < missingIds.length; i += reconcileChunkSize) {
+            const chunk = missingIds.slice(i, i + reconcileChunkSize);
+            const result = await this.studentRepository.update(
+              { ID_Number: In(chunk) },
+              { isArchived: true, updatedAt: new Date() },
+            );
+            archivedByReconciliation += result.affected ?? 0;
+          }
+          this.logger.log(
+            `[Dasma] Reconciliation: archived ${archivedByReconciliation} users missing from source`,
+          );
+        }
+      }
+
       this.logger.log(
-        `[Dasma] Export counts: active=${totalActiveExported}, archivedDisabled=${totalArchivedDisabledExported}, totalProcessed=${totalProcessed}`,
+        `[Dasma] Run summary: seenFromSource=${seenIdsFromSource.size}, activeUploadedToBiostar=${totalActiveExported}, archivedSkippedFromCsv=${totalArchivedDisabledExported}, archivedByReconciliation=${archivedByReconciliation}`,
       );
       await this.commonService.cleanupTempFiles(tempDir);
 
