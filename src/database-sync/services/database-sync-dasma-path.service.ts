@@ -97,7 +97,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
     let totalSkipped = 0;
     let totalFailed = 0;
     let totalCardUpdated = 0;
-    let totalCardCleared = 0;
+    const totalCardCleared = 0;
     let totalRateLimitHits = 0;
     let maxLastModified = state.lastModifiedCursor || '0';
 
@@ -218,6 +218,8 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
             const uniqueId = this.normalizeUniqueIdValue(
               this.extractBiostarCardValue(detail),
             );
+            const isArchivedFromBiostar =
+              this.deriveBiostarUserDisabled(detail);
 
             const existingStudent = await this.studentRepository.findOne({
               where: { ID_Number: cleanUserId },
@@ -232,7 +234,14 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
               const uniqueIdChanged =
                 uniqueId !== null && uniqueId !== (existingUnique || null);
               const nameChanged = name !== (existingStudent.Name ?? null);
-              if (photoChanged || uniqueIdChanged || nameChanged) {
+              const isArchivedChanged =
+                existingStudent.isArchived !== isArchivedFromBiostar;
+              if (
+                photoChanged ||
+                uniqueIdChanged ||
+                nameChanged ||
+                isArchivedChanged
+              ) {
                 const updatePayload: Partial<Student> = {
                   updatedAt: new Date(),
                 };
@@ -244,6 +253,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                 }
                 if (uniqueIdChanged) {
                   updatePayload.Unique_ID = uniqueId;
+                }
+                if (isArchivedChanged) {
+                  updatePayload.isArchived = isArchivedFromBiostar;
                 }
                 await this.studentRepository.update(
                   { ID_Number: cleanUserId },
@@ -262,7 +274,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                 Photo: photo,
                 Unique_ID: uniqueId,
                 Name: name,
-                isArchived: false,
+                isArchived: isArchivedFromBiostar,
               });
               await this.studentRepository.save(newStudent);
               totalCreated++;
@@ -323,6 +335,28 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
       await this.biostarSyncStateRepository.save(state);
       throw error;
     }
+  }
+
+  /**
+   * Derives whether a Biostar user is disabled/expired.
+   * Used to map Biostar state to Postgres isArchived.
+   */
+  private deriveBiostarUserDisabled(detail: Record<string, unknown>): boolean {
+    const userObj = (detail.User as Record<string, unknown>) ?? detail;
+    const disabled =
+      userObj?.disabled === true ||
+      userObj?.disabled === 'true' ||
+      detail.disabled === true ||
+      detail.disabled === 'true';
+    if (disabled) return true;
+    const expiry = userObj?.expiry_datetime ?? detail.expiry_datetime;
+    if (expiry) {
+      const expiryDate = new Date(String(expiry));
+      if (!isNaN(expiryDate.getTime()) && expiryDate < new Date()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private extractBiostarCardValue(
@@ -410,6 +444,8 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
       let totalSkipped = 0;
       let totalEnabled = 0;
       let totalDisabled = 0;
+      let totalActiveExported = 0;
+      let totalArchivedDisabledExported = 0;
       const failedRecordsAll = [];
       const tempDir = path.join(process.cwd(), 'temp');
       if (!fs.existsSync(tempDir)) {
@@ -469,7 +505,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
           changes: Partial<Student>;
         }> = [];
         for (const record of batchRecordsWithPhoto) {
-          const incomingUniqueId = this.normalizeUniqueIdValue(record.Unique_ID);
+          const incomingUniqueId = this.normalizeUniqueIdValue(
+            record.Unique_ID,
+          );
           const groupValue = this.commonService.normalizeGroupValue(
             record.Group,
           );
@@ -531,19 +569,22 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                         where: { ID_Number: rec.ID_Number as string },
                       });
                       if (existing) {
-                        const changedFields = this.buildChangedFields(existing, {
-                          Name: rec.Name ?? null,
-                          Lived_Name: rec.Lived_Name ?? null,
-                          Remarks: rec.Remarks ?? null,
-                          Photo: rec.Photo ?? null,
-                          Campus_Entry: rec.Campus_Entry ?? null,
-                          Unique_ID:
-                            this.normalizeUniqueIdValue(rec.Unique_ID) ??
-                            existing.Unique_ID ??
-                            null,
-                          isArchived: rec.isArchived ?? false,
-                          group: rec.group ?? null,
-                        });
+                        const changedFields = this.buildChangedFields(
+                          existing,
+                          {
+                            Name: rec.Name ?? null,
+                            Lived_Name: rec.Lived_Name ?? null,
+                            Remarks: rec.Remarks ?? null,
+                            Photo: rec.Photo ?? null,
+                            Campus_Entry: rec.Campus_Entry ?? null,
+                            Unique_ID:
+                              this.normalizeUniqueIdValue(rec.Unique_ID) ??
+                              existing.Unique_ID ??
+                              null,
+                            isArchived: rec.isArchived ?? false,
+                            group: rec.group ?? null,
+                          },
+                        );
                         if (Object.keys(changedFields).length > 0) {
                           await this.studentRepository.update(
                             { ID_Number: rec.ID_Number as string },
@@ -613,16 +654,15 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
 
         const formattedRecords = batchRecordsWithPhoto
           .map((record) => {
-            const userId = this.commonService.sanitizeUserId(
-              record.ID_Number?.toString()?.trim() || '',
-            );
+            // Preserve ID_Number as-is for identity; no hex conversion or truncation
+            const userId = (record.ID_Number?.toString() || '').trim();
             const name = this.commonService.removeSpecialChars(
               record.Name?.trim() || '',
             );
             const remarks = record.Remarks?.trim() || '';
             const validationErrors = [];
-            if (!userId || userId.length > 10) {
-              validationErrors.push(!userId ? 'Empty ID' : 'ID too long');
+            if (!userId) {
+              validationErrors.push('Empty ID');
             }
             if (!name) {
               validationErrors.push('Empty name');
@@ -646,11 +686,12 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
 
             const userTitle =
               (record.Group && String(record.Group).trim()) || 'Student';
+            // Disabled = Campus_Entry N or archived; both use expired date-window in Biostar
             const isDisabled =
-              record.Campus_Entry?.toString().toUpperCase() === 'N';
-            const csvUserId = (userId || '').trim().replace(/\s/g, '');
+              record.Campus_Entry?.toString().toUpperCase() === 'N' ||
+              record.isArchived === true;
             return {
-              user_id: csvUserId,
+              user_id: userId,
               name: name,
               department: 'DLSU',
               user_title: userTitle,
@@ -663,6 +704,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
                 ? formattedExpiryDateDisabled
                 : formattedExpiryDateEnabled,
               original_campus_entry: record.Campus_Entry ?? '',
+              _isArchived: record.isArchived,
             };
           })
           .filter((record) => record !== null);
@@ -915,6 +957,12 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
         }
 
         totalProcessed += formattedRecords.length;
+        totalActiveExported += formattedRecords.filter(
+          (r) => !(r as { _isArchived?: boolean })._isArchived,
+        ).length;
+        totalArchivedDisabledExported += formattedRecords.filter(
+          (r) => (r as { _isArchived?: boolean })._isArchived,
+        ).length;
         void (totalSkipped += skippedRecords.length);
         void (totalEnabled += formattedRecords.filter((r) => {
           const campusEntry = r.original_campus_entry
@@ -945,6 +993,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
       }
 
       this.logger.log('All batches processed, performing final cleanup...');
+      this.logger.log(
+        `[Dasma] Export counts: active=${totalActiveExported}, archivedDisabled=${totalArchivedDisabledExported}, totalProcessed=${totalProcessed}`,
+      );
       await this.commonService.cleanupTempFiles(tempDir);
 
       const scheduleNumber = parseInt(jobName.replace('sync-', ''));
@@ -992,9 +1043,9 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
       const columns =
         'ID, LastName, FirstName, MiddleName, Suffix, [Group], Status, Remarks, IsArchived';
       if (hasIsArchivedColumn) {
+        // Fetch both active and archived rows; archived rows exported as disabled via date-window
         query = `
           SELECT ${columns} FROM ${tableName}
-          WHERE IsArchived = 0 OR IsArchived IS NULL
           ORDER BY ID
           OFFSET ${offset} ROWS
           FETCH NEXT ${batchSize} ROWS ONLY

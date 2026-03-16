@@ -33,6 +33,12 @@ export class DatabaseSyncCommonService {
     return str.replace(/[^a-zA-Z0-9\s]/g, '');
   }
 
+  /**
+   * Normalizes userId for CSN/card-like values (hex-to-decimal, truncation).
+   * WARNING: Do NOT use for identity keys (ID_Number). This performs lossy
+   * transformations that can mutate or collapse distinct IDs. For identity
+   * preservation use trim-only normalization.
+   */
   sanitizeUserId(userId: string): string {
     const cleanUserId = userId.replace(/\s/g, '');
     if (/^[0-9A-Fa-f]+$/.test(cleanUserId)) {

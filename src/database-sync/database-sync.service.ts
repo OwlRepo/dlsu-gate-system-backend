@@ -320,33 +320,36 @@ export class DatabaseSyncService {
    * Updates lastSyncTime for the shared schedule when jobName is sync-1 or sync-2.
    */
   private async executeCombinedSync(jobName: string): Promise<void> {
-    await this.runWithStudentMutationLock(`combined-sync:${jobName}`, async () => {
-      try {
-        this.logger.log(`Starting combined sync for ${jobName}`);
-        await this.executeDatabaseSyncInternal(jobName, false);
-        const biostarJobKey = `biostar-after-${jobName}`;
-        await this.syncFromBiostarInternal(biostarJobKey, false);
+    await this.runWithStudentMutationLock(
+      `combined-sync:${jobName}`,
+      async () => {
+        try {
+          this.logger.log(`Starting combined sync for ${jobName}`);
+          await this.executeDatabaseSyncInternal(jobName, false);
+          const biostarJobKey = `biostar-after-${jobName}`;
+          await this.syncFromBiostarInternal(biostarJobKey, false);
 
-        const scheduleMatch = jobName.match(/^sync-(\d+)$/);
-        if (scheduleMatch) {
-          const scheduleNumber = parseInt(scheduleMatch[1], 10);
-          const schedule = await this.syncScheduleRepository.findOne({
-            where: { scheduleNumber },
-          });
-          if (schedule) {
-            schedule.lastSyncTime = new Date();
-            await this.syncScheduleRepository.save(schedule);
-            this.logger.log(
-              `Updated last sync time for schedule ${scheduleNumber}`,
-            );
+          const scheduleMatch = jobName.match(/^sync-(\d+)$/);
+          if (scheduleMatch) {
+            const scheduleNumber = parseInt(scheduleMatch[1], 10);
+            const schedule = await this.syncScheduleRepository.findOne({
+              where: { scheduleNumber },
+            });
+            if (schedule) {
+              schedule.lastSyncTime = new Date();
+              await this.syncScheduleRepository.save(schedule);
+              this.logger.log(
+                `Updated last sync time for schedule ${scheduleNumber}`,
+              );
+            }
           }
+          this.logger.log(`Combined sync completed for ${jobName}`);
+        } catch (error) {
+          this.logger.error(`Combined sync failed for ${jobName}:`, error);
+          throw error;
         }
-        this.logger.log(`Combined sync completed for ${jobName}`);
-      } catch (error) {
-        this.logger.error(`Combined sync failed for ${jobName}:`, error);
-        throw error;
-      }
-    });
+      },
+    );
   }
 
   private addBiostarCronJob(
@@ -680,7 +683,10 @@ export class DatabaseSyncService {
       return runBiostarSync();
     }
 
-    return this.runWithStudentMutationLock(`biostar-sync:${jobKey}`, runBiostarSync);
+    return this.runWithStudentMutationLock(
+      `biostar-sync:${jobKey}`,
+      runBiostarSync,
+    );
   }
 
   async testConnection() {
