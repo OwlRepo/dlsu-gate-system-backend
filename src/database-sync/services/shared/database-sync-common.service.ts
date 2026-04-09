@@ -13,6 +13,7 @@ const DASMA_BULK_CSV_HEADERS = [
   { id: 'user_title', title: 'user_title' },
   { id: 'user_group', title: 'user_group' },
   { id: 'remarks', title: 'Remarks' },
+  { id: 'csn', title: 'csn' },
   { id: 'start_datetime', title: 'start_datetime' },
   { id: 'expiry_datetime', title: 'expiry_datetime' },
   { id: 'original_campus_entry', title: 'original_campus_entry' },
@@ -180,10 +181,9 @@ export class DatabaseSyncCommonService {
       }
     }
 
-    const workers = Array.from(
-      { length: Math.min(concurrency, items.length, 1) },
-      () => worker(),
-    );
+    const workerCount =
+      items.length === 0 ? 0 : Math.min(concurrency, items.length);
+    const workers = Array.from({ length: workerCount }, () => worker());
     await Promise.all(workers);
     return results;
   }
@@ -511,6 +511,7 @@ export class DatabaseSyncCommonService {
         user_title: record.user_title ?? '',
         user_group: record.user_group ?? '',
         remarks: record.remarks ?? '',
+        csn: record.csn ?? '',
         start_datetime: record.start_datetime ?? '',
         expiry_datetime: record.expiry_datetime ?? '',
         original_campus_entry: record.original_campus_entry ?? '',

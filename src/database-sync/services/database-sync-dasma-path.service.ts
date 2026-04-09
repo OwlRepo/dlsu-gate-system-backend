@@ -385,6 +385,41 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
     return null;
   }
 
+  /**
+   * When Biostar CSV import uses overwrite (import_option 2), including the current
+   * CSN in the row prevents clearing cards enrolled only in Biostar UI.
+   */
+  private async resolveDasmaCsnForCsvRow(
+    userId: string,
+    existing: Student | undefined,
+    token: string,
+    sessionId: string,
+    fetchFromBiostar: boolean,
+    rateLimitTracker: { count: number },
+  ): Promise<string> {
+    const fromDb = this.normalizeUniqueIdValue(existing?.Unique_ID);
+    if (fromDb) {
+      return fromDb;
+    }
+    if (!fetchFromBiostar) {
+      return '';
+    }
+    const detail = await this.biostarApiService.fetchBiostarUserDetailWithRetry(
+      userId,
+      token,
+      sessionId,
+      3,
+      rateLimitTracker,
+    );
+    if (!detail) {
+      return '';
+    }
+    const card = this.extractBiostarCardValue(
+      detail as Record<string, unknown>,
+    );
+    return this.normalizeUniqueIdValue(card) ?? '';
+  }
+
   private async getOrCreateBiostarSyncState(): Promise<BiostarSyncState> {
     let state = await this.biostarSyncStateRepository.findOne({
       where: { schemaKey: 'dasma' },
@@ -460,6 +495,7 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
         { id: 'user_title', title: 'user_title' },
         { id: 'user_group', title: 'user_group' },
         { id: 'remarks', title: 'Remarks' },
+        { id: 'csn', title: 'csn' },
         { id: 'start_datetime', title: 'start_datetime' },
         { id: 'expiry_datetime', title: 'expiry_datetime' },
         { id: 'original_campus_entry', title: 'original_campus_entry' },
@@ -633,6 +669,16 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
           `[Batch ${batchNumber}] Synced ${toCreate.length + toUpdate.length} records (${batchRecordsWithPhoto.length - (toCreate.length + toUpdate.length)} unchanged)`,
         );
 
+        const refreshedStudents = await this.commonService.executeWithRetry(
+          () =>
+            this.studentRepository.find({
+              where: { ID_Number: In(idNumbers) },
+            }),
+          3,
+          `refresh students for CSN batch ${batchNumber}`,
+        );
+        refreshedStudents.forEach((s) => existingMap.set(s.ID_Number, s));
+
         const csvFilePath = path.join(
           tempDir,
           `sync_${jobName}_batch${batchNumber}_${Date.now()}.csv`,
@@ -660,8 +706,28 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
         const activeRecordsForBiostar = batchRecordsWithPhoto.filter(
           (r) => r.isArchived !== true,
         );
-        const formattedRecords = activeRecordsForBiostar
-          .map((record) => {
+
+        const fetchCardsFromBiostar =
+          (this.configService.get('DASMA_CSV_FETCH_CARD_FROM_BIOSTAR') ??
+            'true') !== 'false';
+        const csnConcurrency = Math.max(
+          1,
+          parseInt(
+            this.configService.get('BIOSTAR_DETAIL_CONCURRENCY') || '8',
+            10,
+          ) || 8,
+        );
+        const { token: csnToken, sessionId: csnSessionId } =
+          await this.biostarApiService.getApiToken();
+        const csnRateLimitTracker = { count: 0 };
+
+        type DasmaCsvRowInput = {
+          userId: string;
+          rowBase: Record<string, string>;
+        };
+
+        const validatedRows: Array<DasmaCsvRowInput | null> =
+          activeRecordsForBiostar.map((record) => {
             // Preserve ID_Number as-is for identity; no hex conversion or truncation
             const userId = (record.ID_Number?.toString() || '').trim();
             const name = this.commonService.removeSpecialChars(
@@ -694,27 +760,62 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
 
             const userTitle =
               (record.Group && String(record.Group).trim()) || 'Student';
-            // Disabled = Campus_Entry N or archived; both use expired date-window in Biostar
             const isDisabled =
               record.Campus_Entry?.toString().toUpperCase() === 'N' ||
               record.isArchived === true;
             return {
-              user_id: userId,
-              name: name,
-              department: 'DLSU',
-              user_title: userTitle,
-              user_group: 'All Users',
-              remarks: remarks,
-              start_datetime: isDisabled
-                ? formattedStartDateDisabled
-                : formattedStartDateEnabled,
-              expiry_datetime: isDisabled
-                ? formattedExpiryDateDisabled
-                : formattedExpiryDateEnabled,
-              original_campus_entry: record.Campus_Entry ?? '',
+              userId,
+              rowBase: {
+                user_id: userId,
+                name: name,
+                department: 'DLSU',
+                user_title: userTitle,
+                user_group: 'All Users',
+                remarks: remarks,
+                start_datetime: isDisabled
+                  ? formattedStartDateDisabled
+                  : formattedStartDateEnabled,
+                expiry_datetime: isDisabled
+                  ? formattedExpiryDateDisabled
+                  : formattedExpiryDateEnabled,
+                original_campus_entry: String(record.Campus_Entry ?? ''),
+              },
             };
-          })
-          .filter((record) => record !== null);
+          });
+
+        const toResolveCsn = validatedRows.filter(
+          (row): row is DasmaCsvRowInput => row !== null,
+        );
+
+        let csnFilledFromApi = 0;
+        const formattedRecords: Record<string, string>[] =
+          await this.commonService.runWithConcurrency(
+            toResolveCsn,
+            csnConcurrency,
+            async ({ userId, rowBase }): Promise<Record<string, string>> => {
+              const hadDbCsn = !!this.normalizeUniqueIdValue(
+                existingMap.get(userId)?.Unique_ID,
+              );
+              const csn = await this.resolveDasmaCsnForCsvRow(
+                userId,
+                existingMap.get(userId),
+                csnToken,
+                csnSessionId,
+                fetchCardsFromBiostar,
+                csnRateLimitTracker,
+              );
+              if (!hadDbCsn && csn) {
+                csnFilledFromApi++;
+              }
+              return { ...rowBase, csn };
+            },
+          );
+
+        if (csnFilledFromApi > 0 || fetchCardsFromBiostar) {
+          this.logger.log(
+            `[Batch ${batchNumber}] Dasma CSV CSN: filledFromBiostarApi=${csnFilledFromApi}, fetchEnabled=${fetchCardsFromBiostar}`,
+          );
+        }
 
         await csvWriter.writeRecords(formattedRecords);
         this.logger.log(
