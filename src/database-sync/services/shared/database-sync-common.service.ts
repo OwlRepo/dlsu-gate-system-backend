@@ -5,6 +5,41 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createObjectCsvWriter } from 'csv-writer';
 
+/** Same column set as bulk upload CSV in `database-sync-dasma-path.service.ts`. */
+const DASMA_BULK_CSV_HEADERS = [
+  { id: 'user_id', title: 'user_id' },
+  { id: 'name', title: 'name' },
+  { id: 'department', title: 'department' },
+  { id: 'user_title', title: 'user_title' },
+  { id: 'user_group', title: 'user_group' },
+  { id: 'remarks', title: 'Remarks' },
+  { id: 'start_datetime', title: 'start_datetime' },
+  { id: 'expiry_datetime', title: 'expiry_datetime' },
+  { id: 'original_campus_entry', title: 'original_campus_entry' },
+];
+
+/**
+ * Legacy audit CSV/JSON shape for non-Dasma sync (main path). Kept for backward compatibility.
+ */
+const LEGACY_SYNC_AUDIT_CSV_HEADERS = [
+  { id: 'user_id', title: 'user_id' },
+  { id: 'name', title: 'name' },
+  { id: 'department', title: 'department' },
+  { id: 'user_title', title: 'user_title' },
+  { id: 'phone', title: 'phone' },
+  { id: 'email', title: 'email' },
+  { id: 'user_group', title: 'user_group' },
+  { id: 'lived_name', title: 'Lived Name' },
+  { id: 'remarks', title: 'Remarks' },
+  { id: 'csn', title: 'csn' },
+  { id: 'photo', title: 'photo' },
+  { id: 'face_image_file1', title: 'face_image_file1' },
+  { id: 'face_image_file2', title: 'face_image_file2' },
+  { id: 'start_datetime', title: 'start_datetime' },
+  { id: 'expiry_datetime', title: 'expiry_datetime' },
+  { id: 'original_campus_entry', title: 'original_campus_entry' },
+];
+
 @Injectable()
 export class DatabaseSyncCommonService {
   private readonly logger = new Logger(DatabaseSyncCommonService.name);
@@ -445,9 +480,15 @@ export class DatabaseSyncCommonService {
     }
   }
 
+  /**
+   * Writes synced-records JSON/CSV audit logs.
+   * @param auditAsDasmaBulkUpload When true (Dasma path only), columns match the Dasma Biostar bulk upload CSV.
+   *   Main path omits this flag and keeps the legacy summary format.
+   */
   async logSyncedRecords(
     formattedRecords: any[],
     jobName: string,
+    auditAsDasmaBulkUpload = false,
   ): Promise<void> {
     const dateString = new Date()
       .toISOString()
@@ -458,21 +499,40 @@ export class DatabaseSyncCommonService {
       ? 'manual'
       : jobName.replace('-', '');
 
-    const syncedData = formattedRecords.map((record) => ({
-      user_id: record.user_id,
-      name: record.name,
-      lived_name: record.lived_name ?? '',
-      remarks: record.remarks ?? record.Remarks ?? '',
-      campus_entry: record.original_campus_entry ?? '',
-      expiry_datetime: record.expiry_datetime ?? '',
-      sync_timestamp: new Date().toISOString(),
-    }));
+    let rowsForLog: Record<string, unknown>[];
+    let csvHeaders: { id: string; title: string }[];
+
+    if (auditAsDasmaBulkUpload) {
+      csvHeaders = [...DASMA_BULK_CSV_HEADERS];
+      rowsForLog = formattedRecords.map((record) => ({
+        user_id: record.user_id ?? '',
+        name: record.name ?? '',
+        department: record.department ?? '',
+        user_title: record.user_title ?? '',
+        user_group: record.user_group ?? '',
+        remarks: record.remarks ?? '',
+        start_datetime: record.start_datetime ?? '',
+        expiry_datetime: record.expiry_datetime ?? '',
+        original_campus_entry: record.original_campus_entry ?? '',
+      }));
+    } else {
+      csvHeaders = [...LEGACY_SYNC_AUDIT_CSV_HEADERS];
+      rowsForLog = formattedRecords.map((record) => ({
+        user_id: record.user_id,
+        name: record.name,
+        lived_name: record.lived_name ?? '',
+        remarks: record.remarks ?? record.Remarks ?? '',
+        campus_entry: record.original_campus_entry ?? '',
+        expiry_datetime: record.expiry_datetime ?? '',
+        sync_timestamp: new Date().toISOString(),
+      }));
+    }
 
     const jsonFilePath = path.join(
       this.syncedJsonDir,
       `synced_${syncType}_${dateString}.json`,
     );
-    fs.writeFileSync(jsonFilePath, JSON.stringify(syncedData, null, 2));
+    fs.writeFileSync(jsonFilePath, JSON.stringify(rowsForLog, null, 2));
 
     const csvFilePath = path.join(
       this.syncedCsvDir,
@@ -480,29 +540,12 @@ export class DatabaseSyncCommonService {
     );
     const csvWriter = createObjectCsvWriter({
       path: csvFilePath,
-      header: [
-        { id: 'user_id', title: 'user_id' },
-        { id: 'name', title: 'name' },
-        { id: 'department', title: 'department' },
-        { id: 'user_title', title: 'user_title' },
-        { id: 'phone', title: 'phone' },
-        { id: 'email', title: 'email' },
-        { id: 'user_group', title: 'user_group' },
-        { id: 'lived_name', title: 'Lived Name' },
-        { id: 'remarks', title: 'Remarks' },
-        { id: 'csn', title: 'csn' },
-        { id: 'photo', title: 'photo' },
-        { id: 'face_image_file1', title: 'face_image_file1' },
-        { id: 'face_image_file2', title: 'face_image_file2' },
-        { id: 'start_datetime', title: 'start_datetime' },
-        { id: 'expiry_datetime', title: 'expiry_datetime' },
-        { id: 'original_campus_entry', title: 'original_campus_entry' },
-      ],
+      header: csvHeaders,
     });
 
-    await csvWriter.writeRecords(syncedData);
+    await csvWriter.writeRecords(rowsForLog);
 
-    this.logger.log(`Saved ${syncedData.length} synced records to:`);
+    this.logger.log(`Saved ${rowsForLog.length} synced records to:`);
     this.logger.log(`- JSON: ${jsonFilePath}`);
     this.logger.log(`- CSV: ${csvFilePath}`);
   }

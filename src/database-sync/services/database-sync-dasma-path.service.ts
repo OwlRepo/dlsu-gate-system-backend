@@ -763,7 +763,11 @@ export class DatabaseSyncDasmaPathService implements IDatabaseSyncPath {
           continue;
         }
 
-        await this.commonService.logSyncedRecords(formattedRecords, jobName);
+        await this.commonService.logSyncedRecords(
+          formattedRecords,
+          jobName,
+          true,
+        );
 
         let retries = 3;
         while (retries > 0) {
